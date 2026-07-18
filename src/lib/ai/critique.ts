@@ -83,6 +83,35 @@ export async function runCritiqueModel(opts: {
 
 function demoCritique(user: string): AiJsonResult {
   const snippet = user.slice(0, 120).replace(/\s+/g, " ");
+
+  if (user.includes("extract story-bible") || user.includes("bible_extract")) {
+    return {
+      summary: "Demo bible extract (no AI API key). Sample entities from your text — connect an API key for a real scan.",
+      items: [],
+      extras: {
+        demo: true,
+        entries: [
+          {
+            entry_type: "character",
+            name: "Unnamed protagonist",
+            summary: "Primary viewpoint presence inferred from the draft (demo).",
+            speech_notes: "",
+          },
+          {
+            entry_type: "place",
+            name: "Opening setting",
+            summary: "Location implied by the opening chapter (demo).",
+          },
+          {
+            entry_type: "timeline",
+            name: "Story start",
+            summary: "Beginning of the narrative timeline (demo).",
+          },
+        ],
+      },
+    };
+  }
+
   return {
     summary:
       "Demo critique (no AI API key configured). Connect ANTHROPIC_API_KEY or OPENAI_API_KEY for live feedback.",

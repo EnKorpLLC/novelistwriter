@@ -38,6 +38,7 @@ export function ProjectWorkspace({
 }: Props) {
   const [chapters, setChapters] = useState(initialChapters);
   const [bible, setBible] = useState(initialBible);
+  const [projectTitle, setProjectTitle] = useState(project.title);
   const [activeId, setActiveId] = useState(chapters[0]?.id || "");
   const [tab, setTab] = useState<"write" | "bible" | "tools">("write");
   const [focusMode, setFocusMode] = useState(false);
@@ -126,16 +127,40 @@ export function ProjectWorkspace({
     });
   }
 
+  async function saveProjectTitle() {
+    const title = projectTitle.trim() || "Untitled Novel";
+    if (title === project.title) return;
+    setProjectTitle(title);
+    const res = await fetch(`/api/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) setSaveState("Title save failed");
+  }
+
   return (
     <div className={`flex min-h-screen flex-col ${focusMode ? "focus-mode" : ""}`}>
       {!focusMode && (
         <header className="font-ui flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-muted hover:text-ink">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <Link href="/dashboard" className="shrink-0 text-muted hover:text-ink">
               ←
             </Link>
-            <div>
-              <h1 className="font-display text-lg">{project.title}</h1>
+            <div className="min-w-0 flex-1">
+              <input
+                value={projectTitle}
+                onChange={(e) => setProjectTitle(e.target.value)}
+                onBlur={() => void saveProjectTitle()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                }}
+                className="font-display w-full max-w-xl border-b border-transparent bg-transparent text-lg text-ink outline-none hover:border-line focus:border-accent"
+                aria-label="Project title"
+                placeholder="Untitled Novel"
+              />
               <p className="text-[11px] text-muted">{saveState}</p>
             </div>
           </div>

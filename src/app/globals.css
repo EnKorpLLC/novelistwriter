@@ -58,6 +58,20 @@ body {
   min-height: 60vh;
   line-height: 1.75;
   font-size: 1.125rem;
+  /* Keep browser spelling/grammar underlines visible */
+  -webkit-user-modify: read-write;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}
+
+.ProseMirror ::spelling-error {
+  text-decoration: underline wavy #c43c3c;
+}
+
+.ProseMirror ::grammar-error {
+  text-decoration: underline wavy #8b4513;
 }
 
 .ProseMirror p {

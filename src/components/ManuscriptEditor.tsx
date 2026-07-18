@@ -59,9 +59,12 @@ export function ManuscriptEditor({
       attributes: {
         class: "ProseMirror max-w-3xl mx-auto px-4 py-8",
         spellcheck: "true",
+        "data-gramm": "false",
+        "data-gramm_editor": "false",
+        "data-enable-grammarly": "false",
         autocapitalize: "sentences",
         autocorrect: "on",
-        lang: "en",
+        lang: "en-US",
       },
       handleDOMEvents: {
         mouseup: (view) => {
@@ -73,6 +76,17 @@ export function ManuscriptEditor({
           return false;
         },
       },
+    },
+    onCreate: ({ editor: ed }) => {
+      const dom = ed.view.dom as HTMLElement;
+      dom.setAttribute("spellcheck", "true");
+      dom.spellcheck = true;
+      dom.setAttribute("lang", "en-US");
+      // Force browser to re-evaluate spellcheck after mount
+      requestAnimationFrame(() => {
+        dom.blur();
+        dom.focus();
+      });
     },
     onTransaction: () => setTick((t) => t + 1),
     onUpdate: ({ editor: ed }) => {
@@ -153,10 +167,13 @@ export function ManuscriptEditor({
 
   return (
     <div className="flex h-full flex-col">
-      {!focusMode && <EditorToolbar editor={editor} />}
+      <EditorToolbar editor={editor} />
       <div className="font-ui flex items-center justify-between border-b border-line px-4 py-2 text-xs text-muted">
         <span>{words} words</span>
-        <span>{saveHint} · spellcheck on · Ctrl/Cmd+S</span>
+        <span>
+          {saveHint}
+          {focusMode ? " · focus" : ""} · browser spellcheck · Ctrl/Cmd+S
+        </span>
       </div>
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} />

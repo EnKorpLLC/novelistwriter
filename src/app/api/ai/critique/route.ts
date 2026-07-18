@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     manuscript = ch?.content_text || "";
   }
 
-  if (!manuscript && ["continuity", "plotholes", "voice_analysis", "discover_comps", "pacing", "arcs", "promises", "lore_lock", "dialogue_fingerprint"].includes(jt)) {
+  if (!manuscript && ["continuity", "plotholes", "voice_analysis", "discover_comps", "pacing", "arcs", "promises", "lore_lock", "dialogue_fingerprint", "bible_extract", "reading_list"].includes(jt)) {
     const { data: chapters } = await supabase
       .from("chapters")
       .select("title, content_text, sort_order")
@@ -176,6 +176,51 @@ export async function POST(req: Request) {
           });
         }
       }
+
+      if (jt === "bible_extract" && Array.isArray(result.extras?.entries)) {
+        const existingNames = new Set(
+          (bible || []).map((b) => `${b.entry_type}:${String(b.name).toLowerCase().trim()}`)
+        );
+        const allowed = new Set(["character", "place", "note", "lore", "rule", "timeline"]);
+        const toAdd = (
+          result.extras.entries as Array<{
+            entry_type: string;
+            name: string;
+            summary?: string;
+            speech_notes?: string;
+          }>
+        )
+          .filter(
+            (e) =>
+              e.name?.trim() &&
+              allowed.has(e.entry_type) &&
+              !existingNames.has(`${e.entry_type}:${e.name.toLowerCase().trim()}`)
+          )
+          .slice(0, 40);
+
+        const inserted: unknown[] = [];
+        for (const e of toAdd) {
+          const { data: row } = await supabase
+            .from("bible_entries")
+            .insert({
+              project_id: projectId,
+              user_id: user.id,
+              entry_type: e.entry_type,
+              name: e.name.trim(),
+              summary: e.summary || "",
+              speech_notes: e.speech_notes || "",
+              details: { source: "ai_extract" },
+            })
+            .select("*")
+            .single();
+          if (row) inserted.push(row);
+        }
+        result.extras = {
+          ...(result.extras || {}),
+          added: inserted,
+          skipped: (result.extras.entries as unknown[]).length - toAdd.length,
+        };
+      }
     }
 
     return NextResponse.json({
@@ -251,6 +296,8 @@ Never provide replacement manuscript paragraphs. example_text must be labeled il
     blurb_critique: "Task: critique the blurb/marketing copy only — do not write a replacement blurb.",
     beta_summary: "Task: summarize themes in provided beta feedback (in manuscript field).",
     custom_persona: `Task: critique through persona lens: ${opts.persona || "ruthless developmental editor"}. Still never write replacement prose.`,
+    bible_extract:
+      "Task: extract story-bible entities from the manuscript. extras.entries = [{entry_type:'character'|'place'|'note'|'lore'|'rule'|'timeline', name, summary, speech_notes?}]. Prefer named characters and places; include world rules/lore/timeline beats when evidenced. Do not invent unsupported entities. Do not write manuscript prose. items can briefly note confidence for each find.",
   };
 
   return `${jobHints[opts.jobType] || "Task: craft critique."}\n\n${base}`;

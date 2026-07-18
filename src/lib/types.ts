@@ -19,7 +19,8 @@ export type JobType =
   | "sensitivity"
   | "blurb_critique"
   | "beta_summary"
-  | "custom_persona";
+  | "custom_persona"
+  | "bible_extract";
 
 export const CREDIT_COSTS: Record<JobType, number> = {
   line_edit: 2,
@@ -41,6 +42,7 @@ export const CREDIT_COSTS: Record<JobType, number> = {
   blurb_critique: 6,
   beta_summary: 8,
   custom_persona: 15,
+  bible_extract: 20,
 };
 
 export const CREDIT_PACKS = {

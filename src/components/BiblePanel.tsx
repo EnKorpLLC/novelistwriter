@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { BibleEntry } from "@/lib/types";
+import { CREDIT_COSTS } from "@/lib/types";
+import Link from "next/link";
 
 type Props = {
   projectId: string;
@@ -25,6 +27,8 @@ export function BiblePanel({ projectId, entries, onChange, promises, arcs }: Pro
   const [name, setName] = useState("");
   const [summary, setSummary] = useState("");
   const [speech, setSpeech] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractMsg, setExtractMsg] = useState<string | null>(null);
 
   async function add() {
     if (!name.trim()) return;
@@ -52,11 +56,82 @@ export function BiblePanel({ projectId, entries, onChange, promises, arcs }: Pro
     onChange(entries.filter((e) => e.id !== id));
   }
 
+  async function extractFromManuscript() {
+    const cost = CREDIT_COSTS.bible_extract;
+    if (
+      !confirm(
+        `Scan the whole project for characters, places, rules, lore, and timelines?\n\nCost: ${cost} credits.\nExisting entries are kept; new ones are added (duplicates skipped by name).`
+      )
+    ) {
+      return;
+    }
+    setExtracting(true);
+    setExtractMsg(null);
+    try {
+      const res = await fetch("/api/ai/critique", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobType: "bible_extract",
+          projectId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.code === "insufficient_credits") {
+          setExtractMsg(data.error || "Need more credits.");
+          return;
+        }
+        throw new Error(data.error || "Extract failed");
+      }
+      const added = (data.extras?.added as BibleEntry[]) || [];
+      if (added.length) {
+        onChange([...entries, ...added]);
+      }
+      setExtractMsg(
+        data.summary ||
+          `Added ${added.length} entr${added.length === 1 ? "y" : "ies"} (${data.cost} credits).`
+      );
+    } catch (e) {
+      setExtractMsg(e instanceof Error ? e.message : "Extract failed");
+    } finally {
+      setExtracting(false);
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-6 py-8">
-      <h2 className="font-display text-2xl">Story bible</h2>
-      <p className="mt-1 text-sm text-muted">
-        Characters, places, lore — used by lore lock and dialogue fingerprint.
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="font-display text-2xl">Story bible</h2>
+          <p className="mt-1 text-sm text-muted">
+            Characters, places, lore — used by lore lock and dialogue fingerprint.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={extracting}
+          onClick={extractFromManuscript}
+          className="font-ui shrink-0 border border-accent bg-paper px-4 py-2 text-sm text-accent hover:bg-accent hover:text-paper disabled:opacity-50"
+        >
+          {extracting
+            ? "Scanning manuscript…"
+            : `AI: extract from project (${CREDIT_COSTS.bible_extract} cr)`}
+        </button>
+      </div>
+      {extractMsg && (
+        <p className="font-ui mt-3 text-sm text-muted">
+          {extractMsg}{" "}
+          {extractMsg.toLowerCase().includes("credit") && (
+            <Link href="/billing" className="text-accent underline">
+              Billing
+            </Link>
+          )}
+        </p>
+      )}
+      <p className="font-ui mt-2 text-xs text-muted">
+        Optional AI scan reads your chapters and suggests bible entries. It does not write prose for
+        you — you can edit or delete anything it adds.
       </p>
 
       <div className="font-ui mt-6 grid gap-2 border border-line bg-paper p-4 md:grid-cols-2">
