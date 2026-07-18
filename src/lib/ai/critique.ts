@@ -67,8 +67,10 @@ export async function runCritiqueModel(opts: {
   if (anthropicKey) {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
     const client = new Anthropic({ apiKey: anthropicKey });
+    // claude-sonnet-4-20250514 retired June 2026 — default to Sonnet 4.6
+    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
     const res = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model,
       max_tokens: 4096,
       system: opts.system || CRITIQUE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: opts.user }],

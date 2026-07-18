@@ -92,6 +92,21 @@ export async function debitCredits(opts: {
   return { ok: true, charged: cost };
 }
 
+/** Refund credits after a failed AI job (credits return to purchased balance). */
+export async function refundCredits(opts: {
+  userId: string;
+  amount: number;
+  reason?: string;
+  jobType?: string;
+}) {
+  if (opts.amount <= 0) return;
+  await addCredits({
+    userId: opts.userId,
+    amount: opts.amount,
+    reason: opts.reason || `refund_${opts.jobType || "ai_job"}`,
+  });
+}
+
 export async function addCredits(opts: {
   userId: string;
   amount: number;

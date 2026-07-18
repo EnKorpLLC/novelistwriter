@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { debitCredits, creditCost } from "@/lib/credits";
+import { debitCredits, creditCost, refundCredits } from "@/lib/credits";
 import {
   runCritiqueModel,
   parseAiJson,
@@ -231,6 +231,17 @@ export async function POST(req: Request) {
       extras: result.extras,
     });
   } catch (e) {
+    // Don't keep credits for a failed provider call
+    try {
+      await refundCredits({
+        userId: user.id,
+        amount: debit.charged,
+        jobType: jt,
+        reason: "ai_job_failed_refund",
+      });
+    } catch (refundErr) {
+      console.error("credit refund failed", refundErr);
+    }
     if (job) {
       await supabase
         .from("ai_jobs")
@@ -242,7 +253,10 @@ export async function POST(req: Request) {
         .eq("id", job.id);
     }
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "AI failed" },
+      {
+        error: e instanceof Error ? e.message : "AI failed",
+        refunded: debit.charged,
+      },
       { status: 500 }
     );
   }
