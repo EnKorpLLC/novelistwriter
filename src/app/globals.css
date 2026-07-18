@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #1a1612;
+  --paper: #f7f2e9;
+  --paper-deep: #ebe3d4;
+  --accent: #2c5f4a;
+  --accent-soft: #3d7a61;
+  --warn: #8b4513;
+  --muted: #6b6358;
+  --line: #d4cbb8;
+  --critique: #1e3a5f;
+  --danger: #9b2c2c;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-critique: var(--critique);
+  --color-danger: var(--danger);
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Source Serif 4", Georgia, serif;
+  --font-ui: "DM Sans", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-ui {
+  font-family: var(--font-ui);
+}
+
+/* TipTap */
+.ProseMirror {
+  outline: none;
+  min-height: 60vh;
+  line-height: 1.75;
+  font-size: 1.125rem;
+}
+
+.ProseMirror p {
+  margin-bottom: 1em;
+}
+
+.ProseMirror h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  margin: 1.5em 0 0.75em;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.focus-mode .app-chrome {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.focus-mode:hover .app-chrome {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out both;
+}
+
+@keyframes ink-wash {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.hero-wash {
+  background: linear-gradient(
+    135deg,
+    #f7f2e9 0%,
+    #e8dcc8 35%,
+    #d4e5dc 70%,
+    #f7f2e9 100%
+  );
+  background-size: 200% 200%;
+  animation: ink-wash 18s ease infinite alternate;
+}
