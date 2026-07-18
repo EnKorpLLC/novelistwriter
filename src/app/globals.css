@@ -97,6 +97,33 @@ body {
   padding-top: 3rem;
 }
 
+/* Critique report print: only the open report */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .critique-report-overlay,
+  .critique-report-overlay * {
+    visibility: visible !important;
+  }
+  .critique-report-overlay {
+    position: static !important;
+    inset: auto !important;
+    background: white !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  .critique-report-sheet {
+    max-width: none !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .critique-report-body {
+    overflow: visible !important;
+  }
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
