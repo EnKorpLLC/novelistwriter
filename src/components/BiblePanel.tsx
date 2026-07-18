@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { BibleEntry } from "@/lib/types";
-import { CREDIT_COSTS } from "@/lib/types";
+import { computeCritiqueCost } from "@/lib/ai/pricing";
 import Link from "next/link";
 
 type Props = {
@@ -65,10 +65,14 @@ export function BiblePanel({
   }
 
   async function extractFromManuscript() {
-    const cost = CREDIT_COSTS.bible_extract;
+    const cost = computeCritiqueCost({
+      jobType: "bible_extract",
+      scope: "book",
+      model: "standard",
+    });
     if (
       !confirm(
-        `Scan the whole project for characters, places, rules, lore, and timelines?\n\nCost: ${cost} credits.\nExisting entries are kept; new ones are added (duplicates skipped by name).`
+        `Scan the whole project for characters, places, rules, lore, and timelines?\n\nCost: ${cost} credits (whole book · Standard model).\nExisting entries are kept; new ones are added (duplicates skipped by name).`
       )
     ) {
       return;
@@ -82,6 +86,8 @@ export function BiblePanel({
         body: JSON.stringify({
           jobType: "bible_extract",
           projectId,
+          scope: "book",
+          model: "standard",
         }),
       });
       const data = await res.json();
@@ -127,7 +133,7 @@ export function BiblePanel({
         >
           {extracting
             ? "Scanning manuscript…"
-            : `AI: extract from project (${CREDIT_COSTS.bible_extract} cr)`}
+            : `AI: extract from project (${computeCritiqueCost({ jobType: "bible_extract", scope: "book", model: "standard" })} cr)`}
         </button>
       </div>
       {extractMsg && (

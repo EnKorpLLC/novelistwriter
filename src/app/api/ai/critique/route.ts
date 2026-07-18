@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { debitCredits, creditCost, refundCredits, getCreditBalance } from "@/lib/credits";
+import { debitCredits, refundCredits, getCreditBalance } from "@/lib/credits";
 import {
   runCritiqueModel,
   parseAiJson,
   revisionModeInstructions,
   CRITIQUE_SYSTEM_PROMPT,
 } from "@/lib/ai/critique";
+import {
+  computeCritiqueCost,
+  defaultScopeForJob,
+  isValidModelTier,
+  isValidScope,
+  type AiModelTier,
+  type AiScope,
+} from "@/lib/ai/pricing";
 import type { JobType } from "@/lib/types";
 import { z } from "zod";
 
@@ -20,6 +28,8 @@ const bodySchema = z.object({
   targetAuthor: z.string().optional(),
   targetBook: z.string().optional(),
   persona: z.string().optional(),
+  scope: z.enum(["selection", "chapter", "book"]).optional(),
+  model: z.enum(["fast", "standard", "deep"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -34,10 +44,55 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const { jobType, projectId, chapterId, text, mode, challengeLevel, targetAuthor, targetBook, persona } =
-    parsed.data;
+  const {
+    jobType,
+    projectId,
+    chapterId,
+    text,
+    mode,
+    challengeLevel,
+    targetAuthor,
+    targetBook,
+    persona,
+  } = parsed.data;
   const jt = jobType as JobType;
-  const cost = creditCost(jt);
+
+  const model: AiModelTier =
+    parsed.data.model && isValidModelTier(parsed.data.model) ? parsed.data.model : "standard";
+  let scope: AiScope =
+    parsed.data.scope && isValidScope(parsed.data.scope)
+      ? parsed.data.scope
+      : defaultScopeForJob(jt);
+
+  if (jt === "bible_extract") scope = "book";
+  if (scope === "selection" && !(text && text.trim())) {
+    return NextResponse.json(
+      { error: "Select text in the editor to run a selection critique." },
+      { status: 400 }
+    );
+  }
+  if (scope === "chapter" && !chapterId) {
+    return NextResponse.json({ error: "No chapter selected." }, { status: 400 });
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("challenge_level, critique_preferences, byok_anthropic_key, byok_openai_key")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const { data: bal } = await supabase
+    .from("credit_balances")
+    .select("subscription_tier")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const isStudio = bal?.subscription_tier === "studio";
+  const byokAnthropic = isStudio ? profile?.byok_anthropic_key : null;
+  const byokOpenAi = isStudio ? profile?.byok_openai_key : null;
+  const usingByok = Boolean(byokAnthropic || byokOpenAi);
+
+  const cost = computeCritiqueCost({ jobType: jt, scope, model, usingByok });
 
   const debit = await debitCredits({ userId: user.id, jobType: jt, cost });
   if (!debit.ok) {
@@ -47,26 +102,20 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("challenge_level, critique_preferences, byok_anthropic_key, byok_openai_key")
-    .eq("id", user.id)
-    .maybeSingle();
-
   const level = challengeLevel ?? profile?.challenge_level ?? 50;
   const prefs = profile?.critique_preferences || {};
 
-  let manuscript = text || "";
-  if (!manuscript && chapterId) {
+  let manuscript = "";
+  if (scope === "selection") {
+    manuscript = (text || "").trim();
+  } else if (scope === "chapter" && chapterId) {
     const { data: ch } = await supabase
       .from("chapters")
       .select("content_text, title")
       .eq("id", chapterId)
       .single();
     manuscript = ch?.content_text || "";
-  }
-
-  if (!manuscript && ["continuity", "plotholes", "voice_analysis", "discover_comps", "pacing", "arcs", "promises", "lore_lock", "dialogue_fingerprint", "bible_extract", "reading_list"].includes(jt)) {
+  } else {
     const { data: chapters } = await supabase
       .from("chapters")
       .select("title, content_text, sort_order")
@@ -75,7 +124,20 @@ export async function POST(req: Request) {
     manuscript = (chapters || [])
       .map((c) => `## ${c.title}\n${c.content_text}`)
       .join("\n\n")
-      .slice(0, 80000);
+      .slice(0, 100000);
+  }
+
+  if (!manuscript.trim()) {
+    await refundCredits({
+      userId: user.id,
+      amount: debit.charged,
+      jobType: jt,
+      reason: "ai_job_empty_refund",
+    });
+    return NextResponse.json(
+      { error: "Nothing to critique in that scope.", refunded: debit.charged },
+      { status: 400 }
+    );
   }
 
   const { data: bible } = await supabase
@@ -92,7 +154,7 @@ export async function POST(req: Request) {
       job_type: jt,
       status: "running",
       credit_cost: debit.charged,
-      input: { mode, targetAuthor, targetBook, persona },
+      input: { mode, targetAuthor, targetBook, persona, scope, model, usingByok },
     })
     .select("*")
     .single();
@@ -107,14 +169,16 @@ export async function POST(req: Request) {
     targetAuthor,
     targetBook,
     persona,
+    scope,
   });
 
   try {
     const raw = await runCritiqueModel({
       system: CRITIQUE_SYSTEM_PROMPT,
       user: userPrompt,
-      byokAnthropic: profile?.byok_anthropic_key,
-      byokOpenAi: profile?.byok_openai_key,
+      byokAnthropic,
+      byokOpenAi,
+      modelTier: model,
     });
     const result = parseAiJson(raw);
 
@@ -226,6 +290,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       jobId: job?.id,
       cost: debit.charged,
+      scope,
+      model,
+      usingByok,
       summary: result.summary,
       items: result.items,
       extras: result.extras,
@@ -279,15 +346,24 @@ function buildPrompt(opts: {
   targetAuthor?: string;
   targetBook?: string;
   persona?: string;
+  scope?: AiScope;
 }) {
+  const scopeLabel =
+    opts.scope === "selection"
+      ? "selected passage only"
+      : opts.scope === "book"
+        ? "full manuscript (all chapters)"
+        : "single chapter";
+
   const base = `challenge_level: ${opts.level}
+scope: ${scopeLabel}
 author_preferences: ${JSON.stringify(opts.prefs)}
 revision_lens: ${revisionModeInstructions(opts.mode)}
 story_bible: ${JSON.stringify(opts.bible).slice(0, 8000)}
 
 MANUSCRIPT:
 """
-${opts.manuscript.slice(0, 60000)}
+${opts.manuscript.slice(0, 90000)}
 """
 
 Return JSON: {

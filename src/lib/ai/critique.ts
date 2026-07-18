@@ -44,16 +44,27 @@ export async function runCritiqueModel(opts: {
   user: string;
   byokAnthropic?: string | null;
   byokOpenAi?: string | null;
+  /** Model tier — defaults to standard Sonnet-class */
+  modelTier?: "fast" | "standard" | "deep";
+  anthropicModel?: string;
+  openaiModel?: string;
 }): Promise<string> {
   const provider = (process.env.AI_PROVIDER || "anthropic").toLowerCase();
   const anthropicKey = opts.byokAnthropic || process.env.ANTHROPIC_API_KEY;
   const openaiKey = opts.byokOpenAi || process.env.OPENAI_API_KEY;
+  const tier = opts.modelTier || "standard";
+
+  // Lazy import avoids circular deps at module load in some bundlers
+  const { AI_MODEL_TIERS } = await import("@/lib/ai/pricing");
+  const tierDef = AI_MODEL_TIERS[tier];
+  const anthropicModel = opts.anthropicModel || tierDef.anthropicModel;
+  const openaiModel = opts.openaiModel || tierDef.openaiModel;
 
   if (provider === "openai" && openaiKey) {
     const OpenAI = (await import("openai")).default;
     const client = new OpenAI({ apiKey: openaiKey });
     const res = await client.chat.completions.create({
-      model: "gpt-4o",
+      model: openaiModel,
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [
@@ -67,10 +78,8 @@ export async function runCritiqueModel(opts: {
   if (anthropicKey) {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
     const client = new Anthropic({ apiKey: anthropicKey });
-    // claude-sonnet-4-20250514 retired June 2026 — default to Sonnet 4.6
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
     const res = await client.messages.create({
-      model,
+      model: anthropicModel,
       max_tokens: 4096,
       system: opts.system || CRITIQUE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: opts.user }],

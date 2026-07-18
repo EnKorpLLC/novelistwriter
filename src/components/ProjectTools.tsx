@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Chapter, Project } from "@/lib/types";
 import { KDP_CHECKLIST } from "@/lib/export";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
@@ -229,8 +230,11 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(keys),
     });
-    if (res.ok) setByokNote("BYOK keys saved (Studio feature).");
-    else setByokNote("Failed to save keys.");
+    if (res.ok) setByokNote("BYOK keys saved.");
+    else {
+      const data = await res.json().catch(() => ({}));
+      setByokNote(data.error || "Failed — Studio subscription required.");
+    }
   }
 
   return (
@@ -587,9 +591,10 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
       </section>
 
       <section>
-        <h3 className="font-display text-xl">BYOK / local models</h3>
+        <h3 className="font-display text-xl">BYOK (Studio)</h3>
         <p className="mt-1 text-sm text-muted">
-          Studio users can bring Anthropic or OpenAI keys. Requests use your key when set.
+          Studio subscribers can bring Anthropic or OpenAI keys. When set, critiques use your key and
+          cost 1 platform credit instead of the full model×scope price.
         </p>
         <div className="font-ui mt-3 grid gap-2">
           <input
@@ -616,6 +621,9 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
             Save BYOK keys
           </button>
           {byokNote && <p className="text-xs text-accent">{byokNote}</p>}
+          <Link href="/billing" className="text-xs text-accent underline">
+            Upgrade to Studio for BYOK →
+          </Link>
         </div>
       </section>
 

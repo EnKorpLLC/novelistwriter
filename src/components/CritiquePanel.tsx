@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import type { CritiqueItem } from "@/lib/types";
-import { CREDIT_COSTS, type JobType } from "@/lib/types";
+import { useMemo, useState } from "react";
+import type { CritiqueItem, JobType } from "@/lib/types";
+import { CREDIT_COSTS } from "@/lib/types";
+import {
+  AI_MODEL_TIERS,
+  AI_SCOPE_MULT,
+  BOOK_DEFAULT_JOBS,
+  computeCritiqueCost,
+  defaultScopeForJob,
+  type AiModelTier,
+  type AiScope,
+} from "@/lib/ai/pricing";
 import Link from "next/link";
 
 type Props = {
@@ -48,16 +57,58 @@ export function CritiquePanel({
   const [extras, setExtras] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [costHint, setCostHint] = useState<number | null>(null);
   const [targetAuthor, setTargetAuthor] = useState("");
   const [targetBook, setTargetBook] = useState("");
   const [persona, setPersona] = useState("");
   const [disagreeNote, setDisagreeNote] = useState("");
+  const [model, setModel] = useState<AiModelTier>("standard");
+  const [scope, setScope] = useState<AiScope>("chapter");
+  const hasSelection = Boolean(selectionText?.trim());
+
+  const scopeOptions = useMemo(() => {
+    const opts: { id: AiScope; label: string; disabled?: boolean; tip?: string }[] = [
+      {
+        id: "selection",
+        label: "Selection",
+        disabled: !hasSelection,
+        tip: hasSelection ? undefined : "Highlight text in the chapter first",
+      },
+      { id: "chapter", label: "Chapter" },
+      { id: "book", label: "Whole book" },
+    ];
+    return opts;
+  }, [hasSelection]);
+
+  function costFor(jobType: JobType) {
+    return computeCritiqueCost({ jobType, scope, model });
+  }
 
   async function run(jobType: JobType, mode?: string) {
-    const cost = CREDIT_COSTS[jobType];
-    setCostHint(cost);
-    if (!confirm(`Run ${jobType.replace(/_/g, " ")} for ${cost} credits?`)) return;
+    let effectiveScope = scope;
+    if (jobType === "bible_extract") effectiveScope = "book";
+    if (effectiveScope === "selection" && !hasSelection) {
+      setError("Highlight a passage in the editor, or choose Chapter / Whole book.");
+      return;
+    }
+    // If user left scope on selection but job is book-default and no selection, bump to book
+    if (!hasSelection && effectiveScope === "selection") {
+      effectiveScope = defaultScopeForJob(jobType);
+    }
+
+    const cost = computeCritiqueCost({ jobType, scope: effectiveScope, model });
+    const scopeLabel =
+      effectiveScope === "selection"
+        ? "selection"
+        : effectiveScope === "book"
+          ? "whole book"
+          : "this chapter";
+    if (
+      !confirm(
+        `Run ${jobType.replace(/_/g, " ")} on ${scopeLabel} with ${AI_MODEL_TIERS[model].label} model?\n\nCost: ${cost} credits`
+      )
+    ) {
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -75,6 +126,8 @@ export function CritiquePanel({
           targetAuthor: targetAuthor || undefined,
           targetBook: targetBook || undefined,
           persona: persona || undefined,
+          scope: effectiveScope,
+          model,
         }),
       });
       const data = await res.json();
@@ -114,6 +167,45 @@ export function CritiquePanel({
       <div className="border-b border-line px-4 py-3">
         <h2 className="font-display text-lg text-critique">Critique</h2>
         <p className="mt-1 text-xs text-muted">AI coaches — never writes your prose.</p>
+
+        <div className="mt-3 space-y-2">
+          <p className="text-[10px] uppercase tracking-wide text-muted">Scope</p>
+          <div className="flex flex-wrap gap-1">
+            {scopeOptions.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                disabled={o.disabled}
+                title={o.tip}
+                onClick={() => setScope(o.id)}
+                className={`px-2 py-1 text-[11px] ${
+                  scope === o.id ? "bg-critique text-paper" : "border border-line text-muted"
+                } disabled:opacity-40`}
+              >
+                {o.label}
+                <span className="ml-1 opacity-70">×{AI_SCOPE_MULT[o.id]}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] uppercase tracking-wide text-muted">Model</p>
+          <div className="flex flex-wrap gap-1">
+            {(Object.keys(AI_MODEL_TIERS) as AiModelTier[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setModel(id)}
+                title={AI_MODEL_TIERS[id].blurb}
+                className={`px-2 py-1 text-[11px] ${
+                  model === id ? "bg-accent text-paper" : "border border-line text-muted"
+                }`}
+              >
+                {AI_MODEL_TIERS[id].label}
+                <span className="ml-1 opacity-70">×{AI_MODEL_TIERS[id].creditMult}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <label className="mt-3 block text-xs text-muted">
           Challenge me: {challengeLevel}
           <input
@@ -132,18 +224,37 @@ export function CritiquePanel({
       </div>
 
       <div className="max-h-40 space-y-1 overflow-y-auto border-b border-line p-2">
-        {JOBS.map((j) => (
-          <button
-            key={j.type}
-            type="button"
-            disabled={loading}
-            onClick={() => run(j.type, j.mode)}
-            className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs hover:bg-paper disabled:opacity-50"
-          >
-            <span>{j.label}</span>
-            <span className="text-muted">{CREDIT_COSTS[j.type]} cr</span>
-          </button>
-        ))}
+        {JOBS.map((j) => {
+          const suggested = BOOK_DEFAULT_JOBS.includes(j.type) ? "book" : "chapter";
+          return (
+            <button
+              key={j.type}
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                if (BOOK_DEFAULT_JOBS.includes(j.type) && scope === "selection" && !hasSelection) {
+                  setScope("book");
+                } else if (
+                  BOOK_DEFAULT_JOBS.includes(j.type) &&
+                  scope === "chapter" &&
+                  suggested === "book"
+                ) {
+                  // keep user's chapter choice — they may want chapter-only continuity
+                }
+                void run(j.type, j.mode);
+              }}
+              className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs hover:bg-paper disabled:opacity-50"
+            >
+              <span>
+                {j.label}
+                {BOOK_DEFAULT_JOBS.includes(j.type) && (
+                  <span className="ml-1 text-[9px] text-muted">· often book</span>
+                )}
+              </span>
+              <span className="text-muted">{costFor(j.type)} cr</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="space-y-2 border-b border-line p-3 text-xs">
@@ -165,6 +276,11 @@ export function CritiquePanel({
           onChange={(e) => setPersona(e.target.value)}
           className="w-full border border-line bg-paper px-2 py-1"
         />
+        <p className="text-[10px] text-muted">
+          Base costs × scope × model. Example developmental chapter standard ={" "}
+          {CREDIT_COSTS.developmental} × {AI_SCOPE_MULT[scope]} × {AI_MODEL_TIERS[model].creditMult} →{" "}
+          {costFor("developmental")} cr.
+        </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -176,9 +292,6 @@ export function CritiquePanel({
               Buy credits
             </Link>
           </p>
-        )}
-        {costHint !== null && !loading && !error && !summary && (
-          <p className="text-xs text-muted">Last quoted cost: {costHint} credits</p>
         )}
         {summary && <p className="mb-3 text-sm text-ink">{summary}</p>}
         <ul className="space-y-3">
