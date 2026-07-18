@@ -1,6 +1,8 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
+import { Plugin, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
@@ -29,6 +31,28 @@ type Props = {
   focusMode?: boolean;
 };
 
+/** Blocks ProseMirror’s scroll-into-view while the chapter is first loading */
+function createSuppressScrollExtension(suppressRef: { current: boolean }) {
+  return Extension.create({
+    name: "suppressInitialScroll",
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          props: {
+            handleScrollToSelection: () => suppressRef.current,
+          },
+        }),
+      ];
+    },
+  });
+}
+
+function selectionAtStart(editor: NonNullable<ReturnType<typeof useEditor>>) {
+  const { state, view } = editor;
+  const sel = TextSelection.atStart(state.doc);
+  view.dispatch(state.tr.setSelection(sel));
+}
+
 export function ManuscriptEditor({
   chapterId,
   initialHtml,
@@ -39,11 +63,14 @@ export function ManuscriptEditor({
 }: Props) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSynced = useRef(initialHtml);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const suppressScrollRef = useRef(true);
   const [saveHint, setSaveHint] = useState("All changes saved");
   const [, setTick] = useState(0);
 
   const editor = useEditor({
     immediatelyRender: false,
+    autofocus: false,
     extensions: [
       StarterKit,
       Underline,
@@ -53,6 +80,7 @@ export function ManuscriptEditor({
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Placeholder.configure({ placeholder: "Write your chapter…" }),
       CharacterCount,
+      createSuppressScrollExtension(suppressScrollRef),
     ],
     content: initialHtml || "<p></p>",
     editorProps: {
@@ -82,11 +110,9 @@ export function ManuscriptEditor({
       dom.setAttribute("spellcheck", "true");
       dom.spellcheck = true;
       dom.setAttribute("lang", "en-US");
-      // Re-assert spellcheck without scrolling the page to the editor
-      requestAnimationFrame(() => {
-        dom.blur();
-        dom.focus({ preventScroll: true });
-      });
+      selectionAtStart(ed);
+      scrollRef.current?.scrollTo(0, 0);
+      window.scrollTo(0, 0);
     },
     onTransaction: () => setTick((t) => t + 1),
     onUpdate: ({ editor: ed }) => {
@@ -116,6 +142,16 @@ export function ManuscriptEditor({
   });
 
   useEffect(() => {
+    suppressScrollRef.current = true;
+    scrollRef.current?.scrollTo(0, 0);
+    window.scrollTo(0, 0);
+    const t = window.setTimeout(() => {
+      suppressScrollRef.current = false;
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [chapterId]);
+
+  useEffect(() => {
     if (!editor) return;
 
     const serverMs = serverUpdatedAt ? Date.parse(serverUpdatedAt) : 0;
@@ -131,7 +167,11 @@ export function ManuscriptEditor({
 
     const next = useCache ? cached!.html : initialHtml || "<p></p>";
     if (next !== editor.getHTML()) {
+      suppressScrollRef.current = true;
       editor.commands.setContent(next, false);
+      selectionAtStart(editor);
+      scrollRef.current?.scrollTo(0, 0);
+      window.scrollTo(0, 0);
     }
     lastSynced.current = useCache ? lastSynced.current : next;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,16 +206,16 @@ export function ManuscriptEditor({
   const words = editor?.storage.characterCount?.words?.() ?? countWords(editor?.getText() || "");
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <EditorToolbar editor={editor} />
-      <div className="font-ui flex items-center justify-between border-b border-line px-4 py-2 text-xs text-muted">
+      <div className="font-ui flex shrink-0 items-center justify-between border-b border-line px-4 py-2 text-xs text-muted">
         <span>{words} words</span>
         <span>
           {saveHint}
           {focusMode ? " · focus" : ""} · browser spellcheck · Ctrl/Cmd+S
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
     </div>

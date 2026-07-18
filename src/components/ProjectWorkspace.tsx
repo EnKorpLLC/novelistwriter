@@ -158,7 +158,7 @@ export function ProjectWorkspace({
   }
 
   return (
-    <div className={`flex min-h-screen flex-col ${focusMode ? "focus-mode" : ""}`}>
+    <div className={`flex h-dvh max-h-dvh flex-col overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
       {!focusMode && (
         <header className="font-ui flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -214,7 +214,7 @@ export function ProjectWorkspace({
         </button>
       )}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {tab === "write" && (
           <>
             {!focusMode && (
@@ -260,7 +260,7 @@ export function ProjectWorkspace({
             </nav>
             )}
 
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {active && (
                 <>
                   {!focusMode && (
@@ -346,7 +346,7 @@ export function ProjectWorkspace({
                     />
                   </div>
                   )}
-                  <div className="min-h-0 flex-1">
+                  <div className="min-h-0 flex-1 overflow-hidden">
                     <ManuscriptEditor
                       key={active.id}
                       chapterId={active.id}
