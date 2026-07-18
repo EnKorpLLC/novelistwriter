@@ -25,6 +25,7 @@ type Props = {
   challengeLevel: number;
   promises: { id: string; description: string; status: string }[];
   arcs: { id: string; arc_type: string; subject: string; notes: string }[];
+  initialCredits: number;
 };
 
 export function ProjectWorkspace({
@@ -35,6 +36,7 @@ export function ProjectWorkspace({
   challengeLevel: initialChallenge,
   promises,
   arcs,
+  initialCredits,
 }: Props) {
   const [chapters, setChapters] = useState(initialChapters);
   const [bible, setBible] = useState(initialBible);
@@ -45,6 +47,7 @@ export function ProjectWorkspace({
   const [selectionText, setSelectionText] = useState("");
   const [challengeLevel, setChallengeLevel] = useState(initialChallenge);
   const [saveState, setSaveState] = useState("Saved");
+  const [credits, setCredits] = useState(initialCredits);
 
   const active = useMemo(
     () => chapters.find((c) => c.id === activeId) || chapters[0],
@@ -182,7 +185,14 @@ export function ProjectWorkspace({
               <p className="text-[11px] text-muted">{saveState}</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <Link
+              href="/billing"
+              className="border border-line px-3 py-1 text-muted hover:border-accent hover:text-ink"
+              title="Buy credits or manage billing"
+            >
+              Credits: <strong className="text-ink">{credits}</strong>
+            </Link>
             {(["write", "bible", "tools"] as const).map((t) => (
               <button
                 key={t}
@@ -369,6 +379,7 @@ export function ProjectWorkspace({
                 selectionText={selectionText}
                 challengeLevel={challengeLevel}
                 onChallengeChange={setChallengeLevel}
+                onCreditsChange={setCredits}
               />
             </div>
             )}
@@ -382,6 +393,7 @@ export function ProjectWorkspace({
             onChange={setBible}
             promises={promises}
             arcs={arcs}
+            onCreditsChange={setCredits}
           />
         )}
 

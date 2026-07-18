@@ -11,6 +11,7 @@ type Props = {
   onChange: (entries: BibleEntry[]) => void;
   promises: { id: string; description: string; status: string }[];
   arcs: { id: string; arc_type: string; subject: string; notes: string }[];
+  onCreditsChange?: (n: number) => void;
 };
 
 const TYPES: BibleEntry["entry_type"][] = [
@@ -22,7 +23,14 @@ const TYPES: BibleEntry["entry_type"][] = [
   "timeline",
 ];
 
-export function BiblePanel({ projectId, entries, onChange, promises, arcs }: Props) {
+export function BiblePanel({
+  projectId,
+  entries,
+  onChange,
+  promises,
+  arcs,
+  onCreditsChange,
+}: Props) {
   const [type, setType] = useState<BibleEntry["entry_type"]>("character");
   const [name, setName] = useState("");
   const [summary, setSummary] = useState("");
@@ -77,6 +85,9 @@ export function BiblePanel({ projectId, entries, onChange, promises, arcs }: Pro
         }),
       });
       const data = await res.json();
+      if (typeof data.creditsRemaining === "number") {
+        onCreditsChange?.(data.creditsRemaining);
+      }
       if (!res.ok) {
         if (data.code === "insufficient_credits") {
           setExtractMsg(data.error || "Need more credits.");

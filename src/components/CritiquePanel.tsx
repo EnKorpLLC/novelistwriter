@@ -11,6 +11,7 @@ type Props = {
   selectionText?: string;
   challengeLevel: number;
   onChallengeChange: (n: number) => void;
+  onCreditsChange?: (n: number) => void;
 };
 
 const JOBS: { type: JobType; label: string; mode?: string }[] = [
@@ -40,6 +41,7 @@ export function CritiquePanel({
   selectionText,
   challengeLevel,
   onChallengeChange,
+  onCreditsChange,
 }: Props) {
   const [items, setItems] = useState<CritiqueItem[]>([]);
   const [summary, setSummary] = useState("");
@@ -76,6 +78,9 @@ export function CritiquePanel({
         }),
       });
       const data = await res.json();
+      if (typeof data.creditsRemaining === "number") {
+        onCreditsChange?.(data.creditsRemaining);
+      }
       if (!res.ok) {
         if (data.code === "insufficient_credits") {
           setError(`${data.error} `);

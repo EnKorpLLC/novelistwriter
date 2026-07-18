@@ -29,6 +29,7 @@ export default async function ProjectPage({
     { data: profile },
     { data: promises },
     { data: arcs },
+    { data: credits },
   ] = await Promise.all([
     supabase.from("chapters").select("*").eq("project_id", id).order("sort_order"),
     supabase.from("bible_entries").select("*").eq("project_id", id).order("created_at"),
@@ -36,7 +37,15 @@ export default async function ProjectPage({
     supabase.from("profiles").select("challenge_level").eq("id", user.id).maybeSingle(),
     supabase.from("story_promises").select("id, description, status").eq("project_id", id),
     supabase.from("arc_tracks").select("id, arc_type, subject, notes").eq("project_id", id),
+    supabase
+      .from("credit_balances")
+      .select("balance, monthly_allowance_remaining")
+      .eq("user_id", user.id)
+      .maybeSingle(),
   ]);
+
+  const creditTotal =
+    (credits?.balance ?? 0) + (credits?.monthly_allowance_remaining ?? 0);
 
   return (
     <ProjectWorkspace
@@ -47,6 +56,7 @@ export default async function ProjectPage({
       challengeLevel={profile?.challenge_level ?? 50}
       promises={promises || []}
       arcs={arcs || []}
+      initialCredits={creditTotal}
     />
   );
 }

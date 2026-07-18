@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { debitCredits, creditCost, refundCredits } from "@/lib/credits";
+import { debitCredits, creditCost, refundCredits, getCreditBalance } from "@/lib/credits";
 import {
   runCritiqueModel,
   parseAiJson,
@@ -229,6 +229,7 @@ export async function POST(req: Request) {
       summary: result.summary,
       items: result.items,
       extras: result.extras,
+      creditsRemaining: await remainingCredits(user.id),
     });
   } catch (e) {
     // Don't keep credits for a failed provider call
@@ -256,10 +257,16 @@ export async function POST(req: Request) {
       {
         error: e instanceof Error ? e.message : "AI failed",
         refunded: debit.charged,
+        creditsRemaining: await remainingCredits(user.id),
       },
       { status: 500 }
     );
   }
+}
+
+async function remainingCredits(userId: string) {
+  const bal = await getCreditBalance(userId);
+  return (bal?.balance ?? 0) + (bal?.monthly_allowance_remaining ?? 0);
 }
 
 function buildPrompt(opts: {
