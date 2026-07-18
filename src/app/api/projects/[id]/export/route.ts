@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { exportDocx, exportEpub, validateEpubStructure } from "@/lib/export";
+import { exportDocx, exportEpub, validateEpubStructure, type CoverImage } from "@/lib/export";
+import { projectCoverPath } from "@/lib/cover";
+
+function coverTypeFromPath(path: string): CoverImage["type"] {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".png")) return "png";
+  if (lower.endsWith(".webp")) return "webp";
+  if (lower.endsWith(".gif")) return "gif";
+  return "jpg";
+}
 
 export async function POST(
   req: Request,
@@ -44,6 +53,16 @@ export async function POST(
     sort_order: m.sort_order,
   }));
 
+  let cover: CoverImage | null = null;
+  const coverPath = projectCoverPath(project);
+  if (coverPath) {
+    const { data: file, error } = await supabase.storage.from("covers").download(coverPath);
+    if (!error && file) {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      cover = { data: buf, type: coverTypeFromPath(coverPath) };
+    }
+  }
+
   const safeName = (project.title || "manuscript").replace(/[^\w\- ]+/g, "").trim() || "manuscript";
 
   if (format === "docx") {
@@ -53,6 +72,7 @@ export async function POST(
       authorName,
       chapters: selected,
       matter: matterBlocks,
+      cover,
     });
     const buf = Buffer.from(await blob.arrayBuffer());
     return new NextResponse(buf, {
@@ -70,6 +90,7 @@ export async function POST(
       authorName,
       chapters: selected,
       matter: matterBlocks,
+      cover,
     });
     const buf = Buffer.from(await blob.arrayBuffer());
     return new NextResponse(buf, {

@@ -84,6 +84,7 @@ export type Project = {
     font?: string;
     margins?: string;
   };
+  cover_path?: string | null;
   is_unlocked: boolean;
   created_at: string;
   updated_at: string;

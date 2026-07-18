@@ -4,6 +4,7 @@ import {
   Packer,
   Paragraph,
   TextRun,
+  ImageRun,
 } from "docx";
 import JSZip from "jszip";
 import type { Chapter } from "@/lib/types";
@@ -15,6 +16,11 @@ export type MatterBlock = {
   content_html: string;
   enabled: boolean;
   sort_order: number;
+};
+
+export type CoverImage = {
+  data: Uint8Array;
+  type: "jpg" | "png" | "webp" | "gif";
 };
 
 function htmlToPlain(html: string): string {
@@ -41,13 +47,19 @@ function parasFromText(text: string): Paragraph[] {
   );
 }
 
-/** Novelist 2.0–style DOCX: title → Contents → Chapter N: Title → body → matter */
+function docxImageType(type: CoverImage["type"]): "jpg" | "png" | "gif" | null {
+  if (type === "jpg" || type === "png" || type === "gif") return type;
+  return null;
+}
+
+/** Novelist 2.0–style DOCX: optional cover → title → Contents → Chapter N: Title → body → matter */
 export async function exportDocx(opts: {
   title: string;
   subtitle?: string;
   authorName?: string;
   chapters: Chapter[];
   matter: MatterBlock[];
+  cover?: CoverImage | null;
 }): Promise<Blob> {
   const front = opts.matter
     .filter((m) => m.enabled && m.matter_type.startsWith("front_") && m.matter_type !== "front_toc")
@@ -58,12 +70,31 @@ export async function exportDocx(opts: {
   const ordered = [...opts.chapters].sort((a, b) => a.sort_order - b.sort_order);
   const includeToc = opts.matter.some((m) => m.enabled && m.matter_type === "front_toc");
 
-  const children: Paragraph[] = [
+  const children: Paragraph[] = [];
+
+  const docxType = opts.cover ? docxImageType(opts.cover.type) : null;
+  if (opts.cover && docxType) {
+    children.push(
+      new Paragraph({
+        spacing: { after: 400 },
+        children: [
+          new ImageRun({
+            type: docxType,
+            data: opts.cover.data,
+            transformation: { width: 400, height: 600 },
+            altText: { title: "Cover", description: "Book cover", name: "cover" },
+          }),
+        ],
+      })
+    );
+  }
+
+  children.push(
     new Paragraph({
       spacing: { after: 400 },
       children: [new TextRun({ text: opts.title, bold: true, font: "Garamond", size: 56 })],
-    }),
-  ];
+    })
+  );
 
   if (opts.authorName) {
     children.push(
@@ -78,7 +109,9 @@ export async function exportDocx(opts: {
     children.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: block.title || block.matter_type, font: "Garamond", bold: true })],
+        children: [
+          new TextRun({ text: block.title || block.matter_type, font: "Garamond", bold: true }),
+        ],
       })
     );
     children.push(...parasFromText(htmlToPlain(block.content_html)));
@@ -117,7 +150,9 @@ export async function exportDocx(opts: {
     children.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: block.title || block.matter_type, font: "Garamond", bold: true })],
+        children: [
+          new TextRun({ text: block.title || block.matter_type, font: "Garamond", bold: true }),
+        ],
       })
     );
     children.push(...parasFromText(htmlToPlain(block.content_html)));
@@ -134,12 +169,20 @@ export async function exportDocx(opts: {
   });
 }
 
+function epubCoverMeta(type: CoverImage["type"]): { ext: string; media: string } {
+  if (type === "png") return { ext: "png", media: "image/png" };
+  if (type === "webp") return { ext: "webp", media: "image/webp" };
+  if (type === "gif") return { ext: "gif", media: "image/gif" };
+  return { ext: "jpg", media: "image/jpeg" };
+}
+
 /** Minimal EPUB 3 package suitable for KDP upload */
 export async function exportEpub(opts: {
   title: string;
   authorName?: string;
   chapters: Chapter[];
   matter: MatterBlock[];
+  cover?: CoverImage | null;
 }): Promise<Blob> {
   const zip = new JSZip();
   const orderedChapters = [...opts.chapters].sort((a, b) => a.sort_order - b.sort_order);
@@ -161,7 +204,10 @@ export async function exportEpub(opts: {
       id,
       href: `${id}.xhtml`,
       title: block.title || "Front matter",
-      html: wrapXhtml(block.title || "Front matter", block.content_html || `<p>${htmlToPlain(block.content_html)}</p>`),
+      html: wrapXhtml(
+        block.title || "Front matter",
+        block.content_html || `<p>${htmlToPlain(block.content_html)}</p>`
+      ),
     });
   }
   orderedChapters.forEach((ch, idx) => {
@@ -186,7 +232,10 @@ export async function exportEpub(opts: {
       id,
       href: `${id}.xhtml`,
       title: block.title || "Back matter",
-      html: wrapXhtml(block.title || "Back matter", block.content_html || `<p>${htmlToPlain(block.content_html)}</p>`),
+      html: wrapXhtml(
+        block.title || "Back matter",
+        block.content_html || `<p>${htmlToPlain(block.content_html)}</p>`
+      ),
     });
   }
 
@@ -198,6 +247,27 @@ export async function exportEpub(opts: {
 
   const oebps = zip.folder("OEBPS");
   items.forEach((item) => oebps?.file(item.href, item.html));
+
+  let coverManifest = "";
+  let coverMeta = "";
+  let coverHref = "";
+  if (opts.cover) {
+    const { ext, media } = epubCoverMeta(opts.cover.type);
+    coverHref = `cover.${ext}`;
+    oebps?.file(coverHref, opts.cover.data);
+    coverManifest = `<item id="cover-image" href="${coverHref}" media-type="${media}" properties="cover-image"/>`;
+    coverMeta = `<meta name="cover" content="cover-image"/>`;
+    oebps?.file(
+      "cover.xhtml",
+      `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title></head>
+<body style="text-align:center;margin:0;padding:0;">
+<img src="${coverHref}" alt="Cover" style="max-width:100%;height:auto;"/>
+</body></html>`
+    );
+  }
 
   const manifest = items
     .map((item) => `<item id="${item.id}" href="${item.href}" media-type="application/xhtml+xml"/>`)
@@ -217,12 +287,16 @@ export async function exportEpub(opts: {
     <dc:creator>${escapeXml(opts.authorName || "Author")}</dc:creator>
     <dc:language>en</dc:language>
     <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d+Z$/, "Z")}</meta>
+    ${coverMeta}
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    ${opts.cover ? `<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>` : ""}
+    ${coverManifest}
     ${manifest}
   </manifest>
   <spine>
+    ${opts.cover ? `<itemref idref="cover"/>` : ""}
     <itemref idref="nav"/>
     ${spine}
   </spine>

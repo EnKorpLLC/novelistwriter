@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import mammoth from "mammoth";
-import { parseNovelist2DocxText } from "@/lib/novelist2-docx";
+import { parseNovelist2DocxText, plainToMatterHtml } from "@/lib/novelist2-docx";
 
 function fountainToChapters(text: string): { title: string; body: string }[] {
   const scenes = text.split(/\n(?=\.[A-Z])/);
@@ -56,29 +56,29 @@ export async function POST(
   const buf = Buffer.from(await file.arrayBuffer());
   let chapters: { title: string; body: string }[] = [];
   let importedTitle: string | undefined;
+  let frontMatter: { matter_type: string; title: string; content: string; enabled: boolean }[] =
+    [];
+  let backMatter: { matter_type: string; title: string; content: string; enabled: boolean }[] =
+    [];
   const name = file.name.toLowerCase();
 
   if (kind === "fountain" || name.endsWith(".fountain")) {
     chapters = fountainToChapters(buf.toString("utf8"));
-  } else if (kind === "scrivener") {
-    const text = buf
-      .toString("utf8")
-      .replace(/\{\\[^}]+\}/g, " ")
-      .replace(/\\[a-z]+\d*\s?/gi, " ");
-    const parsed = parseNovelist2DocxText(text);
-    chapters = parsed.chapters;
-    importedTitle = parsed.title;
   } else {
-    // Novelist 2.0 / Word DOCX (Chapter N: Title)
     const result = await mammoth.extractRawText({ buffer: buf });
     const parsed = parseNovelist2DocxText(result.value);
     chapters = parsed.chapters;
     importedTitle = parsed.title;
+    frontMatter = parsed.frontMatter;
+    backMatter = parsed.backMatter;
   }
 
   if (!chapters.length) {
     return NextResponse.json(
-      { error: "No chapters found. Expected Novelist 2.0 style headings like “Chapter 1: Title”." },
+      {
+        error:
+          "No chapters found. Expected Novelist 2.0 style headings like “Chapter 1: Title”.",
+      },
       { status: 400 }
     );
   }
@@ -109,9 +109,50 @@ export async function POST(
       .eq("user_id", user.id);
   }
 
+  // Merge imported front/back matter into existing matter_blocks
+  const imported = [...frontMatter, ...backMatter];
+  let matterUpdated = 0;
+  if (imported.length) {
+    const { data: existingMatter } = await supabase
+      .from("matter_blocks")
+      .select("*")
+      .eq("project_id", projectId);
+
+    for (const block of imported) {
+      const match = (existingMatter || []).find((m) => m.matter_type === block.matter_type);
+      const html = plainToMatterHtml(block.content);
+      if (match) {
+        const { error: upErr } = await supabase
+          .from("matter_blocks")
+          .update({
+            title: block.title,
+            content_html: html,
+            enabled: true,
+          })
+          .eq("id", match.id)
+          .eq("user_id", user.id);
+        if (!upErr) matterUpdated += 1;
+      } else {
+        const { error: insErr } = await supabase.from("matter_blocks").insert({
+          project_id: projectId,
+          user_id: user.id,
+          matter_type: block.matter_type,
+          title: block.title,
+          content_html: html,
+          enabled: true,
+          sort_order: block.matter_type.startsWith("back_") ? 20 : 0,
+        });
+        if (!insErr) matterUpdated += 1;
+      }
+    }
+  }
+
   return NextResponse.json({
     chapters: rows.length,
     title: importedTitle,
+    matterUpdated,
+    frontMatter: frontMatter.map((m) => m.title),
+    backMatter: backMatter.map((m) => m.title),
     format: "novelist2-docx",
   });
 }

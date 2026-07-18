@@ -65,6 +65,7 @@ create table if not exists public.projects (
   blurb text default '',
   metadata jsonb not null default '{}'::jsonb,
   kdp_settings jsonb not null default '{"trim":"6x9","font":"Garamond","margins":"standard"}'::jsonb,
+  cover_path text,
   is_unlocked boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

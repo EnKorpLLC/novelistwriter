@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Chapter, Project } from "@/lib/types";
 import { KDP_CHECKLIST } from "@/lib/export";
+import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { saveAs } from "file-saver";
 
 function htmlToEditable(html: string): string {
@@ -62,6 +63,10 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
   const [buildFormat, setBuildFormat] = useState<"docx" | "epub">("docx");
   const [includeIds, setIncludeIds] = useState<string[]>(() => chapters.map((c) => c.id));
   const [building, setBuilding] = useState(false);
+  const [coverUrl, setCoverUrl] = useState<string | null>(() =>
+    coverPublicUrl(projectCoverPath(project))
+  );
+  const [coverBusy, setCoverBusy] = useState(false);
 
   async function saveMeta() {
     await fetch(`/api/projects/${project.id}`, {
@@ -131,8 +136,51 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
     const data = await res.json();
     if (!res.ok) alert(data.error || "Import failed");
     else {
-      alert(`Imported ${data.chapters || 0} chapters${data.title ? ` (“${data.title}”)` : ""}. Refreshing…`);
+      const matterBits = [
+        ...(data.frontMatter || []),
+        ...(data.backMatter || []),
+      ] as string[];
+      const matterNote =
+        matterBits.length > 0
+          ? ` Matter updated: ${matterBits.join(", ")}.`
+          : " No front/back matter headings found in the file (only Contents/chapters) — empty matter templates stay for you to fill.";
+      alert(
+        `Imported ${data.chapters || 0} chapters${data.title ? ` (“${data.title}”)` : ""}.${matterNote} Refreshing…`
+      );
       window.location.reload();
+    }
+  }
+
+  async function uploadCover(file: File) {
+    setCoverBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/projects/${project.id}/cover`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Cover upload failed");
+        return;
+      }
+      setCoverUrl(data.url || coverPublicUrl(data.path));
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
+  async function removeCover() {
+    if (!confirm("Remove this project’s cover image?")) return;
+    setCoverBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/cover`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Could not remove cover");
+        return;
+      }
+      setCoverUrl(null);
+    } finally {
+      setCoverBusy(false);
     }
   }
 
@@ -203,6 +251,49 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
             placeholder="Blurb (critique only — we won't write it for you)"
             rows={4}
           />
+          <div className="flex flex-wrap items-start gap-4 border border-line p-3">
+            <div className="relative h-28 w-20 shrink-0 overflow-hidden border border-line bg-paper-deep">
+              {coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverUrl} alt="Cover" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-muted">
+                  No cover
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1 space-y-2 text-sm">
+              <p className="font-medium">Book cover</p>
+              <p className="text-xs text-muted">
+                Shows on the projects list and is embedded in DOCX/EPUB exports. JPG, PNG, or WebP
+                under 5MB.
+              </p>
+              <label className="inline-block cursor-pointer border border-line px-3 py-1.5 text-xs hover:border-accent">
+                {coverBusy ? "Working…" : coverUrl ? "Replace cover" : "Upload cover"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  disabled={coverBusy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void uploadCover(f);
+                  }}
+                />
+              </label>
+              {coverUrl && (
+                <button
+                  type="button"
+                  disabled={coverBusy}
+                  onClick={() => void removeCover()}
+                  className="ml-2 border border-line px-3 py-1.5 text-xs disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <label className="text-xs">
               Trim
@@ -274,6 +365,8 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
         <h3 className="font-display text-xl">Front / back matter</h3>
         <p className="mt-1 text-sm text-muted">
           Write your own copyright, dedication, about the author, etc. Toggle Include for export.
+          New projects start with empty templates. DOCX import fills a section only when that
+          heading exists in the file (e.g. Dedication, Copyright, About the Author).
         </p>
         <ul className="mt-3 space-y-4">
           {matter.map((m) => (
@@ -405,8 +498,9 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
       <section>
         <h3 className="font-display text-xl">Import project</h3>
         <p className="mt-1 text-sm text-muted">
-          Import a Novelist 2.0 DOCX export (title + Contents + “Chapter 1: …” headings). Your
-          Everwind-style files work here.
+          Import a Novelist 2.0 DOCX (title + Contents + “Chapter 1: …” headings). Front/back
+          matter is imported when those headings are present; otherwise the empty templates stay
+          for you to fill.
         </p>
         <div className="font-ui mt-3 space-y-3 text-sm">
           <label className="block border border-accent bg-paper p-3">
