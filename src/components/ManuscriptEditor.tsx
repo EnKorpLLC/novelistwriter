@@ -124,13 +124,21 @@ export function ManuscriptEditor({
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         void (async () => {
-          if (html === lastSynced.current) {
+          // Read latest content at flush time (not the stale onUpdate closure)
+          const latestHtml = ed.getHTML();
+          const latestText = ed.getText();
+          const latestWords = countWords(latestText);
+          if (latestHtml === lastSynced.current) {
             setSaveHint("All changes saved");
             return;
           }
-          const ok = await onSave({ html, text, wordCount });
+          const ok = await onSave({
+            html: latestHtml,
+            text: latestText,
+            wordCount: latestWords,
+          });
           if (ok) {
-            lastSynced.current = html;
+            lastSynced.current = latestHtml;
             clearDraftLocal(chapterId);
             setSaveHint("All changes saved");
           } else {
@@ -141,41 +149,40 @@ export function ManuscriptEditor({
     },
   });
 
+  // Chapter open only (component remounts via key={chapterId}). Do NOT re-run when
+  // parent updates initialHtml/serverUpdatedAt after autosave — that was jumping the caret.
   useEffect(() => {
+    if (!editor) return;
+
     suppressScrollRef.current = true;
     scrollRef.current?.scrollTo(0, 0);
     window.scrollTo(0, 0);
-    const t = window.setTimeout(() => {
-      suppressScrollRef.current = false;
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, [chapterId]);
-
-  useEffect(() => {
-    if (!editor) return;
 
     const serverMs = serverUpdatedAt ? Date.parse(serverUpdatedAt) : 0;
     const cached = loadDraftLocal(chapterId);
 
     // Only use local cache if it is newer than the server AND still pending sync
-    // (prevents one computer's old localStorage from overwriting cloud text)
     const useCache =
       cached?.pendingSync &&
       cached.html &&
       cached.html !== initialHtml &&
       (!serverMs || cached.savedAt > serverMs);
 
-    const next = useCache ? cached!.html : initialHtml || "<p></p>";
-    if (next !== editor.getHTML()) {
-      suppressScrollRef.current = true;
-      editor.commands.setContent(next, false);
+    if (useCache && cached!.html !== editor.getHTML()) {
+      editor.commands.setContent(cached!.html, false);
       selectionAtStart(editor);
       scrollRef.current?.scrollTo(0, 0);
-      window.scrollTo(0, 0);
     }
-    lastSynced.current = useCache ? lastSynced.current : next;
+
+    lastSynced.current = useCache ? cached!.html : initialHtml || "<p></p>";
+
+    const t = window.setTimeout(() => {
+      suppressScrollRef.current = false;
+    }, 400);
+    return () => window.clearTimeout(t);
+    // intentionally: chapter open only (key remount) — not on every autosave prop churn
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapterId, editor, initialHtml, serverUpdatedAt]);
+  }, [editor]);
 
   const forceSave = useCallback(async () => {
     if (!editor) return;
