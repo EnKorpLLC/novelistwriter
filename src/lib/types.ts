@@ -102,6 +102,7 @@ export type Chapter = {
   pov: string;
   timeline_position: string;
   summary: string;
+  updated_at?: string;
 };
 
 export type BibleEntry = {

@@ -6,11 +6,20 @@ export type DraftCache = {
   text: string;
   wordCount: number;
   savedAt: number;
+  /** True until a successful server save clears the cache */
+  pendingSync?: boolean;
 };
 
-export function saveDraftLocal(chapterId: string, draft: Omit<DraftCache, "savedAt">) {
+export function saveDraftLocal(
+  chapterId: string,
+  draft: Omit<DraftCache, "savedAt"> & { pendingSync?: boolean }
+) {
   if (typeof window === "undefined") return;
-  const payload: DraftCache = { ...draft, savedAt: Date.now() };
+  const payload: DraftCache = {
+    ...draft,
+    pendingSync: draft.pendingSync ?? true,
+    savedAt: Date.now(),
+  };
   try {
     localStorage.setItem(`${PREFIX}${chapterId}`, JSON.stringify(payload));
   } catch {

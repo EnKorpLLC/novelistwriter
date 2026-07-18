@@ -52,7 +52,7 @@ export function ProjectWorkspace({
 
   const onSave = useCallback(
     async (payload: { html: string; text: string; wordCount: number }) => {
-      if (!active) return;
+      if (!active) return false;
       setSaveState("Saving…");
       const res = await fetch(`/api/chapters/${active.id}`, {
         method: "PATCH",
@@ -64,6 +64,7 @@ export function ProjectWorkspace({
         }),
       });
       if (res.ok) {
+        const now = new Date().toISOString();
         setChapters((prev) =>
           prev.map((c) =>
             c.id === active.id
@@ -72,14 +73,16 @@ export function ProjectWorkspace({
                   content_html: payload.html,
                   content_text: payload.text,
                   word_count: payload.wordCount,
+                  updated_at: now,
                 }
               : c
           )
         );
         setSaveState("Saved");
-      } else {
-        setSaveState("Save failed");
+        return true;
       }
+      setSaveState("Save failed");
+      return false;
     },
     [active]
   );
@@ -125,41 +128,54 @@ export function ProjectWorkspace({
 
   return (
     <div className={`flex min-h-screen flex-col ${focusMode ? "focus-mode" : ""}`}>
-      <header className="app-chrome font-ui flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-muted hover:text-ink">
-            ←
-          </Link>
-          <div>
-            <h1 className="font-display text-lg">{project.title}</h1>
-            <p className="text-[11px] text-muted">{saveState}</p>
+      {!focusMode && (
+        <header className="font-ui flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="text-muted hover:text-ink">
+              ←
+            </Link>
+            <div>
+              <h1 className="font-display text-lg">{project.title}</h1>
+              <p className="text-[11px] text-muted">{saveState}</p>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2 text-sm">
-          {(["write", "bible", "tools"] as const).map((t) => (
+          <div className="flex flex-wrap gap-2 text-sm">
+            {(["write", "bible", "tools"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={`px-3 py-1 capitalize ${tab === t ? "bg-accent text-paper" : "text-muted hover:text-ink"}`}
+              >
+                {t}
+              </button>
+            ))}
             <button
-              key={t}
               type="button"
-              onClick={() => setTab(t)}
-              className={`px-3 py-1 capitalize ${tab === t ? "bg-accent text-paper" : "text-muted hover:text-ink"}`}
+              onClick={() => setFocusMode(true)}
+              className="border border-line px-3 py-1 text-muted hover:text-ink"
             >
-              {t}
+              Focus
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setFocusMode((f) => !f)}
-            className="border border-line px-3 py-1 text-muted hover:text-ink"
-          >
-            {focusMode ? "Exit focus" : "Focus"}
-          </button>
-        </div>
-      </header>
+          </div>
+        </header>
+      )}
+
+      {focusMode && (
+        <button
+          type="button"
+          onClick={() => setFocusMode(false)}
+          className="font-ui fixed right-4 top-4 z-50 rounded-sm bg-ink px-3 py-2 text-xs text-paper shadow-md"
+        >
+          Exit focus
+        </button>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {tab === "write" && (
           <>
-            <nav className="app-chrome w-52 shrink-0 overflow-y-auto border-r border-line bg-paper-deep/30 p-2">
+            {!focusMode && (
+            <nav className="w-52 shrink-0 overflow-y-auto border-r border-line bg-paper-deep/30 p-2">
               <p className="font-ui px-2 text-[10px] uppercase tracking-wide text-muted">Chapters</p>
               <ul className="mt-2 space-y-1">
                 {chapters.map((c) => (
@@ -192,11 +208,13 @@ export function ProjectWorkspace({
                 </button>
               </div>
             </nav>
+            )}
 
             <div className="flex min-w-0 flex-1 flex-col">
               {active && (
                 <>
-                  <div className="app-chrome grid gap-2 border-b border-line p-3 md:grid-cols-3">
+                  {!focusMode && (
+                  <div className="grid gap-2 border-b border-line p-3 md:grid-cols-3">
                     <input
                       className="border border-line bg-paper px-2 py-1 text-sm"
                       value={active.title}
@@ -277,11 +295,13 @@ export function ProjectWorkspace({
                       onBlur={(e) => updateChapterMeta({ timeline_position: e.target.value })}
                     />
                   </div>
-                  <div className="flex-1 overflow-y-auto">
+                  )}
+                  <div className="min-h-0 flex-1">
                     <ManuscriptEditor
                       key={active.id}
                       chapterId={active.id}
                       initialHtml={active.content_html}
+                      serverUpdatedAt={active.updated_at}
                       onSave={onSave}
                       onSelectionText={setSelectionText}
                       focusMode={focusMode}
@@ -291,7 +311,8 @@ export function ProjectWorkspace({
               )}
             </div>
 
-            <div className="app-chrome hidden w-[340px] shrink-0 lg:block">
+            {!focusMode && (
+            <div className="hidden w-[340px] shrink-0 lg:block">
               <CritiquePanel
                 projectId={project.id}
                 chapterId={active?.id}
@@ -300,6 +321,7 @@ export function ProjectWorkspace({
                 onChallengeChange={setChallengeLevel}
               />
             </div>
+            )}
           </>
         )}
 
