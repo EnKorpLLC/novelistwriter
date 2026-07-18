@@ -99,27 +99,38 @@ export async function addCredits(opts: {
   stripeEventId?: string;
 }) {
   const admin = createServiceClient();
-  const { data: bal } = await admin
+
+  if (opts.stripeEventId) {
+    const { data: prior } = await admin
+      .from("credit_ledger")
+      .select("id")
+      .eq("stripe_event_id", opts.stripeEventId)
+      .maybeSingle();
+    if (prior) return;
+  }
+
+  const { data: bal, error: readErr } = await admin
     .from("credit_balances")
     .select("balance")
     .eq("user_id", opts.userId)
-    .single();
+    .maybeSingle();
+  if (readErr) throw new Error(`credit read failed: ${readErr.message}`);
 
   const next = (bal?.balance ?? 0) + opts.amount;
-  await admin
-    .from("credit_balances")
-    .upsert({
-      user_id: opts.userId,
-      balance: next,
-      updated_at: new Date().toISOString(),
-    });
+  const { error: upErr } = await admin.from("credit_balances").upsert({
+    user_id: opts.userId,
+    balance: next,
+    updated_at: new Date().toISOString(),
+  });
+  if (upErr) throw new Error(`credit upsert failed: ${upErr.message}`);
 
-  await admin.from("credit_ledger").insert({
+  const { error: ledErr } = await admin.from("credit_ledger").insert({
     user_id: opts.userId,
     delta: opts.amount,
     reason: opts.reason,
     stripe_event_id: opts.stripeEventId,
   });
+  if (ledErr) throw new Error(`credit ledger failed: ${ledErr.message}`);
 }
 
 export async function canCreateProject(userId: string): Promise<{

@@ -51,6 +51,9 @@ export async function POST(req: Request) {
       success_url: appUrl("/billing?success=unlock"),
       cancel_url: appUrl("/billing?canceled=1"),
       metadata: { supabase_user_id: user.id, kind: "project_unlock" },
+      payment_intent_data: {
+        metadata: { supabase_user_id: user.id, kind: "project_unlock" },
+      },
     });
     return NextResponse.json({ url: session.url });
   }
@@ -72,6 +75,14 @@ export async function POST(req: Request) {
         kind: "credits",
         pack,
         credits: String(packDef.credits),
+      },
+      payment_intent_data: {
+        metadata: {
+          supabase_user_id: user.id,
+          kind: "credits",
+          pack,
+          credits: String(packDef.credits),
+        },
       },
     });
     return NextResponse.json({ url: session.url });

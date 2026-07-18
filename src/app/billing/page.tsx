@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 
 function BillingInner() {
   const search = useSearchParams();
@@ -10,6 +10,38 @@ function BillingInner() {
   const success = search.get("success");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  async function syncPurchases() {
+    setLoading("sync");
+    setError(null);
+    try {
+      const res = await fetch("/api/stripe/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sync failed");
+      setBalance((data.balance ?? 0) + (data.monthly ?? 0));
+      if (data.applied?.length) {
+        setSyncNote(
+          `Applied ${data.applied.length} purchase(s). Balance is now ${data.balance ?? 0} purchased credits.`
+        );
+      } else {
+        setSyncNote(
+          `Checked Stripe — no new purchases to apply. Purchased balance: ${data.balance ?? 0}.`
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!success) return;
+    void syncPurchases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [success]);
 
   async function checkout(body: Record<string, unknown>) {
     setLoading(JSON.stringify(body.kind));
@@ -47,10 +79,34 @@ function BillingInner() {
       )}
       {success && (
         <p className="mt-4 border border-accent bg-paper-deep px-4 py-3 text-sm text-accent">
-          Payment received. Entitlements update within a few seconds.
+          Payment received. Syncing entitlements…
+        </p>
+      )}
+      {syncNote && (
+        <p className="mt-4 border border-accent bg-paper-deep px-4 py-3 text-sm text-accent">
+          {syncNote}
+          {balance !== null && (
+            <>
+              {" "}
+              <Link href="/dashboard" className="underline">
+                Back to dashboard
+              </Link>
+            </>
+          )}
         </p>
       )}
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+
+      <p className="font-ui mt-4 text-sm">
+        <button
+          type="button"
+          disabled={!!loading}
+          onClick={() => void syncPurchases()}
+          className="text-accent underline disabled:opacity-50"
+        >
+          {loading === "sync" ? "Syncing…" : "Refresh purchases from Stripe"}
+        </button>
+      </p>
 
       <section className="mt-10 border border-line p-6">
         <h2 className="font-display text-xl">Project unlock</h2>
