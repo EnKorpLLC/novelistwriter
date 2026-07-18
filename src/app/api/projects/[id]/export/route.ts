@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { exportDocx, exportEpub, validateEpubStructure } from "@/lib/export";
-import {
-  exportNovelWriterMarkup,
-  exportNovelWriterProject,
-} from "@/lib/novelwriter-archive";
 
 export async function POST(
   req: Request,
@@ -80,34 +76,6 @@ export async function POST(
       headers: {
         "Content-Type": "application/epub+zip",
         "Content-Disposition": `attachment; filename="${safeName}.epub"`,
-      },
-    });
-  }
-
-  if (format === "nwproject") {
-    const blob = await exportNovelWriterProject({
-      title: project.title,
-      authorName,
-      chapters: selected,
-    });
-    const buf = Buffer.from(await blob.arrayBuffer());
-    return new NextResponse(buf, {
-      headers: {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="${safeName}.nwproject.zip"`,
-      },
-    });
-  }
-
-  if (format === "nwmarkup") {
-    const text = exportNovelWriterMarkup({
-      title: project.title,
-      chapters: selected,
-    });
-    return new NextResponse(text, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${safeName}.txt"`,
       },
     });
   }

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CreateProjectButton } from "@/components/CreateProjectButton";
 import { SignOutButton } from "@/components/SignOutButton";
+import { DeleteProjectButton } from "@/components/DeleteProjectButton";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -74,19 +75,22 @@ export default async function DashboardPage() {
             </li>
           )}
           {(projects ?? []).map((p) => (
-            <li key={p.id}>
-              <Link
-                href={`/project/${p.id}`}
-                className="flex items-center justify-between border border-line bg-paper px-5 py-4 transition hover:border-accent"
-              >
-                <div>
-                  <h2 className="font-display text-xl">{p.title}</h2>
-                  <p className="text-sm text-muted">
-                    {p.genre || "No genre"} · {p.pov || "POV TBD"} · {p.status}
-                  </p>
-                </div>
-                <span className="font-ui text-sm text-accent">Open →</span>
+            <li
+              key={p.id}
+              className="flex items-center justify-between gap-4 border border-line bg-paper px-5 py-4 transition hover:border-accent"
+            >
+              <Link href={`/project/${p.id}`} className="min-w-0 flex-1">
+                <h2 className="font-display text-xl">{p.title}</h2>
+                <p className="text-sm text-muted">
+                  {p.genre || "No genre"} · {p.pov || "POV TBD"} · {p.status}
+                </p>
               </Link>
+              <div className="font-ui flex shrink-0 items-center gap-4 text-sm">
+                <DeleteProjectButton projectId={p.id} title={p.title} />
+                <Link href={`/project/${p.id}`} className="text-accent">
+                  Open →
+                </Link>
+              </div>
             </li>
           ))}
         </ul>

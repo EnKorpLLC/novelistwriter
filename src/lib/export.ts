@@ -7,6 +7,7 @@ import {
 } from "docx";
 import JSZip from "jszip";
 import type { Chapter } from "@/lib/types";
+import { novelist2ChapterHeading } from "@/lib/novelist2-docx";
 
 export type MatterBlock = {
   matter_type: string;
@@ -40,6 +41,7 @@ function parasFromText(text: string): Paragraph[] {
   );
 }
 
+/** Novelist 2.0–style DOCX: title → Contents → Chapter N: Title → body → matter */
 export async function exportDocx(opts: {
   title: string;
   subtitle?: string;
@@ -48,30 +50,25 @@ export async function exportDocx(opts: {
   matter: MatterBlock[];
 }): Promise<Blob> {
   const front = opts.matter
-    .filter((m) => m.enabled && m.matter_type.startsWith("front_"))
+    .filter((m) => m.enabled && m.matter_type.startsWith("front_") && m.matter_type !== "front_toc")
     .sort((a, b) => a.sort_order - b.sort_order);
   const back = opts.matter
     .filter((m) => m.enabled && m.matter_type.startsWith("back_"))
     .sort((a, b) => a.sort_order - b.sort_order);
+  const ordered = [...opts.chapters].sort((a, b) => a.sort_order - b.sort_order);
+  const includeToc = opts.matter.some((m) => m.enabled && m.matter_type === "front_toc");
 
   const children: Paragraph[] = [
     new Paragraph({
-      heading: HeadingLevel.TITLE,
-      children: [new TextRun({ text: opts.title, bold: true, font: "Garamond", size: 48 })],
+      spacing: { after: 400 },
+      children: [new TextRun({ text: opts.title, bold: true, font: "Garamond", size: 56 })],
     }),
   ];
 
-  if (opts.subtitle) {
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: opts.subtitle, italics: true, font: "Garamond", size: 28 })],
-      })
-    );
-  }
   if (opts.authorName) {
     children.push(
       new Paragraph({
-        spacing: { after: 400 },
+        spacing: { after: 600 },
         children: [new TextRun({ text: opts.authorName, font: "Garamond", size: 24 })],
       })
     );
@@ -81,17 +78,36 @@ export async function exportDocx(opts: {
     children.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: block.title || block.matter_type, font: "Garamond" })],
+        children: [new TextRun({ text: block.title || block.matter_type, font: "Garamond", bold: true })],
       })
     );
     children.push(...parasFromText(htmlToPlain(block.content_html)));
   }
 
-  for (const ch of [...opts.chapters].sort((a, b) => a.sort_order - b.sort_order)) {
+  if (includeToc) {
     children.push(
       new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: ch.title, font: "Garamond", bold: true })],
+        spacing: { before: 400, after: 200 },
+        children: [new TextRun({ text: "Contents", bold: true, font: "Garamond", size: 32 })],
+      })
+    );
+    for (const ch of ordered) {
+      const heading = novelist2ChapterHeading(ch.sort_order, ch.title);
+      children.push(
+        new Paragraph({
+          spacing: { after: 80 },
+          children: [new TextRun({ text: heading, font: "Garamond", size: 22 })],
+        })
+      );
+    }
+  }
+
+  for (const ch of ordered) {
+    const heading = novelist2ChapterHeading(ch.sort_order, ch.title);
+    children.push(
+      new Paragraph({
+        spacing: { before: 400, after: 200 },
+        children: [new TextRun({ text: heading, bold: true, font: "Garamond", size: 32 })],
       })
     );
     children.push(...parasFromText(ch.content_text || htmlToPlain(ch.content_html)));
@@ -101,7 +117,7 @@ export async function exportDocx(opts: {
     children.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: block.title || block.matter_type, font: "Garamond" })],
+        children: [new TextRun({ text: block.title || block.matter_type, font: "Garamond", bold: true })],
       })
     );
     children.push(...parasFromText(htmlToPlain(block.content_html)));

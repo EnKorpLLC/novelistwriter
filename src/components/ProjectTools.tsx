@@ -59,9 +59,7 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
   const [betaEmail, setBetaEmail] = useState("");
   const [seriesTitle, setSeriesTitle] = useState("");
   const [byokNote, setByokNote] = useState("");
-  const [buildFormat, setBuildFormat] = useState<
-    "docx" | "epub" | "nwproject" | "nwmarkup"
-  >("docx");
+  const [buildFormat, setBuildFormat] = useState<"docx" | "epub">("docx");
   const [includeIds, setIncludeIds] = useState<string[]>(() => chapters.map((c) => c.id));
   const [building, setBuilding] = useState(false);
 
@@ -107,14 +105,7 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
         return;
       }
       const blob = await res.blob();
-      const ext =
-        buildFormat === "docx"
-          ? "docx"
-          : buildFormat === "epub"
-            ? "epub"
-            : buildFormat === "nwproject"
-              ? "nwproject.zip"
-              : "txt";
+      const ext = buildFormat === "docx" ? "docx" : "epub";
       saveAs(blob, `${title || "manuscript"}.${ext}`);
     } finally {
       setBuilding(false);
@@ -337,7 +328,8 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
       <section>
         <h3 className="font-display text-xl">Manuscript build</h3>
         <p className="mt-1 text-sm text-muted">
-          Like novelWriter’s Manuscript Build: pick a format, choose chapters, then build.
+          Export like Novelist 2.0: DOCX with title, Contents, and “Chapter N: Title” sections.
+          EPUB available for KDP ebook upload.
         </p>
         <div className="font-ui mt-4 grid gap-4 border border-line md:grid-cols-2">
           <div className="border-b border-line p-4 md:border-b-0 md:border-r">
@@ -345,10 +337,8 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
             <ul className="mt-2 space-y-1 text-sm">
               {(
                 [
-                  ["docx", "Microsoft Word (DOCX) — KDP"],
+                  ["docx", "Microsoft Word (DOCX) — Novelist 2.0 style"],
                   ["epub", "EPUB — KDP ebook"],
-                  ["nwproject", "novelWriter project ZIP (nwProject.nwx)"],
-                  ["nwmarkup", "novelWriter Markup (.txt)"],
                 ] as const
               ).map(([id, label]) => (
                 <li key={id}>
@@ -415,15 +405,15 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
       <section>
         <h3 className="font-display text-xl">Import project</h3>
         <p className="mt-1 text-sm text-muted">
-          Prefer a novelWriter 2.0 project ZIP (contains <code>nwProject.nwx</code>). You can also
-          import Markup .txt, DOCX, Fountain, or Scrivener text export.
+          Import a Novelist 2.0 DOCX export (title + Contents + “Chapter 1: …” headings). Your
+          Everwind-style files work here.
         </p>
         <div className="font-ui mt-3 space-y-3 text-sm">
           <label className="block border border-accent bg-paper p-3">
-            <span className="font-medium text-accent">novelWriter project ZIP</span>
+            <span className="font-medium text-accent">Novelist 2.0 / Word DOCX</span>
             <input
               type="file"
-              accept=".zip"
+              accept=".docx"
               className="mt-2 block w-full"
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -431,28 +421,8 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
                 const replace = confirm(
                   "Replace all chapters in this project with the imported ones?\n\nOK = replace\nCancel = append"
                 );
-                void importFile(f, "nwproject", replace);
+                void importFile(f, "docx", replace);
               }}
-            />
-          </label>
-          <label className="block">
-            novelWriter Markup (.txt)
-            <input
-              type="file"
-              accept=".txt"
-              className="mt-1 block"
-              onChange={(e) =>
-                e.target.files?.[0] && importFile(e.target.files[0], "nwmarkup", true)
-              }
-            />
-          </label>
-          <label className="block">
-            DOCX
-            <input
-              type="file"
-              accept=".docx"
-              className="mt-1 block"
-              onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0], "docx")}
             />
           </label>
           <label className="block">
@@ -463,17 +433,6 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
               className="mt-1 block"
               onChange={(e) =>
                 e.target.files?.[0] && importFile(e.target.files[0], "fountain")
-              }
-            />
-          </label>
-          <label className="block">
-            Scrivener (ZIP / RTF text export)
-            <input
-              type="file"
-              accept=".zip,.rtf,.txt"
-              className="mt-1 block"
-              onChange={(e) =>
-                e.target.files?.[0] && importFile(e.target.files[0], "scrivener")
               }
             />
           </label>
