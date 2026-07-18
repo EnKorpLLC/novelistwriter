@@ -45,7 +45,7 @@ export async function POST(
   if (upErr) {
     return NextResponse.json(
       {
-        error: `Upload failed: ${upErr.message}. Create a public Storage bucket named “covers” in Supabase.`,
+        error: `Upload failed: ${upErr.message}. If the covers bucket exists, run supabase/migration_cover.sql so authenticated users can upload (public bucket ≠ upload permission).`,
       },
       { status: 500 }
     );

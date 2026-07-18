@@ -82,10 +82,10 @@ export function ManuscriptEditor({
       dom.setAttribute("spellcheck", "true");
       dom.spellcheck = true;
       dom.setAttribute("lang", "en-US");
-      // Force browser to re-evaluate spellcheck after mount
+      // Re-assert spellcheck without scrolling the page to the editor
       requestAnimationFrame(() => {
         dom.blur();
-        dom.focus();
+        dom.focus({ preventScroll: true });
       });
     },
     onTransaction: () => setTick((t) => t + 1),

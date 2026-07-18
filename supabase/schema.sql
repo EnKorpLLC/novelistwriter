@@ -293,5 +293,6 @@ create policy "beta_comments_own" on public.beta_comments for select using (
 );
 create policy "beta_comments_insert" on public.beta_comments for insert with check (true);
 
--- Storage bucket note: create private bucket `manuscripts` in dashboard
+-- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
+-- Optional private bucket `manuscripts` for raw uploads if needed later
 -- and add policies for authenticated users on folder {user_id}/*
