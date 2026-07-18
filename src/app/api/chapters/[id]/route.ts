@@ -40,7 +40,6 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Track daily words (approximate: use word_count delta lightly)
   if (typeof body.word_count === "number") {
     const today = new Date().toISOString().slice(0, 10);
     const { data: day } = await supabase
@@ -49,7 +48,6 @@ export async function PATCH(
       .eq("user_id", user.id)
       .eq("day", today)
       .maybeSingle();
-    // Store latest session contribution as bump — simple approach: max with current day
     const prev = day?.words_written ?? 0;
     const bump = Math.max(prev, Math.min(body.word_count, prev + 500));
     await supabase.from("writing_days").upsert({
@@ -60,4 +58,46 @@ export async function PATCH(
   }
 
   return NextResponse.json({ chapter: data });
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: chapter } = await supabase
+    .from("chapters")
+    .select("id, project_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!chapter) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const { count } = await supabase
+    .from("chapters")
+    .select("*", { count: "exact", head: true })
+    .eq("project_id", chapter.project_id);
+
+  if ((count ?? 0) <= 1) {
+    return NextResponse.json(
+      { error: "Cannot delete the only chapter. Add another first." },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabase
+    .from("chapters")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

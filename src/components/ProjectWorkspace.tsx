@@ -111,6 +111,24 @@ export function ProjectWorkspace({
     }
   }
 
+  async function deleteChapter() {
+    if (!active) return;
+    if (chapters.length <= 1) {
+      alert("Cannot delete the only chapter. Add another first.");
+      return;
+    }
+    if (!confirm(`Delete “${active.title}”? This cannot be undone.`)) return;
+    const res = await fetch(`/api/chapters/${active.id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || "Delete failed");
+      return;
+    }
+    const next = chapters.filter((c) => c.id !== active.id);
+    setChapters(next);
+    setActiveId(next[0]?.id || "");
+  }
+
   async function reorder(dir: -1 | 1) {
     if (!active) return;
     const idx = chapters.findIndex((c) => c.id === active.id);
@@ -223,6 +241,13 @@ export function ProjectWorkspace({
                 className="font-ui mt-3 w-full px-2 py-1 text-left text-xs text-accent"
               >
                 + Chapter
+              </button>
+              <button
+                type="button"
+                onClick={deleteChapter}
+                className="font-ui w-full px-2 py-1 text-left text-xs text-danger"
+              >
+                Delete chapter
               </button>
               <div className="mt-2 flex gap-1 px-2">
                 <button type="button" className="text-xs text-muted" onClick={() => reorder(-1)}>

@@ -5,6 +5,25 @@ import type { Chapter, Project } from "@/lib/types";
 import { KDP_CHECKLIST } from "@/lib/export";
 import { saveAs } from "file-saver";
 
+function htmlToEditable(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+}
+
+function plainToHtml(text: string): string {
+  return text
+    .split(/\n\n+/)
+    .map((p) => `<p>${p.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+}
+
 type Matter = {
   id: string;
   matter_type: string;
@@ -40,6 +59,11 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
   const [betaEmail, setBetaEmail] = useState("");
   const [seriesTitle, setSeriesTitle] = useState("");
   const [byokNote, setByokNote] = useState("");
+  const [buildFormat, setBuildFormat] = useState<
+    "docx" | "epub" | "nwproject" | "nwmarkup"
+  >("docx");
+  const [includeIds, setIncludeIds] = useState<string[]>(() => chapters.map((c) => c.id));
+  const [building, setBuilding] = useState(false);
 
   async function saveMeta() {
     await fetch(`/api/projects/${project.id}`, {
@@ -54,61 +78,69 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
     });
   }
 
-  async function toggleMatter(id: string, enabled: boolean) {
-    setMatter((prev) => prev.map((m) => (m.id === id ? { ...m, enabled } : m)));
+  async function saveMatter(
+    id: string,
+    patch: { enabled?: boolean; title?: string; content_html?: string }
+  ) {
+    setMatter((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
     await fetch(`/api/matter/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled }),
+      body: JSON.stringify(patch),
     });
   }
 
-  async function exportFile(format: "docx" | "epub") {
-    const res = await fetch(`/api/projects/${project.id}/export`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ format }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      alert(data.error || "Export failed");
-      return;
+  async function buildManuscript() {
+    setBuilding(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format: buildFormat,
+          includeChapterIds: includeIds,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Build failed");
+        return;
+      }
+      const blob = await res.blob();
+      const ext =
+        buildFormat === "docx"
+          ? "docx"
+          : buildFormat === "epub"
+            ? "epub"
+            : buildFormat === "nwproject"
+              ? "nwproject.zip"
+              : "txt";
+      saveAs(blob, `${title || "manuscript"}.${ext}`);
+    } finally {
+      setBuilding(false);
     }
-    const blob = await res.blob();
-    saveAs(blob, `${title || "manuscript"}.${format}`);
   }
 
   async function validate() {
     const res = await fetch(`/api/projects/${project.id}/export`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ format: "validate" }),
+      body: JSON.stringify({ format: "validate", includeChapterIds: includeIds }),
     });
     const data = await res.json();
-    setValidation(data.issues || []);
+    setValidation(data.issues || (data.ok ? ["Looks good — no structural issues."] : []));
   }
 
-  async function importDocx(file: File) {
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch(`/api/projects/${project.id}/import`, { method: "POST", body: fd });
-    const data = await res.json();
-    if (!res.ok) alert(data.error || "Import failed");
-    else {
-      alert(`Imported ${data.chapters || 0} chapters. Refreshing…`);
-      window.location.reload();
-    }
-  }
-
-  async function importScrivenerFountain(file: File, kind: "scrivener" | "fountain") {
+  async function importFile(file: File, kind: string, replaceAll = false) {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("kind", kind);
+    if (replaceAll) fd.append("replaceAll", "1");
     const res = await fetch(`/api/projects/${project.id}/import`, { method: "POST", body: fd });
     const data = await res.json();
     if (!res.ok) alert(data.error || "Import failed");
     else {
-      alert("Import complete. Refreshing…");
+      alert(`Imported ${data.chapters || 0} chapters${data.title ? ` (“${data.title}”)` : ""}. Refreshing…`);
       window.location.reload();
     }
   }
@@ -249,60 +281,178 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
 
       <section>
         <h3 className="font-display text-xl">Front / back matter</h3>
-        <ul className="mt-3 space-y-2">
+        <p className="mt-1 text-sm text-muted">
+          Write your own copyright, dedication, about the author, etc. Toggle Include for export.
+        </p>
+        <ul className="mt-3 space-y-4">
           {matter.map((m) => (
-            <li key={m.id} className="font-ui flex items-center justify-between border border-line px-3 py-2 text-sm">
-              <span>
-                {m.title || m.matter_type}
-              </span>
-              <label className="flex items-center gap-2 text-xs">
+            <li key={m.id} className="font-ui border border-line p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <input
-                  type="checkbox"
-                  checked={m.enabled}
-                  onChange={(e) => toggleMatter(m.id, e.target.checked)}
+                  className="min-w-[12rem] flex-1 border border-line bg-paper px-2 py-1 text-sm"
+                  value={m.title}
+                  onChange={(e) =>
+                    setMatter((prev) =>
+                      prev.map((x) => (x.id === m.id ? { ...x, title: e.target.value } : x))
+                    )
+                  }
+                  onBlur={(e) => void saveMatter(m.id, { title: e.target.value })}
+                  placeholder="Section title"
                 />
-                Include
-              </label>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={m.enabled}
+                    onChange={(e) => void saveMatter(m.id, { enabled: e.target.checked })}
+                  />
+                  Include in export
+                </label>
+              </div>
+              <p className="mt-1 text-[10px] uppercase tracking-wide text-muted">
+                {m.matter_type.replace(/_/g, " ")}
+              </p>
+              <textarea
+                className="mt-2 w-full border border-line bg-paper px-3 py-2 text-sm"
+                rows={5}
+                value={htmlToEditable(m.content_html)}
+                onChange={(e) =>
+                  setMatter((prev) =>
+                    prev.map((x) =>
+                      x.id === m.id
+                        ? { ...x, content_html: plainToHtml(e.target.value) }
+                        : x
+                    )
+                  )
+                }
+                onBlur={(e) =>
+                  void saveMatter(m.id, { content_html: plainToHtml(e.target.value) })
+                }
+                placeholder="Write this page’s text…"
+              />
             </li>
           ))}
         </ul>
       </section>
 
       <section>
-        <h3 className="font-display text-xl">Export</h3>
-        <div className="font-ui mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={() => exportFile("docx")} className="border border-line px-4 py-2">
-            Export DOCX
-          </button>
-          <button type="button" onClick={() => exportFile("epub")} className="border border-line px-4 py-2">
-            Export EPUB
-          </button>
-          <button type="button" onClick={validate} className="border border-line px-4 py-2">
-            Validate EPUB structure
-          </button>
+        <h3 className="font-display text-xl">Manuscript build</h3>
+        <p className="mt-1 text-sm text-muted">
+          Like novelWriter’s Manuscript Build: pick a format, choose chapters, then build.
+        </p>
+        <div className="font-ui mt-4 grid gap-4 border border-line md:grid-cols-2">
+          <div className="border-b border-line p-4 md:border-b-0 md:border-r">
+            <p className="text-[10px] uppercase tracking-wide text-muted">Output format</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {(
+                [
+                  ["docx", "Microsoft Word (DOCX) — KDP"],
+                  ["epub", "EPUB — KDP ebook"],
+                  ["nwproject", "novelWriter project ZIP (nwProject.nwx)"],
+                  ["nwmarkup", "novelWriter Markup (.txt)"],
+                ] as const
+              ).map(([id, label]) => (
+                <li key={id}>
+                  <label className="flex cursor-pointer items-start gap-2 rounded-sm px-2 py-1.5 hover:bg-paper-deep">
+                    <input
+                      type="radio"
+                      name="buildFormat"
+                      checked={buildFormat === id}
+                      onChange={() => setBuildFormat(id)}
+                      className="mt-1"
+                    />
+                    <span>{label}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="p-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted">Include documents</p>
+            <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm">
+              {chapters.map((c) => (
+                <li key={c.id}>
+                  <label className="flex items-center gap-2 px-1 py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={includeIds.includes(c.id)}
+                      onChange={(e) => {
+                        setIncludeIds((prev) =>
+                          e.target.checked
+                            ? [...prev, c.id]
+                            : prev.filter((id) => id !== c.id)
+                        );
+                      }}
+                    />
+                    {c.title}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={building || !includeIds.length}
+                onClick={buildManuscript}
+                className="bg-accent px-4 py-2 text-paper disabled:opacity-50"
+              >
+                {building ? "Building…" : "Build"}
+              </button>
+              <button type="button" onClick={validate} className="border border-line px-4 py-2">
+                Validate
+              </button>
+            </div>
+            {validation.length > 0 && (
+              <ul className="mt-2 text-xs text-muted">
+                {validation.map((v) => (
+                  <li key={v}>{v}</li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
-        {validation.length > 0 && (
-          <ul className="mt-2 text-sm text-danger">
-            {validation.map((v) => (
-              <li key={v}>{v}</li>
-            ))}
-          </ul>
-        )}
-        {validation.length === 0 && (
-          <p className="mt-2 text-xs text-muted">Run validate after drafting chapters.</p>
-        )}
       </section>
 
       <section>
-        <h3 className="font-display text-xl">Import</h3>
-        <div className="font-ui mt-3 space-y-2 text-sm">
+        <h3 className="font-display text-xl">Import project</h3>
+        <p className="mt-1 text-sm text-muted">
+          Prefer a novelWriter 2.0 project ZIP (contains <code>nwProject.nwx</code>). You can also
+          import Markup .txt, DOCX, Fountain, or Scrivener text export.
+        </p>
+        <div className="font-ui mt-3 space-y-3 text-sm">
+          <label className="block border border-accent bg-paper p-3">
+            <span className="font-medium text-accent">novelWriter project ZIP</span>
+            <input
+              type="file"
+              accept=".zip"
+              className="mt-2 block w-full"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const replace = confirm(
+                  "Replace all chapters in this project with the imported ones?\n\nOK = replace\nCancel = append"
+                );
+                void importFile(f, "nwproject", replace);
+              }}
+            />
+          </label>
+          <label className="block">
+            novelWriter Markup (.txt)
+            <input
+              type="file"
+              accept=".txt"
+              className="mt-1 block"
+              onChange={(e) =>
+                e.target.files?.[0] && importFile(e.target.files[0], "nwmarkup", true)
+              }
+            />
+          </label>
           <label className="block">
             DOCX
             <input
               type="file"
               accept=".docx"
               className="mt-1 block"
-              onChange={(e) => e.target.files?.[0] && importDocx(e.target.files[0])}
+              onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0], "docx")}
             />
           </label>
           <label className="block">
@@ -312,7 +462,7 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
               accept=".fountain,.txt"
               className="mt-1 block"
               onChange={(e) =>
-                e.target.files?.[0] && importScrivenerFountain(e.target.files[0], "fountain")
+                e.target.files?.[0] && importFile(e.target.files[0], "fountain")
               }
             />
           </label>
@@ -323,7 +473,7 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
               accept=".zip,.rtf,.txt"
               className="mt-1 block"
               onChange={(e) =>
-                e.target.files?.[0] && importScrivenerFountain(e.target.files[0], "scrivener")
+                e.target.files?.[0] && importFile(e.target.files[0], "scrivener")
               }
             />
           </label>

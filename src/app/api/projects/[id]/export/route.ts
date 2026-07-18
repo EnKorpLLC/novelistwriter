@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { exportDocx, exportEpub, validateEpubStructure } from "@/lib/export";
+import {
+  exportNovelWriterMarkup,
+  exportNovelWriterProject,
+} from "@/lib/novelwriter-archive";
 
 export async function POST(
   req: Request,
@@ -13,7 +17,7 @@ export async function POST(
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { format } = await req.json();
+  const { format, includeChapterIds } = await req.json();
 
   const [{ data: project }, { data: chapters }, { data: matter }, { data: profile }] =
     await Promise.all([
@@ -25,9 +29,14 @@ export async function POST(
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  let selected = chapters || [];
+  if (Array.isArray(includeChapterIds) && includeChapterIds.length) {
+    const set = new Set(includeChapterIds as string[]);
+    selected = selected.filter((c) => set.has(c.id));
+  }
+
   if (format === "validate") {
-    const result = validateEpubStructure(chapters || []);
-    return NextResponse.json(result);
+    return NextResponse.json(validateEpubStructure(selected));
   }
 
   const authorName = profile?.display_name || user.email || "Author";
@@ -39,12 +48,14 @@ export async function POST(
     sort_order: m.sort_order,
   }));
 
+  const safeName = (project.title || "manuscript").replace(/[^\w\- ]+/g, "").trim() || "manuscript";
+
   if (format === "docx") {
     const blob = await exportDocx({
       title: project.title,
       subtitle: project.subtitle,
       authorName,
-      chapters: chapters || [],
+      chapters: selected,
       matter: matterBlocks,
     });
     const buf = Buffer.from(await blob.arrayBuffer());
@@ -52,7 +63,7 @@ export async function POST(
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${project.title}.docx"`,
+        "Content-Disposition": `attachment; filename="${safeName}.docx"`,
       },
     });
   }
@@ -61,14 +72,42 @@ export async function POST(
     const blob = await exportEpub({
       title: project.title,
       authorName,
-      chapters: chapters || [],
+      chapters: selected,
       matter: matterBlocks,
     });
     const buf = Buffer.from(await blob.arrayBuffer());
     return new NextResponse(buf, {
       headers: {
         "Content-Type": "application/epub+zip",
-        "Content-Disposition": `attachment; filename="${project.title}.epub"`,
+        "Content-Disposition": `attachment; filename="${safeName}.epub"`,
+      },
+    });
+  }
+
+  if (format === "nwproject") {
+    const blob = await exportNovelWriterProject({
+      title: project.title,
+      authorName,
+      chapters: selected,
+    });
+    const buf = Buffer.from(await blob.arrayBuffer());
+    return new NextResponse(buf, {
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${safeName}.nwproject.zip"`,
+      },
+    });
+  }
+
+  if (format === "nwmarkup") {
+    const text = exportNovelWriterMarkup({
+      title: project.title,
+      chapters: selected,
+    });
+    return new NextResponse(text, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${safeName}.txt"`,
       },
     });
   }
