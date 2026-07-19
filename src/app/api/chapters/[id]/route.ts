@@ -30,6 +30,14 @@ export async function PATCH(
     if (key in body) patch[key] = body[key];
   }
 
+  const { data: before } = await supabase
+    .from("chapters")
+    .select("word_count")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const { data, error } = await supabase
     .from("chapters")
     .update(patch)
@@ -40,24 +48,28 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: day } = await supabase
+    .from("writing_days")
+    .select("words_written")
+    .eq("user_id", user.id)
+    .eq("day", today)
+    .maybeSingle();
+  let wordsWrittenToday = day?.words_written ?? 0;
+
   if (typeof body.word_count === "number") {
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: day } = await supabase
-      .from("writing_days")
-      .select("words_written")
-      .eq("user_id", user.id)
-      .eq("day", today)
-      .maybeSingle();
-    const prev = day?.words_written ?? 0;
-    const bump = Math.max(prev, Math.min(body.word_count, prev + 500));
-    await supabase.from("writing_days").upsert({
-      user_id: user.id,
-      day: today,
-      words_written: bump,
-    });
+    const delta = Math.max(0, body.word_count - (before.word_count ?? 0));
+    if (delta > 0) {
+      wordsWrittenToday += delta;
+      await supabase.from("writing_days").upsert({
+        user_id: user.id,
+        day: today,
+        words_written: wordsWrittenToday,
+      });
+    }
   }
 
-  return NextResponse.json({ chapter: data });
+  return NextResponse.json({ chapter: data, wordsWrittenToday });
 }
 
 export async function DELETE(

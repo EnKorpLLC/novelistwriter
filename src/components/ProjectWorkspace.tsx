@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ManuscriptEditor } from "@/components/ManuscriptEditor";
 import { CritiquePanel } from "@/components/CritiquePanel";
 import { BiblePanel } from "@/components/BiblePanel";
 import { ProjectTools } from "@/components/ProjectTools";
+import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
 
 type Matter = {
@@ -23,6 +24,8 @@ type Props = {
   bible: BibleEntry[];
   matter: Matter[];
   challengeLevel: number;
+  wordGoalDaily: number;
+  wordsWrittenToday: number;
   promises: { id: string; description: string; status: string }[];
   arcs: { id: string; arc_type: string; subject: string; notes: string }[];
   initialCredits: number;
@@ -34,6 +37,8 @@ export function ProjectWorkspace({
   bible: initialBible,
   matter,
   challengeLevel: initialChallenge,
+  wordGoalDaily,
+  wordsWrittenToday: initialWordsToday,
   promises,
   arcs: initialArcs,
   initialCredits,
@@ -49,16 +54,43 @@ export function ProjectWorkspace({
   const [challengeLevel, setChallengeLevel] = useState(initialChallenge);
   const [saveState, setSaveState] = useState("Saved");
   const [credits, setCredits] = useState(initialCredits);
+  const [wordsToday, setWordsToday] = useState(initialWordsToday);
+  const [sessionWords, setSessionWords] = useState(0);
+  const [liveChapterWords, setLiveChapterWords] = useState<number | null>(null);
+  const [lookupOpen, setLookupOpen] = useState(false);
 
   const active = useMemo(
     () => chapters.find((c) => c.id === activeId) || chapters[0],
     [chapters, activeId]
   );
 
+  const savedChapterWords = active?.word_count ?? 0;
+  const chapterWords = liveChapterWords ?? savedChapterWords;
+  const pendingDelta = Math.max(0, chapterWords - savedChapterWords);
+  const displayToday = wordsToday + pendingDelta;
+  const displaySession = sessionWords + pendingDelta;
+  const goalPct = Math.min(100, Math.round((displayToday / Math.max(1, wordGoalDaily)) * 100));
+
+  useEffect(() => {
+    setLiveChapterWords(null);
+  }, [activeId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setLookupOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const onSave = useCallback(
     async (payload: { html: string; text: string; wordCount: number }) => {
       if (!active) return false;
       setSaveState("Saving…");
+      const prevWords = active.word_count ?? 0;
       const res = await fetch(`/api/chapters/${active.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -69,6 +101,16 @@ export function ProjectWorkspace({
         }),
       });
       if (res.ok) {
+        const data = (await res.json()) as {
+          wordsWrittenToday?: number;
+        };
+        const delta = Math.max(0, payload.wordCount - prevWords);
+        if (typeof data.wordsWrittenToday === "number") {
+          setWordsToday(data.wordsWrittenToday);
+        } else if (delta > 0) {
+          setWordsToday((w) => w + delta);
+        }
+        if (delta > 0) setSessionWords((s) => s + delta);
         const now = new Date().toISOString();
         setChapters((prev) =>
           prev.map((c) =>
@@ -184,6 +226,47 @@ export function ProjectWorkspace({
                 placeholder="Untitled Novel"
               />
               <p className="text-[11px] text-muted">{saveState}</p>
+              {tab === "write" && (
+                <div className="mt-1.5 max-w-xl">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-muted">
+                    <span>
+                      Today{" "}
+                      <strong className="text-ink">
+                        {displayToday.toLocaleString()}
+                      </strong>{" "}
+                      / {wordGoalDaily.toLocaleString()}
+                    </span>
+                    <span>
+                      Session{" "}
+                      <strong className="text-ink">+{displaySession.toLocaleString()}</strong>
+                    </span>
+                    {active && (
+                      <span>
+                        Chapter{" "}
+                        <strong className="text-ink">{chapterWords.toLocaleString()}</strong>
+                      </span>
+                    )}
+                    <Link href="/settings" className="text-accent hover:underline">
+                      Goal
+                    </Link>
+                  </div>
+                  <div
+                    className="mt-1 h-1 overflow-hidden rounded-sm bg-line"
+                    role="progressbar"
+                    aria-valuenow={goalPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Daily word goal progress"
+                  >
+                    <div
+                      className={`h-full transition-[width] duration-300 ${
+                        displayToday >= wordGoalDaily ? "bg-accent" : "bg-ink/50"
+                      }`}
+                      style={{ width: `${goalPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -206,6 +289,14 @@ export function ProjectWorkspace({
             ))}
             <button
               type="button"
+              onClick={() => setLookupOpen(true)}
+              className="border border-line px-3 py-1 text-muted hover:text-ink"
+              title="Look up (Ctrl/Cmd+Shift+F)"
+            >
+              Look up
+            </button>
+            <button
+              type="button"
               onClick={() => setFocusMode(true)}
               className="border border-line px-3 py-1 text-muted hover:text-ink"
             >
@@ -216,14 +307,37 @@ export function ProjectWorkspace({
       )}
 
       {focusMode && (
-        <button
-          type="button"
-          onClick={() => setFocusMode(false)}
-          className="font-ui fixed right-4 top-4 z-50 rounded-sm bg-ink px-3 py-2 text-xs text-paper shadow-md"
-        >
-          Exit focus
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => setFocusMode(false)}
+            className="font-ui fixed right-4 top-4 z-50 rounded-sm bg-ink px-3 py-2 text-xs text-paper shadow-md"
+          >
+            Exit focus
+          </button>
+          <button
+            type="button"
+            onClick={() => setLookupOpen(true)}
+            className="font-ui fixed right-28 top-4 z-50 rounded-sm border border-line bg-paper/90 px-3 py-2 text-xs text-muted shadow-md backdrop-blur-sm hover:text-ink"
+            title="Look up (Ctrl/Cmd+Shift+F)"
+          >
+            Look up
+          </button>
+          <div className="font-ui fixed left-4 top-4 z-50 rounded-sm bg-paper/90 px-3 py-2 text-[11px] text-muted shadow-md backdrop-blur-sm">
+            Today {displayToday.toLocaleString()} / {wordGoalDaily.toLocaleString()}
+            <span className="mx-2 text-line">·</span>
+            Session +{displaySession.toLocaleString()}
+          </div>
+        </>
       )}
+
+      <ReferenceLookupPanel
+        open={lookupOpen}
+        onClose={() => setLookupOpen(false)}
+        projectId={project.id}
+        chapters={chapters}
+        bible={bible}
+      />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {tab === "write" && (
@@ -365,6 +479,8 @@ export function ProjectWorkspace({
                       serverUpdatedAt={active.updated_at}
                       onSave={onSave}
                       onSelectionText={setSelectionText}
+                      onWordCount={setLiveChapterWords}
+                      onLookUp={() => setLookupOpen(true)}
                       focusMode={focusMode}
                     />
                   </div>

@@ -28,6 +28,8 @@ type Props = {
   serverUpdatedAt?: string | null;
   onSave: (payload: { html: string; text: string; wordCount: number }) => Promise<boolean>;
   onSelectionText?: (text: string) => void;
+  onWordCount?: (wordCount: number) => void;
+  onLookUp?: () => void;
   focusMode?: boolean;
 };
 
@@ -59,12 +61,16 @@ export function ManuscriptEditor({
   serverUpdatedAt,
   onSave,
   onSelectionText,
+  onWordCount,
+  onLookUp,
   focusMode,
 }: Props) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSynced = useRef(initialHtml);
   const scrollRef = useRef<HTMLDivElement>(null);
   const suppressScrollRef = useRef(true);
+  const onWordCountRef = useRef(onWordCount);
+  onWordCountRef.current = onWordCount;
   const [saveHint, setSaveHint] = useState("All changes saved");
   const [, setTick] = useState(0);
 
@@ -113,12 +119,14 @@ export function ManuscriptEditor({
       selectionAtStart(ed);
       scrollRef.current?.scrollTo(0, 0);
       window.scrollTo(0, 0);
+      onWordCountRef.current?.(countWords(ed.getText()));
     },
     onTransaction: () => setTick((t) => t + 1),
     onUpdate: ({ editor: ed }) => {
       const html = ed.getHTML();
       const text = ed.getText();
       const wordCount = countWords(text);
+      onWordCountRef.current?.(wordCount);
       saveDraftLocal(chapterId, { html, text, wordCount, pendingSync: true });
       setSaveHint("Saving…");
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -214,7 +222,7 @@ export function ManuscriptEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <EditorToolbar editor={editor} />
+      <EditorToolbar editor={editor} onLookUp={onLookUp} />
       <div className="font-ui flex shrink-0 items-center justify-between border-b border-line px-4 py-2 text-xs text-muted">
         <span>{words} words</span>
         <span>

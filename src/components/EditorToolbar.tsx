@@ -4,6 +4,7 @@ import type { Editor } from "@tiptap/react";
 
 type Props = {
   editor: Editor | null;
+  onLookUp?: () => void;
 };
 
 const FONTS = [
@@ -41,7 +42,7 @@ function Btn({
   );
 }
 
-export function EditorToolbar({ editor }: Props) {
+export function EditorToolbar({ editor, onLookUp }: Props) {
   if (!editor) return null;
 
   return (
@@ -195,6 +196,15 @@ export function EditorToolbar({ editor }: Props) {
       <Btn title="Redo" onClick={() => editor.chain().focus().redo().run()}>
         Redo
       </Btn>
+
+      {onLookUp && (
+        <>
+          <span className="mx-1 h-4 w-px bg-line" />
+          <Btn title="Look up (Ctrl/Cmd+Shift+F)" onClick={onLookUp}>
+            Look up
+          </Btn>
+        </>
+      )}
     </div>
   );
 }
