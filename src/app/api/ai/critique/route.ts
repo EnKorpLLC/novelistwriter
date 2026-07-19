@@ -15,8 +15,12 @@ import {
   type AiModelTier,
   type AiScope,
 } from "@/lib/ai/pricing";
+import { buildBookManuscript } from "@/lib/ai/manuscript";
 import type { JobType } from "@/lib/types";
 import { z } from "zod";
+
+/** Allow long book-scope critiques on Vercel (Pro plan supports up to 300s). */
+export const maxDuration = 60;
 
 const bodySchema = z.object({
   jobType: z.string(),
@@ -92,7 +96,16 @@ export async function POST(req: Request) {
   const byokOpenAi = isStudio ? profile?.byok_openai_key : null;
   const usingByok = Boolean(byokAnthropic || byokOpenAi);
 
-  const cost = computeCritiqueCost({ jobType: jt, scope, model, usingByok });
+  // Bible extract defaults to Fast unless the client asked otherwise — large books time out otherwise
+  const effectiveModel: AiModelTier =
+    jt === "bible_extract" && !parsed.data.model ? "fast" : model;
+
+  const cost = computeCritiqueCost({
+    jobType: jt,
+    scope,
+    model: effectiveModel,
+    usingByok,
+  });
 
   const debit = await debitCredits({ userId: user.id, jobType: jt, cost });
   if (!debit.ok) {
@@ -121,10 +134,7 @@ export async function POST(req: Request) {
       .select("title, content_text, sort_order")
       .eq("project_id", projectId)
       .order("sort_order");
-    manuscript = (chapters || [])
-      .map((c) => `## ${c.title}\n${c.content_text}`)
-      .join("\n\n")
-      .slice(0, 100000);
+    manuscript = buildBookManuscript(chapters || [], { jobType: jt });
   }
 
   if (!manuscript.trim()) {
@@ -154,7 +164,15 @@ export async function POST(req: Request) {
       job_type: jt,
       status: "running",
       credit_cost: debit.charged,
-      input: { mode, targetAuthor, targetBook, persona, scope, model, usingByok },
+      input: {
+        mode,
+        targetAuthor,
+        targetBook,
+        persona,
+        scope,
+        model: effectiveModel,
+        usingByok,
+      },
     })
     .select("*")
     .single();
@@ -178,7 +196,7 @@ export async function POST(req: Request) {
       user: userPrompt,
       byokAnthropic,
       byokOpenAi,
-      modelTier: model,
+      modelTier: effectiveModel,
     });
     const result = parseAiJson(raw);
 
@@ -291,7 +309,7 @@ export async function POST(req: Request) {
       jobId: job?.id,
       cost: debit.charged,
       scope,
-      model,
+      model: effectiveModel,
       usingByok,
       summary: result.summary,
       items: result.items,

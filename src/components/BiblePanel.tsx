@@ -68,11 +68,11 @@ export function BiblePanel({
     const cost = computeCritiqueCost({
       jobType: "bible_extract",
       scope: "book",
-      model: "standard",
+      model: "fast",
     });
     if (
       !confirm(
-        `Scan the whole project for characters, places, rules, lore, and timelines?\n\nCost: ${cost} credits (whole book · Standard model).\nExisting entries are kept; new ones are added (duplicates skipped by name).`
+        `Scan the whole project for characters, places, rules, lore, and timelines?\n\nCost: ${cost} credits (whole book · Fast model).\nExisting entries are kept; new ones are added (duplicates skipped by name).\n\nLarge novels are sampled across all chapters so the scan can finish.`
       )
     ) {
       return;
@@ -87,10 +87,27 @@ export function BiblePanel({
           jobType: "bible_extract",
           projectId,
           scope: "book",
-          model: "standard",
+          model: "fast",
         }),
       });
-      const data = await res.json();
+      let data: {
+        error?: string;
+        code?: string;
+        creditsRemaining?: number;
+        extras?: { added?: BibleEntry[] };
+        summary?: string;
+        cost?: number;
+        refunded?: number;
+      };
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(
+          res.status === 504 || res.status === 408
+            ? "Request timed out — try again in a moment."
+            : `Server error (${res.status}). Try again.`
+        );
+      }
       if (typeof data.creditsRemaining === "number") {
         onCreditsChange?.(data.creditsRemaining);
       }
@@ -110,7 +127,12 @@ export function BiblePanel({
           `Added ${added.length} entr${added.length === 1 ? "y" : "ies"} (${data.cost} credits).`
       );
     } catch (e) {
-      setExtractMsg(e instanceof Error ? e.message : "Extract failed");
+      const msg = e instanceof Error ? e.message : "Extract failed";
+      setExtractMsg(
+        /connection error/i.test(msg)
+          ? "AI connection timed out on this large book. Credits were refunded if charged — try again (we now sample across chapters)."
+          : msg
+      );
     } finally {
       setExtracting(false);
     }
@@ -133,7 +155,7 @@ export function BiblePanel({
         >
           {extracting
             ? "Scanning manuscript…"
-            : `AI: extract from project (${computeCritiqueCost({ jobType: "bible_extract", scope: "book", model: "standard" })} cr)`}
+            : `AI: extract from project (${computeCritiqueCost({ jobType: "bible_extract", scope: "book", model: "fast" })} cr)`}
         </button>
       </div>
       {extractMsg && (

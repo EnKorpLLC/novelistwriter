@@ -77,15 +77,29 @@ export async function runCritiqueModel(opts: {
 
   if (anthropicKey) {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const client = new Anthropic({ apiKey: anthropicKey });
-    const res = await client.messages.create({
-      model: anthropicModel,
-      max_tokens: 4096,
-      system: opts.system || CRITIQUE_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: opts.user }],
+    const client = new Anthropic({
+      apiKey: anthropicKey,
+      timeout: 55_000,
+      maxRetries: 1,
     });
-    const block = res.content.find((b) => b.type === "text");
-    return block && block.type === "text" ? block.text : "{}";
+    try {
+      const res = await client.messages.create({
+        model: anthropicModel,
+        max_tokens: 4096,
+        system: opts.system || CRITIQUE_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: opts.user }],
+      });
+      const block = res.content.find((b) => b.type === "text");
+      return block && block.type === "text" ? block.text : "{}";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "AI request failed";
+      if (/connection|timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(msg)) {
+        throw new Error(
+          "AI connection timed out or dropped. Try again, use Fast model, or run on a smaller scope (one chapter)."
+        );
+      }
+      throw err instanceof Error ? err : new Error(msg);
+    }
   }
 
   // Deterministic demo fallback when no API keys configured
