@@ -78,6 +78,8 @@ export function CritiquePanel({
   const [history, setHistory] = useState<HistoryJob[]>([]);
   const [report, setReport] = useState<CritiqueReportData | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const hasSelection = Boolean(selectionText?.trim());
 
   const completedJobs = useMemo(
@@ -164,9 +166,91 @@ export function CritiquePanel({
         return;
       }
       setHistory((prev) => prev.filter((j) => j.id !== jobId));
+      setSelectedReports((prev) => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
       if (report?.jobId === jobId) setReport(null);
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  function toggleReportSelect(id: string) {
+    setSelectedReports((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllReports() {
+    if (selectedReports.size === completedJobs.length) {
+      setSelectedReports(new Set());
+    } else {
+      setSelectedReports(new Set(completedJobs.map((j) => j.id)));
+    }
+  }
+
+  async function deleteSelectedReports() {
+    const ids = [...selectedReports];
+    if (!ids.length) return;
+    if (
+      !confirm(
+        `Delete ${ids.length} selected report${ids.length === 1 ? "" : "s"}? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setBatchDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/ai-jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || `Delete failed (${res.status})`);
+        return;
+      }
+      const gone = new Set(ids);
+      setHistory((prev) => prev.filter((j) => !gone.has(j.id)));
+      setSelectedReports(new Set());
+      if (report?.jobId && gone.has(report.jobId)) setReport(null);
+    } finally {
+      setBatchDeleting(false);
+    }
+  }
+
+  async function deleteAllReports() {
+    if (!completedJobs.length) return;
+    if (
+      !confirm(
+        `Delete ALL ${completedJobs.length} saved reports for this project? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setBatchDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/ai-jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", deleteAll: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || `Delete failed (${res.status})`);
+        return;
+      }
+      setHistory([]);
+      setSelectedReports(new Set());
+      setReport(null);
+    } finally {
+      setBatchDeleting(false);
     }
   }
 
@@ -566,42 +650,80 @@ export function CritiquePanel({
                 to start one.
               </p>
             ) : (
-              <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
-                {completedJobs.map((j) => (
-                  <li
-                    key={j.id}
-                    className="flex items-stretch gap-1 rounded-sm border border-line bg-paper"
+              <>
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+                  <label className="flex items-center gap-1.5 text-muted">
+                    <input
+                      type="checkbox"
+                      checked={
+                        completedJobs.length > 0 &&
+                        selectedReports.size === completedJobs.length
+                      }
+                      onChange={toggleSelectAllReports}
+                    />
+                    Select all
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!selectedReports.size || batchDeleting}
+                    onClick={() => void deleteSelectedReports()}
+                    className="border border-danger px-1.5 py-0.5 text-danger disabled:opacity-40"
                   >
-                    <button
-                      type="button"
-                      disabled={j.status !== "complete"}
-                      onClick={() => {
-                        if (j.result?.items || j.result?.summary) openFromJob(j);
-                        else void openJobDetail(j.id);
-                      }}
-                      className="min-w-0 flex-1 px-2.5 py-2 text-left text-xs hover:bg-paper-deep disabled:opacity-50"
+                    Delete selected ({selectedReports.size})
+                  </button>
+                  <button
+                    type="button"
+                    disabled={batchDeleting}
+                    onClick={() => void deleteAllReports()}
+                    className="border border-line px-1.5 py-0.5 text-muted disabled:opacity-40"
+                  >
+                    Delete all
+                  </button>
+                </div>
+                <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
+                  {completedJobs.map((j) => (
+                    <li
+                      key={j.id}
+                      className="flex items-stretch gap-1 rounded-sm border border-line bg-paper"
                     >
-                      <span className="block truncate font-medium text-ink">
-                        {JOB_META[j.job_type as JobType]?.label || j.job_type}
-                      </span>
-                      <span className="block text-[10px] text-muted">
-                        {new Date(j.created_at).toLocaleString()} · {j.credit_cost} cr
-                        {j.input?.scope ? ` · ${j.input.scope}` : ""}
-                        {j.status === "failed" ? " · failed" : ""}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      title="Delete report"
-                      disabled={deletingId === j.id}
-                      onClick={() => void deleteJob(j.id)}
-                      className="shrink-0 border-l border-line px-2 text-xs text-danger hover:bg-paper-deep disabled:opacity-50"
-                    >
-                      {deletingId === j.id ? "…" : "×"}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                      <label className="flex items-center px-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedReports.has(j.id)}
+                          onChange={() => toggleReportSelect(j.id)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={j.status !== "complete"}
+                        onClick={() => {
+                          if (j.result?.items || j.result?.summary) openFromJob(j);
+                          else void openJobDetail(j.id);
+                        }}
+                        className="min-w-0 flex-1 px-2.5 py-2 text-left text-xs hover:bg-paper-deep disabled:opacity-50"
+                      >
+                        <span className="block truncate font-medium text-ink">
+                          {JOB_META[j.job_type as JobType]?.label || j.job_type}
+                        </span>
+                        <span className="block text-[10px] text-muted">
+                          {new Date(j.created_at).toLocaleString()} · {j.credit_cost} cr
+                          {j.input?.scope ? ` · ${j.input.scope}` : ""}
+                          {j.status === "failed" ? " · failed" : ""}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        title="Delete report"
+                        disabled={deletingId === j.id || batchDeleting}
+                        onClick={() => void deleteJob(j.id)}
+                        className="shrink-0 border-l border-line px-2 text-xs text-danger hover:bg-paper-deep disabled:opacity-50"
+                      >
+                        {deletingId === j.id ? "…" : "×"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         )}
