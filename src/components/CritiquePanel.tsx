@@ -118,6 +118,23 @@ export function CritiquePanel({
     return computeCritiqueCost({ jobType, scope, model });
   }
 
+  const jobsByCost = useMemo(() => {
+    return [...JOBS].sort((a, b) => {
+      const costA =
+        a.type === "arcs" && scope === "book"
+          ? estimateArcsCost({ chapterCount: Math.max(1, chapterCount), model }).cost
+          : computeCritiqueCost({ jobType: a.type, scope, model });
+      const costB =
+        b.type === "arcs" && scope === "book"
+          ? estimateArcsCost({ chapterCount: Math.max(1, chapterCount), model }).cost
+          : computeCritiqueCost({ jobType: b.type, scope, model });
+      if (costA !== costB) return costA - costB;
+      return (JOB_META[a.type]?.label || a.type).localeCompare(
+        JOB_META[b.type]?.label || b.type
+      );
+    });
+  }, [scope, model, chapterCount]);
+
   function openFromJob(job: HistoryJob) {
     const result = job.result || {};
     setReport({
@@ -566,7 +583,7 @@ export function CritiquePanel({
                 </p>
               )}
               <ul className="space-y-0.5">
-                {JOBS.map((j) => {
+                {jobsByCost.map((j) => {
                   const meta = JOB_META[j.type];
                   return (
                     <li key={j.type}>
