@@ -93,9 +93,16 @@ export async function runCritiqueModel(opts: {
       return block && block.type === "text" ? block.text : "{}";
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI request failed";
-      if (/connection|timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(msg)) {
+      // Anthropic often says "Connection error." for network/TLS failures in ~1–2s —
+      // that is NOT a request timeout. Keep the original detail so the UI can show it.
+      if (/ETIMEDOUT|ECONNRESET|timed?\s*out|fetch failed/i.test(msg)) {
         throw new Error(
-          "AI connection timed out or dropped. Try again, use Fast model, or run on a smaller scope (one chapter)."
+          `AI request timed out or dropped (${msg}). Try again, use Fast model, or run a smaller scope.`
+        );
+      }
+      if (/connection error/i.test(msg)) {
+        throw new Error(
+          `AI provider connection failed immediately (${msg}). Check ANTHROPIC_API_KEY / network, then retry — this is usually not a long-job timeout.`
         );
       }
       throw err instanceof Error ? err : new Error(msg);

@@ -79,26 +79,10 @@ export function BiblePanel({
   }
 
   async function extractFromManuscript() {
-    const est = estimateBibleExtractCost({
-      chapterCount: Math.max(1, chapterCount),
-      model: extractModel,
-    });
-    if (
-      !confirm(
-        `Thorough story-bible scan of ${chapterCount} chapter(s)?\n\n` +
-          `Passes: ${BIBLE_PASSES.map((p) => p.label).join(", ")}\n` +
-          `Full chapters in batches of ${BIBLE_CHAPTERS_PER_BATCH} (${est.batches} batch(es) × ${BIBLE_PASSES.length} passes = ${est.calls} AI calls)\n` +
-          `Model: ${AI_MODEL_TIERS[extractModel].label}\n` +
-          `Estimated cost: ${est.cost} credits\n\n` +
-          `Existing entries are kept; new names are added. This can take several minutes on a long novel.`
-      )
-    ) {
-      return;
-    }
     setExtracting(true);
-    setExtractMsg("Scanning… this may take a few minutes on a long book.");
+    setExtractMsg("Planning scan…");
     try {
-      const res = await fetch("/api/ai/critique", {
+      const planRes = await fetch("/api/ai/critique", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -106,55 +90,118 @@ export function BiblePanel({
           projectId,
           scope: "book",
           model: extractModel,
+          planOnly: true,
         }),
       });
-      let data: {
-        error?: string;
-        code?: string;
-        creditsRemaining?: number;
-        extras?: { added?: BibleEntry[]; calls?: number };
-        summary?: string;
-        cost?: number;
-        refunded?: number;
-      };
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error(
-          res.status === 504 || res.status === 408
-            ? "Request timed out — try again, or use Fast model."
-            : `Server error (${res.status}). Try again.`
-        );
+      const plan = await planRes.json();
+      if (!planRes.ok) {
+        throw new Error(plan.error || "Could not plan bible extract");
       }
-      if (typeof data.creditsRemaining === "number") {
-        onCreditsChange?.(data.creditsRemaining);
+      if (typeof plan.creditsRemaining === "number") {
+        onCreditsChange?.(plan.creditsRemaining);
       }
-      if (!res.ok) {
-        if (data.code === "insufficient_credits") {
+
+      const batches = Math.max(1, plan.batches || estimate.batches);
+      const calls = Math.max(1, plan.calls || estimate.calls);
+      const cost = plan.cost ?? estimate.cost;
+      const passes = BIBLE_PASSES;
+
+      if (
+        !confirm(
+          `Thorough story-bible scan of ${plan.chapterCount ?? chapterCount} chapter(s)?\n\n` +
+            `Passes: ${passes.map((p) => p.label).join(", ")}\n` +
+            `${batches} batch(es) of up to ${BIBLE_CHAPTERS_PER_BATCH} full chapters × ${passes.length} categories = ${calls} separate AI requests\n` +
+            `Model: ${AI_MODEL_TIERS[extractModel].label}\n` +
+            `Estimated cost: ${cost} credits (${plan.perCall ?? "?"} each)\n\n` +
+            `Each request is small so it won’t false-timeout. Existing entries are kept.`
+        )
+      ) {
+        setExtractMsg(null);
+        return;
+      }
+
+      const allAdded: BibleEntry[] = [];
+      let charged = 0;
+      let done = 0;
+      let batchCount = batches;
+
+      for (const pass of passes) {
+        for (let bi = 0; bi < batchCount; bi++) {
+          done += 1;
           setExtractMsg(
-            `${data.error || "Need more credits."} Estimated ${est.cost} credits for this scan.`
+            `Scanning ${pass.label} · batch ${bi + 1}/${batchCount} (${done}/${calls})…`
           );
-          return;
+          const res = await fetch("/api/ai/critique", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jobType: "bible_extract",
+              projectId,
+              scope: "book",
+              model: extractModel,
+              passId: pass.id,
+              batchIndex: bi,
+            }),
+          });
+          let data: {
+            error?: string;
+            code?: string;
+            creditsRemaining?: number;
+            extras?: { added?: BibleEntry[] };
+            summary?: string;
+            cost?: number;
+            empty?: boolean;
+            batchCount?: number;
+            refunded?: number;
+          };
+          try {
+            data = await res.json();
+          } catch {
+            throw new Error(
+              res.status === 504 || res.status === 408
+                ? `Request timed out on ${pass.label} batch ${bi + 1}. Partial results were kept.`
+                : `Server error (${res.status}) on ${pass.label} batch ${bi + 1}.`
+            );
+          }
+          if (typeof data.creditsRemaining === "number") {
+            onCreditsChange?.(data.creditsRemaining);
+          }
+          if (typeof data.batchCount === "number" && data.batchCount > 0) {
+            batchCount = data.batchCount;
+          }
+          if (!res.ok) {
+            if (data.code === "insufficient_credits") {
+              throw new Error(
+                `${data.error || "Need more credits."} Added ${allAdded.length} so far (${charged} credits used).`
+              );
+            }
+            throw new Error(
+              data.error ||
+                `Extract failed on ${pass.label} batch ${bi + 1}. Added ${allAdded.length} so far.`
+            );
+          }
+          if (data.empty) {
+            // No more batches for this packing — stop this pass early
+            break;
+          }
+          charged += data.cost || 0;
+          const added = (data.extras?.added as BibleEntry[]) || [];
+          if (added.length) {
+            allAdded.push(...added);
+            onChange([...entries, ...allAdded]);
+          }
         }
-        throw new Error(data.error || "Extract failed");
       }
-      const added = (data.extras?.added as BibleEntry[]) || [];
-      if (added.length) {
-        onChange([...entries, ...added]);
-      }
+
       setExtractMsg(
-        data.summary ||
-          `Added ${added.length} entr${added.length === 1 ? "y" : "ies"} (${data.cost} credits` +
-            (data.extras?.calls ? `, ${data.extras.calls} AI calls` : "") +
-            `).`
+        allAdded.length
+          ? `Added ${allAdded.length} entr${allAdded.length === 1 ? "y" : "ies"} (${charged} credits across ${done} requests).`
+          : `Scan finished (${charged} credits). No new entries — everything found was already in your bible or nothing clear to add.`
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Extract failed";
-      setExtractMsg(
-        /connection error|timed out|dropped/i.test(msg)
-          ? "AI connection timed out. Credits were refunded if charged — try Fast model, or run again."
-          : msg
-      );
+      // Show the real error — do not collapse everything into "timed out"
+      setExtractMsg(msg);
     } finally {
       setExtracting(false);
     }
@@ -196,9 +243,9 @@ export function BiblePanel({
               : `AI: extract (~${estimate.cost} cr · ${estimate.calls} passes)`}
           </button>
           <p className="max-w-xs text-right text-[10px] text-muted">
-            {chapterCount} chapters · batches of {BIBLE_CHAPTERS_PER_BATCH} ·{" "}
-            {BIBLE_PASSES.length} categories (characters, places, lore/rules, timeline/notes).
-            Standard is recommended; Deep costs more.
+            {chapterCount} chapters · up to {BIBLE_CHAPTERS_PER_BATCH}/batch · ~{estimate.batches}{" "}
+            batches × {BIBLE_PASSES.length} categories = {estimate.calls} separate requests.
+            Standard recommended.
           </p>
         </div>
       </div>

@@ -210,6 +210,91 @@ export function CritiquePanel({
     setLoading(true);
     setError(null);
     try {
+      if (jobType === "arcs" && effectiveScope === "book") {
+        const planRes = await fetch("/api/ai/critique", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobType: "arcs",
+            projectId,
+            scope: "book",
+            model,
+            planOnly: true,
+          }),
+        });
+        const plan = await planRes.json();
+        if (!planRes.ok) throw new Error(plan.error || "Could not plan arcs scan");
+        if (typeof plan.creditsRemaining === "number") {
+          onCreditsChange?.(plan.creditsRemaining);
+        }
+
+        let batchCount = Math.max(1, plan.batches || arcsEstimate?.batches || 1);
+        const allArcs: Array<Record<string, unknown>> = [];
+        const allItems: CritiqueItem[] = [];
+        let charged = 0;
+        let lastJobId: string | undefined;
+        const subjects: string[] = [];
+
+        for (let bi = 0; bi < batchCount; bi++) {
+          setError(`Scanning arcs · batch ${bi + 1}/${batchCount}…`);
+          const res = await fetch("/api/ai/critique", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jobType: "arcs",
+              projectId,
+              scope: "book",
+              model,
+              challengeLevel,
+              batchIndex: bi,
+              priorSubjects: subjects.slice(0, 40).join("; ") || undefined,
+            }),
+          });
+          const data = await res.json();
+          if (typeof data.creditsRemaining === "number") {
+            onCreditsChange?.(data.creditsRemaining);
+          }
+          if (typeof data.batchCount === "number" && data.batchCount > 0) {
+            batchCount = data.batchCount;
+          }
+          if (!res.ok) {
+            throw new Error(
+              data.error ||
+                `Arcs failed on batch ${bi + 1}. Partial results may be saved.`
+            );
+          }
+          if (data.empty) break;
+          charged += data.cost || 0;
+          lastJobId = data.jobId || lastJobId;
+          const batchArcs = (data.extras?.arcs as Array<Record<string, unknown>>) || [];
+          allArcs.push(...batchArcs);
+          for (const a of batchArcs) {
+            const sub = String(a.subject || "");
+            const typ = String(a.arc_type || "story");
+            if (sub) subjects.push(`${typ}:${sub}`);
+          }
+          if (Array.isArray(data.items)) {
+            allItems.push(...(data.items as CritiqueItem[]));
+          }
+        }
+
+        setError(null);
+        setReport({
+          jobId: lastJobId || "arcs-multipass",
+          jobType,
+          summary: `Arc scan complete (${batchCount} batches, ${charged} credits). Tracked ${allArcs.length} arc(s).`,
+          items: allItems,
+          extras: { arcs: allArcs, calls: batchCount, batches: batchCount },
+          createdAt: new Date().toISOString(),
+          scope: "book",
+          model,
+          cost: charged,
+        });
+        setPanelTab("reports");
+        void loadHistory();
+        return;
+      }
+
       const res = await fetch("/api/ai/critique", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

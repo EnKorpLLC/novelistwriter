@@ -18,10 +18,11 @@ import {
 import { buildBookManuscript } from "@/lib/ai/manuscript";
 import {
   estimateBibleExtractCost,
-  runBibleExtractMultipass,
+  planBibleExtract,
+  runBibleExtractUnit,
+  getBiblePass,
 } from "@/lib/ai/bible-extract";
-import { estimateArcsCost, runArcsMultipass } from "@/lib/ai/arcs-multipass";
-import { packChaptersExact } from "@/lib/ai/chapter-batches";
+import { estimateArcsCost, planArcsExtract, runArcsUnit } from "@/lib/ai/arcs-multipass";
 import type { JobType } from "@/lib/types";
 import { z } from "zod";
 
@@ -40,6 +41,14 @@ const bodySchema = z.object({
   persona: z.string().optional(),
   scope: z.enum(["selection", "chapter", "book"]).optional(),
   model: z.enum(["fast", "standard", "deep"]).optional(),
+  /** Bible/arcs chunked runs: plan only (no debit / no AI). */
+  planOnly: z.boolean().optional(),
+  /** Bible extract: which category pass. */
+  passId: z.string().optional(),
+  /** Bible/arcs: which chapter batch (0-based). */
+  batchIndex: z.number().int().min(0).optional(),
+  /** Arcs continuity across batches (client-maintained subject list). */
+  priorSubjects: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -102,7 +111,7 @@ export async function POST(req: Request) {
   const byokOpenAi = isStudio ? profile?.byok_openai_key : null;
   const usingByok = Boolean(byokAnthropic || byokOpenAi);
 
-  // ——— Thorough multi-pass story bible extract (full chapters, batched) ———
+  // ——— Story bible extract: plan or one batch×pass per request ———
   if (jt === "bible_extract") {
     const extractModel: AiModelTier =
       parsed.data.model && isValidModelTier(parsed.data.model) ? parsed.data.model : "standard";
@@ -123,16 +132,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No chapters to scan." }, { status: 400 });
     }
 
-    const estimate = estimateBibleExtractCost({
-      chapterCount: chapterRows.length,
-      model: extractModel,
-      usingByok,
-    });
+    if (parsed.data.planOnly) {
+      const plan = planBibleExtract({
+        chapters: chapterRows,
+        model: extractModel,
+        usingByok,
+      });
+      return NextResponse.json({
+        plan: true,
+        ...plan,
+        chaptersPerBatch: 5,
+        creditsRemaining: await remainingCredits(user.id),
+      });
+    }
+
+    const passId = parsed.data.passId;
+    const batchIndex = parsed.data.batchIndex;
+    if (!passId || typeof batchIndex !== "number") {
+      return NextResponse.json(
+        {
+          error:
+            "Bible extract runs in separate requests. Send planOnly, or passId + batchIndex for each unit.",
+        },
+        { status: 400 }
+      );
+    }
+    if (!getBiblePass(passId)) {
+      return NextResponse.json({ error: `Unknown passId: ${passId}` }, { status: 400 });
+    }
+
+    const unitCost = usingByok
+      ? 1
+      : estimateBibleExtractCost({
+          chapterCount: chapterRows.length,
+          model: extractModel,
+          usingByok,
+        }).perCall;
 
     const debit = await debitCredits({
       userId: user.id,
       jobType: jt,
-      cost: estimate.cost,
+      cost: unitCost,
     });
     if (!debit.ok) {
       return NextResponse.json(
@@ -140,7 +180,6 @@ export async function POST(req: Request) {
           error: debit.error,
           code: "insufficient_credits",
           cost: debit.cost,
-          estimate,
         },
         { status: 402 }
       );
@@ -148,7 +187,7 @@ export async function POST(req: Request) {
 
     const { data: bible } = await supabase
       .from("bible_entries")
-      .select("entry_type, name, summary, speech_notes, details")
+      .select("entry_type, name")
       .eq("project_id", projectId);
 
     const existingKeys = new Set(
@@ -168,42 +207,56 @@ export async function POST(req: Request) {
           scope: "book",
           model: extractModel,
           usingByok,
-          multipass: true,
-          estimate,
+          passId,
+          batchIndex,
+          unit: true,
         },
       })
       .select("*")
       .single();
 
     try {
-      const extract = await runBibleExtractMultipass({
+      const unit = await runBibleExtractUnit({
         chapters: chapterRows,
+        passId,
+        batchIndex,
         model: extractModel,
         byokAnthropic,
         byokOpenAi,
         existingKeys,
       });
 
-      // Charge for actual AI calls; refund unused estimate (empty batches, etc.)
-      let charged = debit.charged;
-      if (extract.calls < estimate.calls) {
-        const perCall = usingByok
-          ? 1
-          : Math.round(estimate.cost / Math.max(1, estimate.calls));
-        const unused = (estimate.calls - extract.calls) * perCall;
-        if (unused > 0) {
-          await refundCredits({
-            userId: user.id,
-            amount: unused,
-            jobType: jt,
-            reason: "bible_extract_unused_batches",
-          });
-          charged = Math.max(0, debit.charged - unused);
+      if (unit.empty) {
+        await refundCredits({
+          userId: user.id,
+          amount: debit.charged,
+          jobType: jt,
+          reason: "bible_extract_empty_batch",
+        });
+        if (job) {
+          await supabase
+            .from("ai_jobs")
+            .update({
+              status: "complete",
+              result: { summary: unit.summary, extras: { empty: true } },
+              credit_cost: 0,
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", job.id);
         }
+        return NextResponse.json({
+          jobId: job?.id,
+          cost: 0,
+          empty: true,
+          batchCount: unit.batchCount,
+          summary: unit.summary,
+          extras: { added: [], calls: 0 },
+          creditsRemaining: await remainingCredits(user.id),
+        });
       }
 
       const inserted: unknown[] = [];
-      for (const e of extract.entries.slice(0, 200)) {
+      for (const e of unit.entries.slice(0, 80)) {
         const { data: row } = await supabase
           .from("bible_entries")
           .insert({
@@ -213,7 +266,7 @@ export async function POST(req: Request) {
             name: e.name.trim(),
             summary: e.summary || "",
             speech_notes: e.speech_notes || "",
-            details: { source: "ai_extract" },
+            details: { source: "ai_extract", passId, batchIndex },
           })
           .select("*")
           .single();
@@ -221,14 +274,16 @@ export async function POST(req: Request) {
       }
 
       const result = {
-        summary: extract.summary,
+        summary: unit.summary,
         items: [] as unknown[],
         extras: {
-          entries: extract.entries,
           added: inserted,
-          calls: extract.calls,
-          batches: estimate.batches,
-          passSummaries: extract.passSummaries,
+          entries: unit.entries,
+          passId,
+          batchIndex,
+          batchCount: unit.batchCount,
+          batchLabel: unit.batchLabel,
+          passLabel: unit.passLabel,
         },
       };
 
@@ -238,7 +293,7 @@ export async function POST(req: Request) {
           .update({
             status: "complete",
             result,
-            credit_cost: charged,
+            credit_cost: debit.charged,
             completed_at: new Date().toISOString(),
           })
           .eq("id", job.id);
@@ -246,13 +301,14 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         jobId: job?.id,
-        cost: charged,
+        cost: debit.charged,
         scope: "book",
         model: extractModel,
         usingByok,
         summary: result.summary,
         items: [],
         extras: result.extras,
+        batchCount: unit.batchCount,
         creditsRemaining: await remainingCredits(user.id),
       });
     } catch (e) {
@@ -287,7 +343,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // ——— Exact full-chapter arcs (batched; no sampling / truncation) ———
+  // ——— Exact full-chapter arcs: plan or one batch per request ———
   if (jt === "arcs" && scope === "book") {
     const arcsModel: AiModelTier =
       parsed.data.model && isValidModelTier(parsed.data.model) ? parsed.data.model : "standard";
@@ -308,22 +364,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No chapters to scan." }, { status: 400 });
     }
 
-    const packed = packChaptersExact(chapterRows, {
-      maxCharsPerBatch: 90000,
-      maxChaptersPerBatch: 5,
-    }).filter((b) => b.some((c) => (c.content_text || "").trim()));
+    if (parsed.data.planOnly) {
+      const plan = planArcsExtract({
+        chapters: chapterRows,
+        model: arcsModel,
+        usingByok,
+      });
+      return NextResponse.json({
+        plan: true,
+        ...plan,
+        chaptersPerBatch: 5,
+        creditsRemaining: await remainingCredits(user.id),
+      });
+    }
 
-    const estimate = estimateArcsCost({
-      chapterCount: chapterRows.length,
-      model: arcsModel,
-      usingByok,
-      batches: Math.max(1, packed.length),
-    });
+    const batchIndex = parsed.data.batchIndex;
+    if (typeof batchIndex !== "number") {
+      return NextResponse.json(
+        {
+          error:
+            "Whole-book arcs run in separate batch requests. Send planOnly, or batchIndex for each unit.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const unitCost = usingByok
+      ? 1
+      : estimateArcsCost({
+          chapterCount: chapterRows.length,
+          model: arcsModel,
+          usingByok,
+        }).perCall;
 
     const debit = await debitCredits({
       userId: user.id,
       jobType: jt,
-      cost: estimate.cost,
+      cost: unitCost,
     });
     if (!debit.ok) {
       return NextResponse.json(
@@ -331,7 +408,6 @@ export async function POST(req: Request) {
           error: debit.error,
           code: "insufficient_credits",
           cost: debit.cost,
-          estimate,
         },
         { status: 402 }
       );
@@ -358,42 +434,57 @@ export async function POST(req: Request) {
           scope: "book",
           model: arcsModel,
           usingByok,
-          multipass: true,
-          estimate,
+          batchIndex,
+          unit: true,
         },
       })
       .select("*")
       .single();
 
     try {
-      const extract = await runArcsMultipass({
+      const unit = await runArcsUnit({
         chapters: chapterRows,
+        batchIndex,
         model: arcsModel,
         byokAnthropic,
         byokOpenAi,
         level,
         prefs,
         bible: bible || [],
+        priorSubjects: parsed.data.priorSubjects,
       });
 
-      let charged = debit.charged;
-      if (extract.calls < estimate.calls) {
-        const perCall = usingByok
-          ? 1
-          : Math.round(estimate.cost / Math.max(1, estimate.calls));
-        const unused = (estimate.calls - extract.calls) * perCall;
-        if (unused > 0) {
-          await refundCredits({
-            userId: user.id,
-            amount: unused,
-            jobType: jt,
-            reason: "arcs_unused_batches",
-          });
-          charged = Math.max(0, debit.charged - unused);
+      if (unit.empty) {
+        await refundCredits({
+          userId: user.id,
+          amount: debit.charged,
+          jobType: jt,
+          reason: "arcs_empty_batch",
+        });
+        if (job) {
+          await supabase
+            .from("ai_jobs")
+            .update({
+              status: "complete",
+              result: { summary: unit.summary, extras: { empty: true } },
+              credit_cost: 0,
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", job.id);
         }
+        return NextResponse.json({
+          jobId: job?.id,
+          cost: 0,
+          empty: true,
+          batchCount: unit.batchCount,
+          summary: unit.summary,
+          items: [],
+          extras: { arcs: [], empty: true },
+          creditsRemaining: await remainingCredits(user.id),
+        });
       }
 
-      for (const a of extract.arcs.slice(0, 40)) {
+      for (const a of unit.arcs.slice(0, 20)) {
         await supabase.from("arc_tracks").insert({
           project_id: projectId,
           user_id: user.id,
@@ -407,9 +498,9 @@ export async function POST(req: Request) {
         });
       }
 
-      if (Array.isArray(extract.items) && extract.items.length && job) {
+      if (unit.items.length && job) {
         await supabase.from("critique_items").insert(
-          extract.items.slice(0, 80).map((item) => ({
+          unit.items.slice(0, 40).map((item) => ({
             job_id: job.id,
             project_id: projectId,
             chapter_id: null,
@@ -426,13 +517,13 @@ export async function POST(req: Request) {
       }
 
       const result = {
-        summary: extract.summary,
-        items: extract.items,
+        summary: unit.summary,
+        items: unit.items,
         extras: {
-          arcs: extract.arcs,
-          calls: extract.calls,
-          batches: extract.batches,
-          batchSummaries: extract.batchSummaries,
+          arcs: unit.arcs,
+          batchIndex,
+          batchCount: unit.batchCount,
+          batchLabel: unit.batchLabel,
         },
       };
 
@@ -442,7 +533,7 @@ export async function POST(req: Request) {
           .update({
             status: "complete",
             result,
-            credit_cost: charged,
+            credit_cost: debit.charged,
             completed_at: new Date().toISOString(),
           })
           .eq("id", job.id);
@@ -450,13 +541,14 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         jobId: job?.id,
-        cost: charged,
+        cost: debit.charged,
         scope: "book",
         model: arcsModel,
         usingByok,
         summary: result.summary,
         items: result.items,
         extras: result.extras,
+        batchCount: unit.batchCount,
         creditsRemaining: await remainingCredits(user.id),
       });
     } catch (e) {

@@ -54,10 +54,16 @@ export const BIBLE_PASSES: {
   },
 ];
 
-export function bibleExtractCallCount(chapterCount: number): number {
-  const n = Math.max(1, chapterCount);
-  const batches = Math.ceil(n / BIBLE_CHAPTERS_PER_BATCH);
-  return batches * BIBLE_PASSES.length;
+export function getBiblePass(passId: string) {
+  return BIBLE_PASSES.find((p) => p.id === passId) || null;
+}
+
+export function packBibleBatches(chapters: ChapterForExtract[]) {
+  const ordered = [...chapters].sort((a, b) => a.sort_order - b.sort_order);
+  return packChaptersExact(ordered, {
+    maxCharsPerBatch: 90000,
+    maxChaptersPerBatch: BIBLE_CHAPTERS_PER_BATCH,
+  }).filter((b) => b.some((c) => (c.content_text || "").trim()));
 }
 
 /** Credits for a thorough multi-pass, full-chapter extract. */
@@ -65,55 +71,46 @@ export function estimateBibleExtractCost(opts: {
   chapterCount: number;
   model: AiModelTier;
   usingByok?: boolean;
-}): { calls: number; cost: number; batches: number } {
+  batches?: number;
+}): { calls: number; cost: number; batches: number; perCall: number } {
   const chapterCount = Math.max(1, opts.chapterCount);
-  const batches = Math.ceil(chapterCount / BIBLE_CHAPTERS_PER_BATCH);
-  const calls = batches * BIBLE_PASSES.length;
+  const batches = opts.batches ?? Math.ceil(chapterCount / BIBLE_CHAPTERS_PER_BATCH);
+  const calls = Math.max(1, batches) * BIBLE_PASSES.length;
   if (opts.usingByok) {
-    return { calls, cost: calls, batches };
+    return { calls, cost: calls, batches: Math.max(1, batches), perCall: 1 };
   }
-  // One “chapter-scope” bible unit per API call (honest multi-request pricing)
   const perCall = computeCritiqueCost({
     jobType: "bible_extract",
     scope: "chapter",
     model: opts.model,
   });
-  return { calls, cost: calls * perCall, batches };
+  return { calls, cost: calls * perCall, batches: Math.max(1, batches), perCall };
 }
 
-function mergeEntries(
-  into: Map<string, BibleExtractEntry>,
-  incoming: BibleExtractEntry[],
-  allowed: Set<string>
-) {
-  for (const e of incoming) {
-    if (!e?.name?.trim() || !allowed.has(e.entry_type)) continue;
-    const key = `${e.entry_type}:${e.name.toLowerCase().trim()}`;
-    const prev = into.get(key);
-    if (!prev) {
-      into.set(key, {
-        entry_type: e.entry_type,
-        name: e.name.trim(),
-        summary: e.summary || "",
-        speech_notes: e.speech_notes || "",
-      });
-      continue;
-    }
-    // Enrich existing rather than drop later-chapter details
-    const summary =
-      (prev.summary || "").length >= (e.summary || "").length
-        ? prev.summary
-        : e.summary || prev.summary;
-    const speech =
-      (prev.speech_notes || "").length >= (e.speech_notes || "").length
-        ? prev.speech_notes
-        : e.speech_notes || prev.speech_notes;
-    into.set(key, { ...prev, summary, speech_notes: speech });
-  }
-}
-
-export async function runBibleExtractMultipass(opts: {
+export function planBibleExtract(opts: {
   chapters: ChapterForExtract[];
+  model: AiModelTier;
+  usingByok?: boolean;
+}) {
+  const batches = packBibleBatches(opts.chapters);
+  const estimate = estimateBibleExtractCost({
+    chapterCount: opts.chapters.length,
+    model: opts.model,
+    usingByok: opts.usingByok,
+    batches: Math.max(1, batches.length),
+  });
+  return {
+    ...estimate,
+    chapterCount: opts.chapters.length,
+    passes: BIBLE_PASSES.map((p) => ({ id: p.id, label: p.label })),
+  };
+}
+
+/** One exact batch × one category pass — safe for a single serverless request. */
+export async function runBibleExtractUnit(opts: {
+  chapters: ChapterForExtract[];
+  passId: string;
+  batchIndex: number;
   model: AiModelTier;
   byokAnthropic?: string | null;
   byokOpenAi?: string | null;
@@ -121,36 +118,41 @@ export async function runBibleExtractMultipass(opts: {
 }): Promise<{
   entries: BibleExtractEntry[];
   summary: string;
-  calls: number;
-  passSummaries: string[];
+  batchCount: number;
+  batchLabel: string;
+  passLabel: string;
+  empty: boolean;
 }> {
-  const ordered = [...opts.chapters].sort((a, b) => a.sort_order - b.sort_order);
-  const batches = packChaptersExact(ordered, {
-    maxCharsPerBatch: 90000,
-    maxChaptersPerBatch: BIBLE_CHAPTERS_PER_BATCH,
-  }).filter((b) => b.some((c) => (c.content_text || "").trim()));
-  const merged = new Map<string, BibleExtractEntry>();
-  const passSummaries: string[] = [];
-  let calls = 0;
+  const pass = getBiblePass(opts.passId);
+  if (!pass) {
+    throw new Error(`Unknown bible pass: ${opts.passId}`);
+  }
 
-  for (const pass of BIBLE_PASSES) {
-    const allowed = new Set(pass.types);
-    for (let bi = 0; bi < batches.length; bi++) {
-      const batch = batches[bi];
-      const manuscript = manuscriptFromBatch(batch);
+  const batches = packBibleBatches(opts.chapters);
+  if (!batches.length || opts.batchIndex < 0 || opts.batchIndex >= batches.length) {
+    return {
+      entries: [],
+      summary: "No chapters in this batch.",
+      batchCount: batches.length,
+      batchLabel: "",
+      passLabel: pass.label,
+      empty: true,
+    };
+  }
 
-      if (!manuscript.trim()) continue;
+  const batch = batches[opts.batchIndex];
+  const manuscript = manuscriptFromBatch(batch);
+  const batchLabel =
+    batch.length === 1
+      ? batch[0].title
+      : `${batch[0].title} → ${batch[batch.length - 1].title}`;
 
-      const chapterLabel =
-        batch.length === 1
-          ? batch[0].title
-          : `${batch[0].title} → ${batch[batch.length - 1].title}`;
-
-      const user = `Task: story-bible extraction pass "${pass.label}" (batch ${bi + 1}/${batches.length}: ${chapterLabel}).
+  const user = `Task: story-bible extraction pass "${pass.label}" (batch ${opts.batchIndex + 1}/${batches.length}: ${batchLabel}).
 
 ${pass.instruction}
 
 HARD RULES:
+- Read the FULL text of every chapter in this batch. Do not skip sections.
 - Only extract what is evidenced in THIS manuscript batch.
 - Do not invent entities.
 - Never write manuscript prose or replacement scenes.
@@ -169,40 +171,35 @@ MANUSCRIPT:
 ${manuscript}
 """`;
 
-      const raw = await runCritiqueModel({
-        system: CRITIQUE_SYSTEM_PROMPT,
-        user,
-        byokAnthropic: opts.byokAnthropic,
-        byokOpenAi: opts.byokOpenAi,
-        modelTier: opts.model,
-      });
-      calls += 1;
-      const parsed = parseAiJson(raw);
-      if (parsed.summary) passSummaries.push(`${pass.label} (${chapterLabel}): ${parsed.summary}`);
-      const entries = (parsed.extras?.entries || []) as BibleExtractEntry[];
-      mergeEntries(merged, entries, allowed);
-    }
-  }
+  const raw = await runCritiqueModel({
+    system: CRITIQUE_SYSTEM_PROMPT,
+    user,
+    byokAnthropic: opts.byokAnthropic,
+    byokOpenAi: opts.byokOpenAi,
+    modelTier: opts.model,
+  });
+  const parsed = parseAiJson(raw);
+  const allowed = new Set(pass.types);
+  const merged = new Map<string, BibleExtractEntry>();
 
-  // Drop ones already in the project bible
-  const fresh = [...merged.values()].filter(
-    (e) => !opts.existingKeys.has(`${e.entry_type}:${e.name.toLowerCase().trim()}`)
-  );
-
-  const byType: Record<string, number> = {};
-  for (const e of fresh) {
-    byType[e.entry_type] = (byType[e.entry_type] || 0) + 1;
+  for (const e of (parsed.extras?.entries || []) as BibleExtractEntry[]) {
+    if (!e?.name?.trim() || !allowed.has(e.entry_type)) continue;
+    const key = `${e.entry_type}:${e.name.toLowerCase().trim()}`;
+    if (opts.existingKeys.has(key) || merged.has(key)) continue;
+    merged.set(key, {
+      entry_type: e.entry_type,
+      name: e.name.trim(),
+      summary: e.summary || "",
+      speech_notes: e.speech_notes || "",
+    });
   }
-  const tally = Object.entries(byType)
-    .map(([t, n]) => `${n} ${t}${n === 1 ? "" : "s"}`)
-    .join(", ");
 
   return {
-    entries: fresh,
-    summary: `Bible scan complete (${calls} AI passes over ${ordered.length} chapters). New entries: ${
-      fresh.length ? tally : "none (everything found was already in your bible or nothing clear to add)"
-    }.`,
-    calls,
-    passSummaries,
+    entries: [...merged.values()],
+    summary: parsed.summary || `${pass.label}: scanned ${batchLabel}`,
+    batchCount: batches.length,
+    batchLabel,
+    passLabel: pass.label,
+    empty: false,
   };
 }
