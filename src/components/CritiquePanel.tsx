@@ -11,6 +11,7 @@ import {
   type AiModelTier,
   type AiScope,
 } from "@/lib/ai/pricing";
+import { estimateArcsCost } from "@/lib/ai/arcs-multipass";
 import { JOB_META } from "@/lib/ai/jobs";
 import { CritiqueReportModal, type CritiqueReportData } from "@/components/CritiqueReportModal";
 import Link from "next/link";
@@ -18,6 +19,7 @@ import Link from "next/link";
 type Props = {
   projectId: string;
   chapterId?: string;
+  chapterCount?: number;
   selectionText?: string;
   challengeLevel: number;
   onChallengeChange: (n: number) => void;
@@ -58,6 +60,7 @@ const JOBS: { type: JobType; mode?: string }[] = [
 export function CritiquePanel({
   projectId,
   chapterId,
+  chapterCount = 1,
   selectionText,
   challengeLevel,
   onChallengeChange,
@@ -107,6 +110,9 @@ export function CritiquePanel({
   }, [hasSelection]);
 
   function costFor(jobType: JobType) {
+    if (jobType === "arcs" && scope === "book") {
+      return estimateArcsCost({ chapterCount: Math.max(1, chapterCount), model }).cost;
+    }
     return computeCritiqueCost({ jobType, scope, model });
   }
 
@@ -175,7 +181,14 @@ export function CritiquePanel({
       effectiveScope = defaultScopeForJob(jobType);
     }
 
-    const cost = computeCritiqueCost({ jobType, scope: effectiveScope, model });
+    const cost =
+      jobType === "arcs" && effectiveScope === "book"
+        ? estimateArcsCost({ chapterCount: Math.max(1, chapterCount), model }).cost
+        : computeCritiqueCost({ jobType, scope: effectiveScope, model });
+    const arcsEstimate =
+      jobType === "arcs" && effectiveScope === "book"
+        ? estimateArcsCost({ chapterCount: Math.max(1, chapterCount), model })
+        : null;
     const meta = JOB_META[jobType];
     const scopeLabel =
       effectiveScope === "selection"
@@ -183,9 +196,12 @@ export function CritiquePanel({
         : effectiveScope === "book"
           ? "whole book"
           : "this chapter";
+    const costNote = arcsEstimate
+      ? `Cost: ~${arcsEstimate.cost} credits (${arcsEstimate.calls} full-chapter batch passes · exact text, no sampling)`
+      : `Cost: ${cost} credits`;
     if (
       !confirm(
-        `Run ${meta.label} on ${scopeLabel} with ${AI_MODEL_TIERS[model].label} model?\n\n${meta.description}\n\nCost: ${cost} credits`
+        `Run ${meta.label} on ${scopeLabel} with ${AI_MODEL_TIERS[model].label} model?\n\n${meta.description}\n\n${costNote}`
       )
     ) {
       return;

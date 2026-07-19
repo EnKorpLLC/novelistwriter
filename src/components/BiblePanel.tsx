@@ -2,11 +2,18 @@
 
 import { useState } from "react";
 import type { BibleEntry } from "@/lib/types";
-import { computeCritiqueCost } from "@/lib/ai/pricing";
+import {
+  BIBLE_CHAPTERS_PER_BATCH,
+  BIBLE_PASSES,
+  estimateBibleExtractCost,
+} from "@/lib/ai/bible-extract";
+import type { AiModelTier } from "@/lib/ai/pricing";
+import { AI_MODEL_TIERS } from "@/lib/ai/pricing";
 import Link from "next/link";
 
 type Props = {
   projectId: string;
+  chapterCount: number;
   entries: BibleEntry[];
   onChange: (entries: BibleEntry[]) => void;
   promises: { id: string; description: string; status: string }[];
@@ -25,6 +32,7 @@ const TYPES: BibleEntry["entry_type"][] = [
 
 export function BiblePanel({
   projectId,
+  chapterCount,
   entries,
   onChange,
   promises,
@@ -37,6 +45,12 @@ export function BiblePanel({
   const [speech, setSpeech] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [extractMsg, setExtractMsg] = useState<string | null>(null);
+  const [extractModel, setExtractModel] = useState<AiModelTier>("standard");
+
+  const estimate = estimateBibleExtractCost({
+    chapterCount: Math.max(1, chapterCount),
+    model: extractModel,
+  });
 
   async function add() {
     if (!name.trim()) return;
@@ -65,20 +79,24 @@ export function BiblePanel({
   }
 
   async function extractFromManuscript() {
-    const cost = computeCritiqueCost({
-      jobType: "bible_extract",
-      scope: "book",
-      model: "fast",
+    const est = estimateBibleExtractCost({
+      chapterCount: Math.max(1, chapterCount),
+      model: extractModel,
     });
     if (
       !confirm(
-        `Scan the whole project for characters, places, rules, lore, and timelines?\n\nCost: ${cost} credits (whole book · Fast model).\nExisting entries are kept; new ones are added (duplicates skipped by name).\n\nLarge novels are sampled across all chapters so the scan can finish.`
+        `Thorough story-bible scan of ${chapterCount} chapter(s)?\n\n` +
+          `Passes: ${BIBLE_PASSES.map((p) => p.label).join(", ")}\n` +
+          `Full chapters in batches of ${BIBLE_CHAPTERS_PER_BATCH} (${est.batches} batch(es) × ${BIBLE_PASSES.length} passes = ${est.calls} AI calls)\n` +
+          `Model: ${AI_MODEL_TIERS[extractModel].label}\n` +
+          `Estimated cost: ${est.cost} credits\n\n` +
+          `Existing entries are kept; new names are added. This can take several minutes on a long novel.`
       )
     ) {
       return;
     }
     setExtracting(true);
-    setExtractMsg(null);
+    setExtractMsg("Scanning… this may take a few minutes on a long book.");
     try {
       const res = await fetch("/api/ai/critique", {
         method: "POST",
@@ -87,14 +105,14 @@ export function BiblePanel({
           jobType: "bible_extract",
           projectId,
           scope: "book",
-          model: "fast",
+          model: extractModel,
         }),
       });
       let data: {
         error?: string;
         code?: string;
         creditsRemaining?: number;
-        extras?: { added?: BibleEntry[] };
+        extras?: { added?: BibleEntry[]; calls?: number };
         summary?: string;
         cost?: number;
         refunded?: number;
@@ -104,7 +122,7 @@ export function BiblePanel({
       } catch {
         throw new Error(
           res.status === 504 || res.status === 408
-            ? "Request timed out — try again in a moment."
+            ? "Request timed out — try again, or use Fast model."
             : `Server error (${res.status}). Try again.`
         );
       }
@@ -113,7 +131,9 @@ export function BiblePanel({
       }
       if (!res.ok) {
         if (data.code === "insufficient_credits") {
-          setExtractMsg(data.error || "Need more credits.");
+          setExtractMsg(
+            `${data.error || "Need more credits."} Estimated ${est.cost} credits for this scan.`
+          );
           return;
         }
         throw new Error(data.error || "Extract failed");
@@ -124,13 +144,15 @@ export function BiblePanel({
       }
       setExtractMsg(
         data.summary ||
-          `Added ${added.length} entr${added.length === 1 ? "y" : "ies"} (${data.cost} credits).`
+          `Added ${added.length} entr${added.length === 1 ? "y" : "ies"} (${data.cost} credits` +
+            (data.extras?.calls ? `, ${data.extras.calls} AI calls` : "") +
+            `).`
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Extract failed";
       setExtractMsg(
-        /connection error/i.test(msg)
-          ? "AI connection timed out on this large book. Credits were refunded if charged — try again (we now sample across chapters)."
+        /connection error|timed out|dropped/i.test(msg)
+          ? "AI connection timed out. Credits were refunded if charged — try Fast model, or run again."
           : msg
       );
     } finally {
@@ -144,19 +166,41 @@ export function BiblePanel({
         <div>
           <h2 className="font-display text-2xl">Story bible</h2>
           <p className="mt-1 text-sm text-muted">
-            Characters, places, lore — used by lore lock and dialogue fingerprint.
+            Characters, places, lore, rules, timeline — used by lore lock and other critiques.
           </p>
         </div>
-        <button
-          type="button"
-          disabled={extracting}
-          onClick={extractFromManuscript}
-          className="font-ui shrink-0 border border-accent bg-paper px-4 py-2 text-sm text-accent hover:bg-accent hover:text-paper disabled:opacity-50"
-        >
-          {extracting
-            ? "Scanning manuscript…"
-            : `AI: extract from project (${computeCritiqueCost({ jobType: "bible_extract", scope: "book", model: "fast" })} cr)`}
-        </button>
+        <div className="font-ui flex shrink-0 flex-col items-end gap-2">
+          <div className="flex flex-wrap justify-end gap-1">
+            {(Object.keys(AI_MODEL_TIERS) as AiModelTier[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setExtractModel(id)}
+                title={AI_MODEL_TIERS[id].blurb}
+                className={`px-2 py-0.5 text-[11px] ${
+                  extractModel === id ? "bg-accent text-paper" : "border border-line text-muted"
+                }`}
+              >
+                {AI_MODEL_TIERS[id].label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={extracting || chapterCount < 1}
+            onClick={extractFromManuscript}
+            className="border border-accent bg-paper px-4 py-2 text-sm text-accent hover:bg-accent hover:text-paper disabled:opacity-50"
+          >
+            {extracting
+              ? "Scanning manuscript…"
+              : `AI: extract (~${estimate.cost} cr · ${estimate.calls} passes)`}
+          </button>
+          <p className="max-w-xs text-right text-[10px] text-muted">
+            {chapterCount} chapters · batches of {BIBLE_CHAPTERS_PER_BATCH} ·{" "}
+            {BIBLE_PASSES.length} categories (characters, places, lore/rules, timeline/notes).
+            Standard is recommended; Deep costs more.
+          </p>
+        </div>
       </div>
       {extractMsg && (
         <p className="font-ui mt-3 text-sm text-muted">

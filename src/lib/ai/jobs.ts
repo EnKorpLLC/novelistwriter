@@ -42,7 +42,7 @@ export const JOB_META: Record<
   arcs: {
     label: "Arcs",
     description:
-      "Tracks character and story arcs — where they rise, stall, or lack payoff.",
+      "Tracks character and story arcs across full chapters in batches (exact text, no sampling). Whole-book runs charge per batch.",
   },
   promises: {
     label: "Promises",
@@ -102,6 +102,6 @@ export const JOB_META: Record<
   bible_extract: {
     label: "Bible extract",
     description:
-      "Scans the manuscript for characters, places, lore, rules, and timeline beats to add to your story bible.",
+      "Thorough multi-pass scan: characters, places, lore/rules, and timeline notes. Reads full chapters in batches and charges per AI pass.",
   },
 };

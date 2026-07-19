@@ -376,6 +376,7 @@ export function ProjectWorkspace({
               <CritiquePanel
                 projectId={project.id}
                 chapterId={active?.id}
+                chapterCount={chapters.length}
                 selectionText={selectionText}
                 challengeLevel={challengeLevel}
                 onChallengeChange={setChallengeLevel}
@@ -389,6 +390,7 @@ export function ProjectWorkspace({
         {tab === "bible" && (
           <BiblePanel
             projectId={project.id}
+            chapterCount={chapters.length}
             entries={bible}
             onChange={setBible}
             promises={promises}

@@ -42,7 +42,7 @@ export const CREDIT_COSTS: Record<JobType, number> = {
   blurb_critique: 6,
   beta_summary: 8,
   custom_persona: 15,
-  bible_extract: 20,
+  bible_extract: 5,
 };
 
 export const CREDIT_PACKS = {

@@ -16,11 +16,17 @@ import {
   type AiScope,
 } from "@/lib/ai/pricing";
 import { buildBookManuscript } from "@/lib/ai/manuscript";
+import {
+  estimateBibleExtractCost,
+  runBibleExtractMultipass,
+} from "@/lib/ai/bible-extract";
+import { estimateArcsCost, runArcsMultipass } from "@/lib/ai/arcs-multipass";
+import { packChaptersExact } from "@/lib/ai/chapter-batches";
 import type { JobType } from "@/lib/types";
 import { z } from "zod";
 
-/** Allow long book-scope critiques on Vercel (Pro plan supports up to 300s). */
-export const maxDuration = 60;
+/** Long multipass bible extracts / book jobs — requires Vercel Pro for full 300s. */
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   jobType: z.string(),
@@ -75,7 +81,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  if (scope === "chapter" && !chapterId) {
+  if (scope === "chapter" && !chapterId && jt !== "bible_extract") {
     return NextResponse.json({ error: "No chapter selected." }, { status: 400 });
   }
 
@@ -96,9 +102,396 @@ export async function POST(req: Request) {
   const byokOpenAi = isStudio ? profile?.byok_openai_key : null;
   const usingByok = Boolean(byokAnthropic || byokOpenAi);
 
-  // Bible extract defaults to Fast unless the client asked otherwise — large books time out otherwise
-  const effectiveModel: AiModelTier =
-    jt === "bible_extract" && !parsed.data.model ? "fast" : model;
+  // ——— Thorough multi-pass story bible extract (full chapters, batched) ———
+  if (jt === "bible_extract") {
+    const extractModel: AiModelTier =
+      parsed.data.model && isValidModelTier(parsed.data.model) ? parsed.data.model : "standard";
+
+    const { data: chapters } = await supabase
+      .from("chapters")
+      .select("title, content_text, sort_order")
+      .eq("project_id", projectId)
+      .order("sort_order");
+
+    const chapterRows = (chapters || []).map((c) => ({
+      title: c.title,
+      content_text: c.content_text || "",
+      sort_order: c.sort_order ?? 0,
+    }));
+
+    if (!chapterRows.length) {
+      return NextResponse.json({ error: "No chapters to scan." }, { status: 400 });
+    }
+
+    const estimate = estimateBibleExtractCost({
+      chapterCount: chapterRows.length,
+      model: extractModel,
+      usingByok,
+    });
+
+    const debit = await debitCredits({
+      userId: user.id,
+      jobType: jt,
+      cost: estimate.cost,
+    });
+    if (!debit.ok) {
+      return NextResponse.json(
+        {
+          error: debit.error,
+          code: "insufficient_credits",
+          cost: debit.cost,
+          estimate,
+        },
+        { status: 402 }
+      );
+    }
+
+    const { data: bible } = await supabase
+      .from("bible_entries")
+      .select("entry_type, name, summary, speech_notes, details")
+      .eq("project_id", projectId);
+
+    const existingKeys = new Set(
+      (bible || []).map((b) => `${b.entry_type}:${String(b.name).toLowerCase().trim()}`)
+    );
+
+    const { data: job } = await supabase
+      .from("ai_jobs")
+      .insert({
+        user_id: user.id,
+        project_id: projectId,
+        chapter_id: null,
+        job_type: jt,
+        status: "running",
+        credit_cost: debit.charged,
+        input: {
+          scope: "book",
+          model: extractModel,
+          usingByok,
+          multipass: true,
+          estimate,
+        },
+      })
+      .select("*")
+      .single();
+
+    try {
+      const extract = await runBibleExtractMultipass({
+        chapters: chapterRows,
+        model: extractModel,
+        byokAnthropic,
+        byokOpenAi,
+        existingKeys,
+      });
+
+      // Charge for actual AI calls; refund unused estimate (empty batches, etc.)
+      let charged = debit.charged;
+      if (extract.calls < estimate.calls) {
+        const perCall = usingByok
+          ? 1
+          : Math.round(estimate.cost / Math.max(1, estimate.calls));
+        const unused = (estimate.calls - extract.calls) * perCall;
+        if (unused > 0) {
+          await refundCredits({
+            userId: user.id,
+            amount: unused,
+            jobType: jt,
+            reason: "bible_extract_unused_batches",
+          });
+          charged = Math.max(0, debit.charged - unused);
+        }
+      }
+
+      const inserted: unknown[] = [];
+      for (const e of extract.entries.slice(0, 200)) {
+        const { data: row } = await supabase
+          .from("bible_entries")
+          .insert({
+            project_id: projectId,
+            user_id: user.id,
+            entry_type: e.entry_type,
+            name: e.name.trim(),
+            summary: e.summary || "",
+            speech_notes: e.speech_notes || "",
+            details: { source: "ai_extract" },
+          })
+          .select("*")
+          .single();
+        if (row) inserted.push(row);
+      }
+
+      const result = {
+        summary: extract.summary,
+        items: [] as unknown[],
+        extras: {
+          entries: extract.entries,
+          added: inserted,
+          calls: extract.calls,
+          batches: estimate.batches,
+          passSummaries: extract.passSummaries,
+        },
+      };
+
+      if (job) {
+        await supabase
+          .from("ai_jobs")
+          .update({
+            status: "complete",
+            result,
+            credit_cost: charged,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", job.id);
+      }
+
+      return NextResponse.json({
+        jobId: job?.id,
+        cost: charged,
+        scope: "book",
+        model: extractModel,
+        usingByok,
+        summary: result.summary,
+        items: [],
+        extras: result.extras,
+        creditsRemaining: await remainingCredits(user.id),
+      });
+    } catch (e) {
+      try {
+        await refundCredits({
+          userId: user.id,
+          amount: debit.charged,
+          jobType: jt,
+          reason: "ai_job_failed_refund",
+        });
+      } catch (refundErr) {
+        console.error("credit refund failed", refundErr);
+      }
+      if (job) {
+        await supabase
+          .from("ai_jobs")
+          .update({
+            status: "failed",
+            error: e instanceof Error ? e.message : "AI failed",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", job.id);
+      }
+      return NextResponse.json(
+        {
+          error: e instanceof Error ? e.message : "AI failed",
+          refunded: debit.charged,
+          creditsRemaining: await remainingCredits(user.id),
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  // ——— Exact full-chapter arcs (batched; no sampling / truncation) ———
+  if (jt === "arcs" && scope === "book") {
+    const arcsModel: AiModelTier =
+      parsed.data.model && isValidModelTier(parsed.data.model) ? parsed.data.model : "standard";
+
+    const { data: chapters } = await supabase
+      .from("chapters")
+      .select("title, content_text, sort_order")
+      .eq("project_id", projectId)
+      .order("sort_order");
+
+    const chapterRows = (chapters || []).map((c) => ({
+      title: c.title,
+      content_text: c.content_text || "",
+      sort_order: c.sort_order ?? 0,
+    }));
+
+    if (!chapterRows.length) {
+      return NextResponse.json({ error: "No chapters to scan." }, { status: 400 });
+    }
+
+    const packed = packChaptersExact(chapterRows, {
+      maxCharsPerBatch: 90000,
+      maxChaptersPerBatch: 5,
+    }).filter((b) => b.some((c) => (c.content_text || "").trim()));
+
+    const estimate = estimateArcsCost({
+      chapterCount: chapterRows.length,
+      model: arcsModel,
+      usingByok,
+      batches: Math.max(1, packed.length),
+    });
+
+    const debit = await debitCredits({
+      userId: user.id,
+      jobType: jt,
+      cost: estimate.cost,
+    });
+    if (!debit.ok) {
+      return NextResponse.json(
+        {
+          error: debit.error,
+          code: "insufficient_credits",
+          cost: debit.cost,
+          estimate,
+        },
+        { status: 402 }
+      );
+    }
+
+    const { data: bible } = await supabase
+      .from("bible_entries")
+      .select("entry_type, name, summary, speech_notes, details")
+      .eq("project_id", projectId);
+
+    const level = challengeLevel ?? profile?.challenge_level ?? 50;
+    const prefs = profile?.critique_preferences || {};
+
+    const { data: job } = await supabase
+      .from("ai_jobs")
+      .insert({
+        user_id: user.id,
+        project_id: projectId,
+        chapter_id: null,
+        job_type: jt,
+        status: "running",
+        credit_cost: debit.charged,
+        input: {
+          scope: "book",
+          model: arcsModel,
+          usingByok,
+          multipass: true,
+          estimate,
+        },
+      })
+      .select("*")
+      .single();
+
+    try {
+      const extract = await runArcsMultipass({
+        chapters: chapterRows,
+        model: arcsModel,
+        byokAnthropic,
+        byokOpenAi,
+        level,
+        prefs,
+        bible: bible || [],
+      });
+
+      let charged = debit.charged;
+      if (extract.calls < estimate.calls) {
+        const perCall = usingByok
+          ? 1
+          : Math.round(estimate.cost / Math.max(1, estimate.calls));
+        const unused = (estimate.calls - extract.calls) * perCall;
+        if (unused > 0) {
+          await refundCredits({
+            userId: user.id,
+            amount: unused,
+            jobType: jt,
+            reason: "arcs_unused_batches",
+          });
+          charged = Math.max(0, debit.charged - unused);
+        }
+      }
+
+      for (const a of extract.arcs.slice(0, 40)) {
+        await supabase.from("arc_tracks").insert({
+          project_id: projectId,
+          user_id: user.id,
+          arc_type:
+            a.arc_type === "character" || a.arc_type === "relationship"
+              ? a.arc_type
+              : "story",
+          subject: a.subject,
+          beats: a.beats || [],
+          notes: a.notes || "",
+        });
+      }
+
+      if (Array.isArray(extract.items) && extract.items.length && job) {
+        await supabase.from("critique_items").insert(
+          extract.items.slice(0, 80).map((item) => ({
+            job_id: job.id,
+            project_id: projectId,
+            chapter_id: null,
+            user_id: user.id,
+            severity: item.severity,
+            confidence: item.confidence,
+            category: item.category,
+            title: item.title,
+            body: item.body,
+            citation_excerpt: item.citation_excerpt || null,
+            example_text: item.example_text || null,
+          }))
+        );
+      }
+
+      const result = {
+        summary: extract.summary,
+        items: extract.items,
+        extras: {
+          arcs: extract.arcs,
+          calls: extract.calls,
+          batches: extract.batches,
+          batchSummaries: extract.batchSummaries,
+        },
+      };
+
+      if (job) {
+        await supabase
+          .from("ai_jobs")
+          .update({
+            status: "complete",
+            result,
+            credit_cost: charged,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", job.id);
+      }
+
+      return NextResponse.json({
+        jobId: job?.id,
+        cost: charged,
+        scope: "book",
+        model: arcsModel,
+        usingByok,
+        summary: result.summary,
+        items: result.items,
+        extras: result.extras,
+        creditsRemaining: await remainingCredits(user.id),
+      });
+    } catch (e) {
+      try {
+        await refundCredits({
+          userId: user.id,
+          amount: debit.charged,
+          jobType: jt,
+          reason: "ai_job_failed_refund",
+        });
+      } catch (refundErr) {
+        console.error("credit refund failed", refundErr);
+      }
+      if (job) {
+        await supabase
+          .from("ai_jobs")
+          .update({
+            status: "failed",
+            error: e instanceof Error ? e.message : "AI failed",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", job.id);
+      }
+      return NextResponse.json(
+        {
+          error: e instanceof Error ? e.message : "AI failed",
+          refunded: debit.charged,
+          creditsRemaining: await remainingCredits(user.id),
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  const effectiveModel: AiModelTier = model;
 
   const cost = computeCritiqueCost({
     jobType: jt,
@@ -259,50 +652,6 @@ export async function POST(req: Request) {
         }
       }
 
-      if (jt === "bible_extract" && Array.isArray(result.extras?.entries)) {
-        const existingNames = new Set(
-          (bible || []).map((b) => `${b.entry_type}:${String(b.name).toLowerCase().trim()}`)
-        );
-        const allowed = new Set(["character", "place", "note", "lore", "rule", "timeline"]);
-        const toAdd = (
-          result.extras.entries as Array<{
-            entry_type: string;
-            name: string;
-            summary?: string;
-            speech_notes?: string;
-          }>
-        )
-          .filter(
-            (e) =>
-              e.name?.trim() &&
-              allowed.has(e.entry_type) &&
-              !existingNames.has(`${e.entry_type}:${e.name.toLowerCase().trim()}`)
-          )
-          .slice(0, 40);
-
-        const inserted: unknown[] = [];
-        for (const e of toAdd) {
-          const { data: row } = await supabase
-            .from("bible_entries")
-            .insert({
-              project_id: projectId,
-              user_id: user.id,
-              entry_type: e.entry_type,
-              name: e.name.trim(),
-              summary: e.summary || "",
-              speech_notes: e.speech_notes || "",
-              details: { source: "ai_extract" },
-            })
-            .select("*")
-            .single();
-          if (row) inserted.push(row);
-        }
-        result.extras = {
-          ...(result.extras || {}),
-          added: inserted,
-          skipped: (result.extras.entries as unknown[]).length - toAdd.length,
-        };
-      }
     }
 
     return NextResponse.json({
