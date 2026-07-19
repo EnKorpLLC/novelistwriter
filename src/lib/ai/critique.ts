@@ -131,6 +131,7 @@ export async function runCritiqueModel(opts: {
   modelTier?: "fast" | "standard" | "deep";
   anthropicModel?: string;
   openaiModel?: string;
+  maxTokens?: number;
 }): Promise<string> {
   const provider = (process.env.AI_PROVIDER || "anthropic").toLowerCase();
   const anthropicKey =
@@ -149,6 +150,7 @@ export async function runCritiqueModel(opts: {
     const res = await client.chat.completions.create({
       model: openaiModel,
       temperature: 0.4,
+      max_tokens: opts.maxTokens ?? 4096,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: opts.system || CRITIQUE_SYSTEM_PROMPT },
@@ -165,6 +167,7 @@ export async function runCritiqueModel(opts: {
         model: anthropicModel,
         system: opts.system || CRITIQUE_SYSTEM_PROMPT,
         user: opts.user,
+        maxTokens: opts.maxTokens ?? 4096,
       });
     } catch (firstErr) {
       const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
@@ -175,6 +178,7 @@ export async function runCritiqueModel(opts: {
           model: anthropicModel,
           system: opts.system || CRITIQUE_SYSTEM_PROMPT,
           user: opts.user,
+          maxTokens: opts.maxTokens ?? 4096,
         });
       }
       throw firstErr instanceof Error ? firstErr : new Error(msg);
@@ -255,24 +259,119 @@ function demoCritique(user: string): AiJsonResult {
 }
 
 export function parseAiJson(raw: string): AiJsonResult {
-  try {
-    const cleaned = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-    const parsed = JSON.parse(cleaned) as AiJsonResult;
+  const empty: AiJsonResult = { summary: "", items: [], extras: {} };
+
+  function normalize(parsed: AiJsonResult): AiJsonResult {
     if (!parsed.items) parsed.items = [];
     if (!parsed.summary) parsed.summary = "";
+    if (!parsed.extras) parsed.extras = {};
     return parsed;
-  } catch {
+  }
+
+  function tryParse(text: string): AiJsonResult | null {
+    try {
+      return normalize(JSON.parse(text) as AiJsonResult);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Close truncated JSON enough to parse (common when max_tokens cuts mid-object). */
+  function repairTruncated(text: string): string {
+    let s = text.trim();
+    // Drop trailing incomplete string / key
+    s = s.replace(/,\s*"[^"]*$/, "");
+    s = s.replace(/,\s*$/, "");
+    // Close open strings if odd number of unescaped quotes — crude: strip last dangling quote fragment
+    const quoteCount = (s.match(/(?<!\\)"/g) || []).length;
+    if (quoteCount % 2 === 1) s += '"';
+    const opens = (s.match(/[{[]/g) || []).length;
+    const closes = (s.match(/[}\]]/g) || []).length;
+    let diff = opens - closes;
+    // Prefer closing objects/arrays in reverse order of opens — stack-based
+    const stack: string[] = [];
+    let inStr = false;
+    let esc = false;
+    for (const ch of s) {
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === "{" || ch === "[") stack.push(ch);
+      else if (ch === "}" || ch === "]") stack.pop();
+    }
+    while (stack.length) {
+      const open = stack.pop();
+      s += open === "{" ? "}" : "]";
+    }
+    void diff;
+    return s;
+  }
+
+  let text = (raw || "").trim();
+  if (!text) return { ...empty, summary: "Empty model response." };
+
+  // Strip markdown fences (complete or truncated)
+  text = text.replace(/^```(?:json)?\s*/i, "");
+  text = text.replace(/\s*```\s*$/i, "");
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/i);
+  if (fenced?.[1]) {
+    const fromFence = tryParse(fenced[1].trim()) || tryParse(repairTruncated(fenced[1].trim()));
+    if (fromFence && (fromFence.summary || fromFence.items.length || fromFence.extras)) {
+      return fromFence;
+    }
+  }
+
+  const start = text.indexOf("{");
+  if (start >= 0) text = text.slice(start);
+
+  let parsed = tryParse(text);
+  if (parsed) return parsed;
+
+  parsed = tryParse(repairTruncated(text));
+  if (parsed) return parsed;
+
+  // Last resort: pull summary + extras.arcs from a broken payload
+  const summaryMatch = text.match(/"summary"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  const arcsMatch = text.match(/"arcs"\s*:\s*(\[[\s\S]*)/);
+  let arcs: unknown[] = [];
+  if (arcsMatch) {
+    const arcsPayload = `{"arcs":${arcsMatch[1]}}`;
+    const repairedArcs = tryParse(repairTruncated(arcsPayload));
+    if (Array.isArray(repairedArcs?.extras?.arcs)) {
+      arcs = repairedArcs!.extras!.arcs as unknown[];
+    } else {
+      try {
+        const slice = repairTruncated(arcsMatch[1]);
+        const arr = JSON.parse(slice);
+        if (Array.isArray(arr)) arcs = arr;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (summaryMatch || arcs.length) {
     return {
-      summary: "Could not parse model response.",
-      items: [
-        {
-          severity: "consider",
-          confidence: 0.3,
-          category: "system",
-          title: "Parse error",
-          body: raw.slice(0, 500),
-        },
-      ],
+      summary: summaryMatch ? JSON.parse(`"${summaryMatch[1]}"`) : "Partial model response (truncated).",
+      items: [],
+      extras: arcs.length ? { arcs } : {},
     };
   }
+
+  return {
+    summary: "Could not parse model response.",
+    items: [
+      {
+        severity: "consider",
+        confidence: 0.3,
+        category: "system",
+        title: "Parse error",
+        body: raw.slice(0, 400),
+      },
+    ],
+  };
 }

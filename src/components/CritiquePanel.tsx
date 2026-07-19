@@ -274,17 +274,61 @@ export function CritiquePanel({
             if (sub) subjects.push(`${typ}:${sub}`);
           }
           if (Array.isArray(data.items)) {
-            allItems.push(...(data.items as CritiqueItem[]));
+            allItems.push(
+              ...(data.items as CritiqueItem[]).filter(
+                (i) => i.title !== "Parse error" && i.category !== "system"
+              )
+            );
           }
         }
 
+        // Deduplicate arcs by type+subject (keep richest beats)
+        const arcMap = new Map<string, Record<string, unknown>>();
+        for (const a of allArcs) {
+          const key = `${String(a.arc_type)}:${String(a.subject).toLowerCase()}`;
+          const prev = arcMap.get(key);
+          if (!prev) {
+            arcMap.set(key, a);
+            continue;
+          }
+          const prevBeats = Array.isArray(prev.beats) ? prev.beats : [];
+          const nextBeats = Array.isArray(a.beats) ? a.beats : [];
+          arcMap.set(key, {
+            ...prev,
+            ...a,
+            beats: [...prevBeats, ...nextBeats],
+            notes: [prev.notes, a.notes].filter(Boolean).join(" "),
+          });
+        }
+        const mergedArcs = [...arcMap.values()];
+        const summary = `Arc scan complete (${batchCount} batches, ${charged} credits). Tracked ${mergedArcs.length} arc(s).`;
+
+        const fin = await fetch("/api/ai/critique", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobType: "arcs",
+            projectId,
+            scope: "book",
+            model,
+            finalize: true,
+            finalizePayload: {
+              summary,
+              items: allItems,
+              extras: { arcs: mergedArcs, calls: batchCount, batches: batchCount },
+              cost: charged,
+            },
+          }),
+        });
+        const finData = await fin.json().catch(() => ({}));
+
         setError(null);
         setReport({
-          jobId: lastJobId || "arcs-multipass",
+          jobId: finData.jobId || lastJobId || "arcs-multipass",
           jobType,
-          summary: `Arc scan complete (${batchCount} batches, ${charged} credits). Tracked ${allArcs.length} arc(s).`,
+          summary,
           items: allItems,
-          extras: { arcs: allArcs, calls: batchCount, batches: batchCount },
+          extras: { arcs: mergedArcs, calls: batchCount, batches: batchCount },
           createdAt: new Date().toISOString(),
           scope: "book",
           model,

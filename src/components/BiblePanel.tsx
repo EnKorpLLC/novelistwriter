@@ -50,7 +50,6 @@ export function BiblePanel({
   const [speech, setSpeech] = useState("");
   const [aliases, setAliases] = useState("");
   const [extracting, setExtracting] = useState(false);
-  const [merging, setMerging] = useState(false);
   const [extractMsg, setExtractMsg] = useState<string | null>(null);
   const [extractModel, setExtractModel] = useState<AiModelTier>("standard");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -321,7 +320,7 @@ export function BiblePanel({
 
       if (!abortRef.current) {
         setExtractMsg(
-          `Scan finished. Added ${addedCount}, updated ${updatedCount} (${charged} credits across ${done} requests). Use “Merge duplicates” if nicknames still split.`
+          `Scan finished. Added ${addedCount}, updated ${updatedCount} (${charged} credits across ${done} requests).`
         );
       }
     } catch (e) {
@@ -331,72 +330,7 @@ export function BiblePanel({
     }
   }
 
-  async function mergeDuplicates() {
-    if (!entries.length) return;
-    if (
-      !confirm(
-        `Merge duplicate bible entries by name/nickname/title?\n\n` +
-          `Uses local matching (Sera + Lady Beaufort → one row) — free, no AI credits.\n` +
-          `You can Stop between entry types.`
-      )
-    ) {
-      return;
-    }
-    abortRef.current = false;
-    setMerging(true);
-    let working = [...entries];
-    let charged = 0;
-    let deletedTotal = 0;
-    try {
-      for (const t of TYPES) {
-        if (abortRef.current) {
-          setExtractMsg(`Merge stopped. Removed ${deletedTotal} duplicates (${charged} credits).`);
-          break;
-        }
-        const ofType = working.filter((e) => e.entry_type === t);
-        if (ofType.length < 2) continue;
-        setExtractMsg(`Merging ${t} entries (${ofType.length})…`);
-        const res = await fetch("/api/ai/critique", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jobType: "bible_extract",
-            projectId,
-            scope: "book",
-            model: extractModel,
-            passId: "merge",
-            mergeEntryType: t,
-          }),
-        });
-        const data = await res.json();
-        if (typeof data.creditsRemaining === "number") {
-          onCreditsChange?.(data.creditsRemaining);
-        }
-        if (!res.ok) {
-          throw new Error(data.error || `Merge failed for ${t}`);
-        }
-        charged += data.cost || 0;
-        const updated = (data.extras?.updated as BibleEntry[]) || [];
-        const deleted = (data.extras?.deleted as string[]) || [];
-        deletedTotal += deleted.length;
-        const delSet = new Set(deleted);
-        working = working.filter((e) => !delSet.has(e.id));
-        working = applyEntryPatch(working, [], updated);
-        onChange(working);
-      }
-      if (!abortRef.current) {
-        setExtractMsg(
-          `Merge finished. Consolidated duplicates (removed ${deletedTotal}, ${charged} credits).`
-        );
-      }
-    } catch (e) {
-      setExtractMsg(e instanceof Error ? e.message : "Merge failed");
-    } finally {
-      setMerging(false);
-    }
-  }
-
-  const busy = extracting || merging;
+  const busy = extracting;
 
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-6 py-8">
@@ -436,14 +370,6 @@ export function BiblePanel({
                 Stop
               </button>
             ) : null}
-            <button
-              type="button"
-              disabled={busy || entries.length < 2}
-              onClick={mergeDuplicates}
-              className="border border-line px-3 py-2 text-sm text-ink hover:bg-paper-deep disabled:opacity-50"
-            >
-              {merging ? "Merging…" : "Merge duplicates (free)"}
-            </button>
             <button
               type="button"
               disabled={busy || chapterCount < 1}

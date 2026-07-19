@@ -22,5 +22,12 @@ export async function GET(
     .limit(40);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ jobs: data || [] });
+
+  // Hide per-batch multipass units — only show final/user-facing reports
+  const jobs = (data || []).filter((j) => {
+    const input = (j.input || {}) as { unit?: boolean; ephemeral?: boolean };
+    return !input.unit && !input.ephemeral;
+  });
+
+  return NextResponse.json({ jobs });
 }

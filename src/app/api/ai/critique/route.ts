@@ -61,6 +61,16 @@ const bodySchema = z.object({
   mergeEntryType: z
     .enum(["character", "place", "note", "lore", "rule", "timeline"])
     .optional(),
+  /** Save one combined multipass report without calling the model. */
+  finalize: z.boolean().optional(),
+  finalizePayload: z
+    .object({
+      summary: z.string(),
+      items: z.array(z.any()).optional(),
+      extras: z.record(z.any()).optional(),
+      cost: z.number().optional(),
+    })
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -122,6 +132,46 @@ export async function POST(req: Request) {
   const byokAnthropic = isStudio ? profile?.byok_anthropic_key : null;
   const byokOpenAi = isStudio ? profile?.byok_openai_key : null;
   const usingByok = Boolean(byokAnthropic || byokOpenAi);
+
+  // ——— Persist a single multipass report (no AI / no extra debit) ———
+  if (parsed.data.finalize && parsed.data.finalizePayload) {
+    const payload = parsed.data.finalizePayload;
+    const { data: job } = await supabase
+      .from("ai_jobs")
+      .insert({
+        user_id: user.id,
+        project_id: projectId,
+        chapter_id: null,
+        job_type: jt,
+        status: "complete",
+        credit_cost: payload.cost ?? 0,
+        input: {
+          scope,
+          model,
+          multipass: true,
+          finalize: true,
+        },
+        result: {
+          summary: payload.summary,
+          items: payload.items || [],
+          extras: payload.extras || {},
+        },
+        completed_at: new Date().toISOString(),
+      })
+      .select("*")
+      .single();
+
+    return NextResponse.json({
+      jobId: job?.id,
+      cost: payload.cost ?? 0,
+      scope,
+      model,
+      summary: payload.summary,
+      items: payload.items || [],
+      extras: payload.extras || {},
+      creditsRemaining: await remainingCredits(user.id),
+    });
+  }
 
   // ——— Story bible extract: plan or one batch×pass per request ———
   if (jt === "bible_extract") {

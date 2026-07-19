@@ -23,12 +23,12 @@ export type ArcCritiqueItem = {
   example_text?: string;
 };
 
-export const ARCS_CHAPTERS_PER_BATCH = 2;
+export const ARCS_CHAPTERS_PER_BATCH = 5;
 
 export function packArcsBatches(chapters: ChapterBatchRow[]) {
   const ordered = [...chapters].sort((a, b) => a.sort_order - b.sort_order);
   return packChaptersExact(ordered, {
-    maxCharsPerBatch: 45000,
+    maxCharsPerBatch: 80000,
     maxChaptersPerBatch: ARCS_CHAPTERS_PER_BATCH,
   }).filter((b) => b.some((c) => (c.content_text || "").trim()));
 }
@@ -113,24 +113,25 @@ export async function runArcsUnit(opts: {
 
 challenge_level: ${opts.level}
 author_preferences: ${JSON.stringify(opts.prefs)}
-story_bible: ${JSON.stringify(opts.bible).slice(0, 8000)}
+story_bible: ${JSON.stringify(opts.bible).slice(0, 6000)}
 ${opts.priorSubjects ? `arcs_seen_so_far: ${opts.priorSubjects}` : ""}
 
 HARD RULES:
-- Read the FULL text of every chapter in this batch. Do not skip or summarize away beats.
+- Read the FULL text of every chapter in this batch.
 - Only cite what is evidenced in THIS batch.
 - Continue existing arcs when the subject matches arcs_seen_so_far; otherwise start new ones.
-- Never write manuscript prose or replacement scenes.
-- Return JSON only:
+- Keep critique items SHORT (max 5 items). Prefer extras.arcs over long items.
+- Never write manuscript prose.
+- Respond with RAW JSON only — no markdown, no code fences, no commentary before/after.
 {
   "summary": string,
-  "items": [{ "severity": "must_fix"|"consider"|"style", "confidence": 0-1, "category": string, "title": string, "body": string, "citation_excerpt"?: string, "example_text"?: string }],
+  "items": [{ "severity": "must_fix"|"consider"|"style", "confidence": 0-1, "category": string, "title": string, "body": string, "citation_excerpt"?: string }],
   "extras": {
-    "arcs": [{ "arc_type": "character"|"relationship"|"story", "subject": string, "beats": [{ "chapter"?: string, "beat": string, "status"?: string }], "notes"?: string }]
+    "arcs": [{ "arc_type": "character"|"relationship"|"story", "subject": string, "beats": [{ "chapter"?: string, "beat": string }], "notes"?: string }]
   }
 }
 
-MANUSCRIPT (full chapters in this batch):
+MANUSCRIPT:
 """
 ${manuscript}
 """`;
@@ -141,6 +142,7 @@ ${manuscript}
     byokAnthropic: opts.byokAnthropic,
     byokOpenAi: opts.byokOpenAi,
     modelTier: opts.model,
+    maxTokens: 8192,
   });
   const parsed = parseAiJson(raw);
   const arcs = ((parsed.extras?.arcs || []) as ArcTrackResult[]).map((a) => ({
@@ -152,9 +154,14 @@ ${manuscript}
     notes: a.notes || "",
   }));
 
+  // Drop parse-error placeholders from failed JSON; keep real craft notes
+  const items = ((parsed.items || []) as ArcCritiqueItem[]).filter(
+    (i) => i.title !== "Parse error" && i.category !== "system"
+  );
+
   return {
     arcs: arcs.filter((a) => a.subject),
-    items: (parsed.items || []) as ArcCritiqueItem[],
+    items,
     summary: parsed.summary || `Arcs: scanned ${batchLabel}`,
     batchCount: batches.length,
     batchLabel,
