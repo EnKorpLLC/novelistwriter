@@ -35,11 +35,12 @@ export function ProjectWorkspace({
   matter,
   challengeLevel: initialChallenge,
   promises,
-  arcs,
+  arcs: initialArcs,
   initialCredits,
 }: Props) {
   const [chapters, setChapters] = useState(initialChapters);
   const [bible, setBible] = useState(initialBible);
+  const [arcs, setArcs] = useState(initialArcs);
   const [projectTitle, setProjectTitle] = useState(project.title);
   const [activeId, setActiveId] = useState(chapters[0]?.id || "");
   const [tab, setTab] = useState<"write" | "bible" | "tools">("write");
@@ -395,6 +396,7 @@ export function ProjectWorkspace({
             onChange={setBible}
             promises={promises}
             arcs={arcs}
+            onArcsChange={setArcs}
             onCreditsChange={setCredits}
           />
         )}

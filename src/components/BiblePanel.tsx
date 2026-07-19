@@ -18,6 +18,7 @@ type Props = {
   onChange: (entries: BibleEntry[]) => void;
   promises: { id: string; description: string; status: string }[];
   arcs: { id: string; arc_type: string; subject: string; notes: string }[];
+  onArcsChange: (arcs: { id: string; arc_type: string; subject: string; notes: string }[]) => void;
   onCreditsChange?: (n: number) => void;
 };
 
@@ -42,6 +43,7 @@ export function BiblePanel({
   onChange,
   promises,
   arcs,
+  onArcsChange,
   onCreditsChange,
 }: Props) {
   const [type, setType] = useState<BibleEntry["entry_type"]>("character");
@@ -53,6 +55,7 @@ export function BiblePanel({
   const [extractMsg, setExtractMsg] = useState<string | null>(null);
   const [extractModel, setExtractModel] = useState<AiModelTier>("standard");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedArcs, setSelectedArcs] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({
     name: "",
@@ -589,14 +592,113 @@ export function BiblePanel({
       </section>
 
       <section className="mt-10">
-        <h3 className="font-display text-xl">Arc tracks</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-display text-xl">Arc tracks</h3>
+          {arcs.length > 0 && (
+            <div className="font-ui flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-1.5 text-muted">
+                <input
+                  type="checkbox"
+                  checked={arcs.length > 0 && selectedArcs.size === arcs.length}
+                  onChange={() => {
+                    if (selectedArcs.size === arcs.length) setSelectedArcs(new Set());
+                    else setSelectedArcs(new Set(arcs.map((a) => a.id)));
+                  }}
+                />
+                Select all
+              </label>
+              <button
+                type="button"
+                disabled={!selectedArcs.size}
+                onClick={async () => {
+                  const ids = [...selectedArcs];
+                  if (!confirm(`Delete ${ids.length} arc track${ids.length === 1 ? "" : "s"}?`)) {
+                    return;
+                  }
+                  const res = await fetch(`/api/projects/${projectId}/arcs`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "delete", ids }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    alert(data.error || "Delete failed");
+                    return;
+                  }
+                  onArcsChange(arcs.filter((a) => !selectedArcs.has(a.id)));
+                  setSelectedArcs(new Set());
+                }}
+                className="border border-danger px-2 py-0.5 text-danger disabled:opacity-40"
+              >
+                Delete selected ({selectedArcs.size})
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (
+                    !confirm(
+                      `Delete ALL ${arcs.length} arc tracks? This cannot be undone.`
+                    )
+                  ) {
+                    return;
+                  }
+                  const res = await fetch(`/api/projects/${projectId}/arcs`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "delete", deleteAll: true }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    alert(data.error || "Delete failed");
+                    return;
+                  }
+                  onArcsChange([]);
+                  setSelectedArcs(new Set());
+                }}
+                className="border border-line px-2 py-0.5 text-muted"
+              >
+                Delete all
+              </button>
+            </div>
+          )}
+        </div>
         <ul className="mt-3 space-y-2 text-sm">
           {arcs.length === 0 && <li className="text-muted">None yet — run Arcs AI.</li>}
           {arcs.map((a) => (
-            <li key={a.id} className="border border-line p-3">
-              <span className="text-xs uppercase text-muted">{a.arc_type}</span>
-              <div className="font-display">{a.subject}</div>
-              <p className="text-muted">{a.notes}</p>
+            <li key={a.id} className="flex gap-3 border border-line p-3">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={selectedArcs.has(a.id)}
+                onChange={() => {
+                  setSelectedArcs((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(a.id)) next.delete(a.id);
+                    else next.add(a.id);
+                    return next;
+                  });
+                }}
+              />
+              <div className="min-w-0 flex-1">
+                <span className="text-xs uppercase text-muted">{a.arc_type}</span>
+                <div className="font-display">{a.subject}</div>
+                <p className="text-muted">{a.notes}</p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  await fetch(`/api/arcs/${a.id}`, { method: "DELETE" });
+                  onArcsChange(arcs.filter((x) => x.id !== a.id));
+                  setSelectedArcs((prev) => {
+                    const next = new Set(prev);
+                    next.delete(a.id);
+                    return next;
+                  });
+                }}
+                className="font-ui shrink-0 text-xs text-danger"
+              >
+                Delete
+              </button>
             </li>
           ))}
         </ul>
