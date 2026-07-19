@@ -372,7 +372,7 @@ export function ProjectWorkspace({
             </div>
 
             {!focusMode && (
-            <div className="hidden w-[340px] shrink-0 lg:block">
+            <div className="hidden w-[360px] shrink-0 lg:block">
               <CritiquePanel
                 projectId={project.id}
                 chapterId={active?.id}
