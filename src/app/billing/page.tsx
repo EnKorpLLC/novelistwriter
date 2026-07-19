@@ -18,6 +18,9 @@ function BillingInner() {
   const [balance, setBalance] = useState<number | null>(null);
   const [referralLink, setReferralLink] = useState<string | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [packPrices, setPackPrices] = useState<
+    { pack: string; label: string; credits: number; usd: number | null }[]
+  >([]);
 
   async function syncPurchases() {
     setLoading("sync");
@@ -54,6 +57,18 @@ function BillingInner() {
         const res = await fetch("/api/referral");
         const data = await res.json();
         if (res.ok && data.link) setReferralLink(data.link as string);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/billing/prices");
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.packs)) setPackPrices(data.packs);
       } catch {
         /* ignore */
       }
@@ -156,23 +171,36 @@ function BillingInner() {
         <h2 className="font-display text-xl">AI credit packs</h2>
         <p className="mt-1 text-sm text-muted">One-time packs. Credits never expire.</p>
         <div className="font-ui mt-4 flex flex-wrap gap-3">
-          {(
-            [
-              ["starter", "Starter · 250 credits · $5"],
-              ["revision", "Revision · 900 credits"],
-              ["manuscript", "Manuscript · 2,800 credits"],
-            ] as const
-          ).map(([pack, label]) => (
-            <button
-              key={pack}
-              type="button"
-              disabled={!!loading}
-              onClick={() => checkout({ kind: "credits", pack })}
-              className="border border-line px-4 py-2 text-sm hover:border-accent"
-            >
-              {label}
-            </button>
-          ))}
+          {(packPrices.length
+            ? packPrices
+            : [
+                { pack: "starter", label: "Starter", credits: 250, usd: 5 as number | null },
+                { pack: "revision", label: "Revision", credits: 900, usd: null as number | null },
+                {
+                  pack: "manuscript",
+                  label: "Manuscript",
+                  credits: 2800,
+                  usd: null as number | null,
+                },
+              ]
+          ).map((p) => {
+            const creditsLabel = p.credits.toLocaleString();
+            const priceLabel =
+              p.usd != null
+                ? ` · $${Number.isInteger(p.usd) ? p.usd : p.usd.toFixed(2)}`
+                : "";
+            return (
+              <button
+                key={p.pack}
+                type="button"
+                disabled={!!loading}
+                onClick={() => checkout({ kind: "credits", pack: p.pack })}
+                className="border border-line px-4 py-2 text-sm hover:border-accent"
+              >
+                {p.label} · {creditsLabel} credits{priceLabel}
+              </button>
+            );
+          })}
         </div>
       </section>
 
