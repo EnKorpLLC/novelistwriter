@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { describeApiKey, redactSecrets, sanitizeApiKey } from "@/lib/ai/api-keys";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 /**
- * Tiny Anthropic connectivity check (admin/debug).
+ * Tiny Anthropic connectivity check.
  * Uses platform key only — does not charge credits.
+ * Never returns the raw API key.
  */
 export async function GET() {
   const supabase = await createClient();
@@ -16,14 +18,17 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const raw = process.env.ANTHROPIC_API_KEY || "";
-  const key = raw.trim().replace(/^['"]|['"]$/g, "");
+  const key = sanitizeApiKey(raw);
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+  const meta = describeApiKey(key);
+  const rawLooksDoubled = (raw.match(/sk-ant-api03-/gi) || []).length > 1 || raw.length > 140;
 
   if (!key) {
     return NextResponse.json({
       ok: false,
       error: "ANTHROPIC_API_KEY is missing in this environment",
       keyPresent: false,
+      rawLooksDoubled,
     });
   }
 
@@ -48,19 +53,22 @@ export async function GET() {
       status: res.status,
       model,
       keyPresent: true,
-      keyLength: key.length,
-      keyHadWhitespace: key.length !== raw.length,
-      bodyPreview: text.slice(0, 240),
+      keyLength: meta.length,
+      keyPrefix: meta.prefix,
+      rawLooksDoubled,
+      sanitizedFromDoubledPaste: rawLooksDoubled && !meta.looksDoubled,
+      bodyPreview: redactSecrets(text.slice(0, 240)),
     });
   } catch (e) {
     return NextResponse.json(
       {
         ok: false,
         keyPresent: true,
-        keyLength: key.length,
-        keyHadWhitespace: key.length !== raw.length,
+        keyLength: meta.length,
+        keyPrefix: meta.prefix,
+        rawLooksDoubled,
         model,
-        error: e instanceof Error ? e.message : String(e),
+        error: redactSecrets(e instanceof Error ? e.message : String(e)),
       },
       { status: 500 }
     );

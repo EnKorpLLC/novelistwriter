@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { sanitizeApiKey } from "@/lib/ai/api-keys";
 
 /** BYOK is a Studio subscription feature only. */
 export async function POST(req: Request) {
@@ -32,12 +33,10 @@ export async function POST(req: Request) {
     updated_at: new Date().toISOString(),
   };
   if (typeof anthropic === "string") {
-    const t = anthropic.trim().replace(/^['"]|['"]$/g, "");
-    patch.byok_anthropic_key = t || null;
+    patch.byok_anthropic_key = sanitizeApiKey(anthropic);
   }
   if (typeof openai === "string") {
-    const t = openai.trim().replace(/^['"]|['"]$/g, "");
-    patch.byok_openai_key = t || null;
+    patch.byok_openai_key = sanitizeApiKey(openai);
   }
 
   const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);

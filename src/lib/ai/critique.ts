@@ -1,3 +1,5 @@
+import { redactSecrets, sanitizeApiKey } from "@/lib/ai/api-keys";
+
 export const CRITIQUE_SYSTEM_PROMPT = `You are Novelist Writer's craft coach — an honest developmental and line editor for fiction.
 
 HARD RULES (never break):
@@ -39,13 +41,6 @@ export type AiJsonResult = {
   extras?: Record<string, unknown>;
 };
 
-function trimKey(key: string | null | undefined): string | null {
-  if (!key) return null;
-  // Env dashboards sometimes paste trailing newlines/spaces — those produce opaque "Connection error."
-  const t = key.trim().replace(/^['"]|['"]$/g, "");
-  return t || null;
-}
-
 function formatErrCause(err: unknown): string {
   if (!err || typeof err !== "object") return "";
   const e = err as { cause?: unknown; code?: string; errno?: string; message?: string };
@@ -59,7 +54,7 @@ function formatErrCause(err: unknown): string {
     if (c.code) parts.push(`cause:${c.code}`);
     if (c.message) parts.push(c.message);
   }
-  return parts.filter(Boolean).join(" | ");
+  return redactSecrets(parts.filter(Boolean).join(" | "));
 }
 
 /** Call Anthropic Messages API via fetch — clearer errors than the SDK's "Connection error." */
@@ -99,7 +94,9 @@ async function callAnthropicMessages(opts: {
       } catch {
         /* keep raw */
       }
-      throw new Error(`Anthropic HTTP ${res.status} (${opts.model}, ${promptChars} chars): ${detail}`);
+      throw new Error(
+        `Anthropic HTTP ${res.status} (${opts.model}, ${promptChars} chars): ${redactSecrets(detail)}`
+      );
     }
 
     const data = JSON.parse(rawText) as {
@@ -116,9 +113,10 @@ async function callAnthropicMessages(opts: {
     if (err instanceof Error && err.message.startsWith("Anthropic HTTP")) {
       throw err;
     }
-    const detail = formatErrCause(err) || (err instanceof Error ? err.message : String(err));
+    const detail =
+      formatErrCause(err) || redactSecrets(err instanceof Error ? err.message : String(err));
     throw new Error(
-      `Anthropic network failure (${opts.model}, ${promptChars} prompt chars): ${detail}. Key length ${opts.apiKey.length} (trimmed). If smaller critiques worked, this batch may be too large — we retry with fewer chapters.`
+      `Anthropic network failure (${opts.model}, ${promptChars} prompt chars, keyLen ${opts.apiKey.length}): ${detail}`
     );
   } finally {
     clearTimeout(timer);
@@ -130,14 +128,14 @@ export async function runCritiqueModel(opts: {
   user: string;
   byokAnthropic?: string | null;
   byokOpenAi?: string | null;
-  /** Model tier — defaults to standard Sonnet-class */
   modelTier?: "fast" | "standard" | "deep";
   anthropicModel?: string;
   openaiModel?: string;
 }): Promise<string> {
   const provider = (process.env.AI_PROVIDER || "anthropic").toLowerCase();
-  const anthropicKey = trimKey(opts.byokAnthropic) || trimKey(process.env.ANTHROPIC_API_KEY);
-  const openaiKey = trimKey(opts.byokOpenAi) || trimKey(process.env.OPENAI_API_KEY);
+  const anthropicKey =
+    sanitizeApiKey(opts.byokAnthropic) || sanitizeApiKey(process.env.ANTHROPIC_API_KEY);
+  const openaiKey = sanitizeApiKey(opts.byokOpenAi) || sanitizeApiKey(process.env.OPENAI_API_KEY);
   const tier = opts.modelTier || "standard";
 
   const { AI_MODEL_TIERS } = await import("@/lib/ai/pricing");
@@ -161,7 +159,6 @@ export async function runCritiqueModel(opts: {
   }
 
   if (anthropicKey) {
-    // Prefer direct fetch — SDK wraps many failures as opaque "Connection error."
     try {
       return await callAnthropicMessages({
         apiKey: anthropicKey,
@@ -171,7 +168,6 @@ export async function runCritiqueModel(opts: {
       });
     } catch (firstErr) {
       const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
-      // One quick retry for transient TLS blips
       if (/network failure|fetch failed|ECONNRESET|UND_ERR/i.test(msg)) {
         await new Promise((r) => setTimeout(r, 800));
         return await callAnthropicMessages({
@@ -191,9 +187,14 @@ export async function runCritiqueModel(opts: {
 function demoCritique(user: string): AiJsonResult {
   const snippet = user.slice(0, 120).replace(/\s+/g, " ");
 
-  if (user.includes("extract story-bible") || user.includes("bible_extract") || user.includes("story-bible extraction")) {
+  if (
+    user.includes("extract story-bible") ||
+    user.includes("bible_extract") ||
+    user.includes("story-bible extraction")
+  ) {
     return {
-      summary: "Demo bible extract (no AI API key). Sample entities from your text — connect an API key for a real scan.",
+      summary:
+        "Demo bible extract (no AI API key). Sample entities from your text — connect an API key for a real scan.",
       items: [],
       extras: {
         demo: true,
