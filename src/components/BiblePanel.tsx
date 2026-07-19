@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { BibleEntry } from "@/lib/types";
 import {
   BIBLE_CHAPTERS_PER_BATCH,
   BIBLE_PASSES,
   estimateBibleExtractCost,
+  estimateBibleMergeCost,
 } from "@/lib/ai/bible-extract";
 import type { AiModelTier } from "@/lib/ai/pricing";
 import { AI_MODEL_TIERS } from "@/lib/ai/pricing";
@@ -30,6 +31,11 @@ const TYPES: BibleEntry["entry_type"][] = [
   "timeline",
 ];
 
+function entryAliases(e: BibleEntry): string[] {
+  const raw = e.details?.aliases;
+  return Array.isArray(raw) ? raw.map(String).filter(Boolean) : [];
+}
+
 export function BiblePanel({
   projectId,
   chapterCount,
@@ -43,14 +49,44 @@ export function BiblePanel({
   const [name, setName] = useState("");
   const [summary, setSummary] = useState("");
   const [speech, setSpeech] = useState("");
+  const [aliases, setAliases] = useState("");
   const [extracting, setExtracting] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [extractMsg, setExtractMsg] = useState<string | null>(null);
   const [extractModel, setExtractModel] = useState<AiModelTier>("standard");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState({
+    name: "",
+    summary: "",
+    speech_notes: "",
+    aliases: "",
+    entry_type: "character" as BibleEntry["entry_type"],
+  });
+  const abortRef = useRef(false);
 
   const estimate = estimateBibleExtractCost({
     chapterCount: Math.max(1, chapterCount),
     model: extractModel,
   });
+  const mergeEstimate = estimateBibleMergeCost({ model: extractModel });
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === entries.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(entries.map((e) => e.id)));
+    }
+  }
 
   async function add() {
     if (!name.trim()) return;
@@ -62,6 +98,10 @@ export function BiblePanel({
         name,
         summary,
         speech_notes: speech,
+        aliases: aliases
+          .split(",")
+          .map((a) => a.trim())
+          .filter(Boolean),
       }),
     });
     const data = await res.json();
@@ -70,17 +110,109 @@ export function BiblePanel({
       setName("");
       setSummary("");
       setSpeech("");
+      setAliases("");
     }
   }
 
   async function remove(id: string) {
     await fetch(`/api/bible/${id}`, { method: "DELETE" });
     onChange(entries.filter((e) => e.id !== id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  async function deleteSelected() {
+    const ids = [...selected];
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} selected entr${ids.length === 1 ? "y" : "ies"}?`)) return;
+    const res = await fetch(`/api/projects/${projectId}/bible`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Delete failed");
+      return;
+    }
+    onChange(entries.filter((e) => !selected.has(e.id)));
+    setSelected(new Set());
+  }
+
+  async function deleteAll() {
+    if (!entries.length) return;
+    if (
+      !confirm(
+        `Delete ALL ${entries.length} story-bible entries for this project? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/projects/${projectId}/bible`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deleteAll: true }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Delete failed");
+      return;
+    }
+    onChange([]);
+    setSelected(new Set());
+  }
+
+  function startEdit(e: BibleEntry) {
+    setEditingId(e.id);
+    setEditDraft({
+      name: e.name,
+      summary: e.summary || "",
+      speech_notes: e.speech_notes || "",
+      aliases: entryAliases(e).join(", "),
+      entry_type: e.entry_type,
+    });
+  }
+
+  async function saveEdit() {
+    if (!editingId) return;
+    const res = await fetch(`/api/bible/${editingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editDraft.name,
+        summary: editDraft.summary,
+        speech_notes: editDraft.speech_notes,
+        entry_type: editDraft.entry_type,
+        aliases: editDraft.aliases
+          .split(",")
+          .map((a) => a.trim())
+          .filter(Boolean),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Save failed");
+      return;
+    }
+    onChange(entries.map((e) => (e.id === editingId ? data.entry : e)));
+    setEditingId(null);
+  }
+
+  function applyEntryPatch(list: BibleEntry[], added: BibleEntry[], updated: BibleEntry[]) {
+    const byId = new Map(list.map((e) => [e.id, e]));
+    for (const u of updated) byId.set(u.id, u);
+    for (const a of added) byId.set(a.id, a);
+    return [...byId.values()];
   }
 
   async function extractFromManuscript() {
+    abortRef.current = false;
     setExtracting(true);
     setExtractMsg("Planning scan…");
+    let working = [...entries];
     try {
       const planRes = await fetch("/api/ai/critique", {
         method: "POST",
@@ -110,26 +242,33 @@ export function BiblePanel({
         !confirm(
           `Thorough story-bible scan of ${plan.chapterCount ?? chapterCount} chapter(s)?\n\n` +
             `Passes: ${passes.map((p) => p.label).join(", ")}\n` +
-            `${batches} batch(es) of up to ${BIBLE_CHAPTERS_PER_BATCH} full chapters × ${passes.length} categories = ${calls} separate AI requests\n` +
+            `${batches} batch(es) of up to ${BIBLE_CHAPTERS_PER_BATCH} full chapters × ${passes.length} categories = ${calls} requests\n` +
             `Model: ${AI_MODEL_TIERS[extractModel].label}\n` +
-            `Estimated cost: ${cost} credits (${plan.perCall ?? "?"} each)\n\n` +
-            `Each request is small so it won’t false-timeout. Existing entries are kept.`
+            `Estimated cost: ${cost} credits\n\n` +
+            `Matching nicknames/titles update existing entries instead of duplicating.\nYou can Stop anytime.`
         )
       ) {
         setExtractMsg(null);
         return;
       }
 
-      const allAdded: BibleEntry[] = [];
+      let addedCount = 0;
+      let updatedCount = 0;
       let charged = 0;
       let done = 0;
       let batchCount = batches;
 
-      for (const pass of passes) {
+      outer: for (const pass of passes) {
         for (let bi = 0; bi < batchCount; bi++) {
+          if (abortRef.current) {
+            setExtractMsg(
+              `Stopped. Added ${addedCount}, updated ${updatedCount} (${charged} credits).`
+            );
+            break outer;
+          }
           done += 1;
           setExtractMsg(
-            `Scanning ${pass.label} · batch ${bi + 1}/${batchCount} (${done}/${calls})…`
+            `Scanning ${pass.label} · batch ${bi + 1}/${batchCount} (${done}/${calls})… — Stop available`
           );
           const res = await fetch("/api/ai/critique", {
             method: "POST",
@@ -147,21 +286,15 @@ export function BiblePanel({
             error?: string;
             code?: string;
             creditsRemaining?: number;
-            extras?: { added?: BibleEntry[] };
-            summary?: string;
+            extras?: { added?: BibleEntry[]; updated?: BibleEntry[] };
             cost?: number;
             empty?: boolean;
             batchCount?: number;
-            refunded?: number;
           };
           try {
             data = await res.json();
           } catch {
-            throw new Error(
-              res.status === 504 || res.status === 408
-                ? `Request timed out on ${pass.label} batch ${bi + 1}. Partial results were kept.`
-                : `Server error (${res.status}) on ${pass.label} batch ${bi + 1}.`
-            );
+            throw new Error(`Server error (${res.status}) on ${pass.label} batch ${bi + 1}.`);
           }
           if (typeof data.creditsRemaining === "number") {
             onCreditsChange?.(data.creditsRemaining);
@@ -170,42 +303,102 @@ export function BiblePanel({
             batchCount = data.batchCount;
           }
           if (!res.ok) {
-            if (data.code === "insufficient_credits") {
-              throw new Error(
-                `${data.error || "Need more credits."} Added ${allAdded.length} so far (${charged} credits used).`
-              );
-            }
             throw new Error(
               data.error ||
-                `Extract failed on ${pass.label} batch ${bi + 1}. Added ${allAdded.length} so far.`
+                `Extract failed on ${pass.label} batch ${bi + 1}. Partial results kept.`
             );
           }
-          if (data.empty) {
-            // No more batches for this packing — stop this pass early
-            break;
-          }
+          if (data.empty) break;
           charged += data.cost || 0;
-          const added = (data.extras?.added as BibleEntry[]) || [];
-          if (added.length) {
-            allAdded.push(...added);
-            onChange([...entries, ...allAdded]);
+          const added = data.extras?.added || [];
+          const updated = data.extras?.updated || [];
+          addedCount += added.length;
+          updatedCount += updated.length;
+          if (added.length || updated.length) {
+            working = applyEntryPatch(working, added, updated);
+            onChange(working);
           }
         }
       }
 
-      setExtractMsg(
-        allAdded.length
-          ? `Added ${allAdded.length} entr${allAdded.length === 1 ? "y" : "ies"} (${charged} credits across ${done} requests).`
-          : `Scan finished (${charged} credits). No new entries — everything found was already in your bible or nothing clear to add.`
-      );
+      if (!abortRef.current) {
+        setExtractMsg(
+          `Scan finished. Added ${addedCount}, updated ${updatedCount} (${charged} credits across ${done} requests). Use “Merge duplicates” if nicknames still split.`
+        );
+      }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Extract failed";
-      // Show the real error — do not collapse everything into "timed out"
-      setExtractMsg(msg);
+      setExtractMsg(e instanceof Error ? e.message : "Extract failed");
     } finally {
       setExtracting(false);
     }
   }
+
+  async function mergeDuplicates() {
+    if (!entries.length) return;
+    if (
+      !confirm(
+        `AI-merge duplicate bible entries (Sera / Lady Beaufort → one row)?\n\n` +
+          `Runs one request per entry type (~${mergeEstimate.cost} credits at ${AI_MODEL_TIERS[extractModel].label}).\n` +
+          `You can Stop between types.`
+      )
+    ) {
+      return;
+    }
+    abortRef.current = false;
+    setMerging(true);
+    let working = [...entries];
+    let charged = 0;
+    let deletedTotal = 0;
+    try {
+      for (const t of TYPES) {
+        if (abortRef.current) {
+          setExtractMsg(`Merge stopped. Removed ${deletedTotal} duplicates (${charged} credits).`);
+          break;
+        }
+        const ofType = working.filter((e) => e.entry_type === t);
+        if (ofType.length < 2) continue;
+        setExtractMsg(`Merging ${t} entries (${ofType.length})…`);
+        const res = await fetch("/api/ai/critique", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobType: "bible_extract",
+            projectId,
+            scope: "book",
+            model: extractModel,
+            passId: "merge",
+            mergeEntryType: t,
+          }),
+        });
+        const data = await res.json();
+        if (typeof data.creditsRemaining === "number") {
+          onCreditsChange?.(data.creditsRemaining);
+        }
+        if (!res.ok) {
+          throw new Error(data.error || `Merge failed for ${t}`);
+        }
+        charged += data.cost || 0;
+        const updated = (data.extras?.updated as BibleEntry[]) || [];
+        const deleted = (data.extras?.deleted as string[]) || [];
+        deletedTotal += deleted.length;
+        const delSet = new Set(deleted);
+        working = working.filter((e) => !delSet.has(e.id));
+        working = applyEntryPatch(working, [], updated);
+        onChange(working);
+      }
+      if (!abortRef.current) {
+        setExtractMsg(
+          `Merge finished. Consolidated duplicates (removed ${deletedTotal}, ${charged} credits).`
+        );
+      }
+    } catch (e) {
+      setExtractMsg(e instanceof Error ? e.message : "Merge failed");
+    } finally {
+      setMerging(false);
+    }
+  }
+
+  const busy = extracting || merging;
 
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-6 py-8">
@@ -232,20 +425,41 @@ export function BiblePanel({
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            disabled={extracting || chapterCount < 1}
-            onClick={extractFromManuscript}
-            className="border border-accent bg-paper px-4 py-2 text-sm text-accent hover:bg-accent hover:text-paper disabled:opacity-50"
-          >
-            {extracting
-              ? "Scanning manuscript…"
-              : `AI: extract (~${estimate.cost} cr · ${estimate.calls} passes)`}
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {busy ? (
+              <button
+                type="button"
+                onClick={() => {
+                  abortRef.current = true;
+                  setExtractMsg("Stopping after current request…");
+                }}
+                className="border border-danger px-3 py-2 text-sm text-danger"
+              >
+                Stop
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={busy || entries.length < 2}
+              onClick={mergeDuplicates}
+              className="border border-line px-3 py-2 text-sm text-ink hover:bg-paper-deep disabled:opacity-50"
+            >
+              {merging ? "Merging…" : `AI: merge duplicates (~${mergeEstimate.cost} cr)`}
+            </button>
+            <button
+              type="button"
+              disabled={busy || chapterCount < 1}
+              onClick={extractFromManuscript}
+              className="border border-accent bg-paper px-4 py-2 text-sm text-accent hover:bg-accent hover:text-paper disabled:opacity-50"
+            >
+              {extracting
+                ? "Scanning…"
+                : `AI: extract (~${estimate.cost} cr · ${estimate.calls} passes)`}
+            </button>
+          </div>
           <p className="max-w-xs text-right text-[10px] text-muted">
-            {chapterCount} chapters · up to {BIBLE_CHAPTERS_PER_BATCH}/batch · ~{estimate.batches}{" "}
-            batches × {BIBLE_PASSES.length} categories = {estimate.calls} separate requests.
-            Standard recommended.
+            {chapterCount} chapters · up to {BIBLE_CHAPTERS_PER_BATCH}/batch · nicknames update
+            existing rows. Still chunked so you can Stop.
           </p>
         </div>
       </div>
@@ -259,10 +473,6 @@ export function BiblePanel({
           )}
         </p>
       )}
-      <p className="font-ui mt-2 text-xs text-muted">
-        Optional AI scan reads your chapters and suggests bible entries. It does not write prose for
-        you — you can edit or delete anything it adds.
-      </p>
 
       <div className="font-ui mt-6 grid gap-2 border border-line bg-paper p-4 md:grid-cols-2">
         <select
@@ -281,6 +491,12 @@ export function BiblePanel({
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="border border-line px-2 py-1"
+        />
+        <input
+          placeholder="Aliases (comma-separated: Sera, Lady Beaufort)"
+          value={aliases}
+          onChange={(e) => setAliases(e.target.value)}
+          className="border border-line px-2 py-1 md:col-span-2"
         />
         <textarea
           placeholder="Summary"
@@ -307,26 +523,130 @@ export function BiblePanel({
         </button>
       </div>
 
-      <ul className="mt-8 space-y-3">
+      <div className="font-ui mt-6 flex flex-wrap items-center gap-3 text-sm">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={entries.length > 0 && selected.size === entries.length}
+            onChange={toggleSelectAll}
+          />
+          Select all ({entries.length})
+        </label>
+        <button
+          type="button"
+          disabled={!selected.size}
+          onClick={deleteSelected}
+          className="border border-danger px-2 py-1 text-xs text-danger disabled:opacity-40"
+        >
+          Delete selected ({selected.size})
+        </button>
+        <button
+          type="button"
+          disabled={!entries.length}
+          onClick={deleteAll}
+          className="border border-line px-2 py-1 text-xs text-muted disabled:opacity-40"
+        >
+          Delete all
+        </button>
+      </div>
+
+      <ul className="mt-4 space-y-3">
         {entries.map((e) => (
           <li key={e.id} className="border border-line p-4">
-            <div className="flex justify-between">
-              <div>
-                <span className="font-ui text-[10px] uppercase text-muted">{e.entry_type}</span>
-                <h3 className="font-display text-lg">{e.name}</h3>
-                <p className="text-sm text-muted">{e.summary}</p>
-                {e.speech_notes && (
-                  <p className="mt-1 text-xs italic text-muted">Speech: {e.speech_notes}</p>
-                )}
+            {editingId === e.id ? (
+              <div className="font-ui grid gap-2 md:grid-cols-2">
+                <select
+                  value={editDraft.entry_type}
+                  onChange={(ev) =>
+                    setEditDraft((d) => ({
+                      ...d,
+                      entry_type: ev.target.value as BibleEntry["entry_type"],
+                    }))
+                  }
+                  className="border border-line px-2 py-1"
+                >
+                  {TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={editDraft.name}
+                  onChange={(ev) => setEditDraft((d) => ({ ...d, name: ev.target.value }))}
+                  className="border border-line px-2 py-1"
+                  placeholder="Name"
+                />
+                <input
+                  value={editDraft.aliases}
+                  onChange={(ev) => setEditDraft((d) => ({ ...d, aliases: ev.target.value }))}
+                  className="border border-line px-2 py-1 md:col-span-2"
+                  placeholder="Aliases (comma-separated)"
+                />
+                <textarea
+                  value={editDraft.summary}
+                  onChange={(ev) => setEditDraft((d) => ({ ...d, summary: ev.target.value }))}
+                  className="border border-line px-2 py-1 md:col-span-2"
+                  rows={3}
+                  placeholder="Summary"
+                />
+                <textarea
+                  value={editDraft.speech_notes}
+                  onChange={(ev) =>
+                    setEditDraft((d) => ({ ...d, speech_notes: ev.target.value }))
+                  }
+                  className="border border-line px-2 py-1 md:col-span-2"
+                  rows={2}
+                  placeholder="Speech / voice notes"
+                />
+                <div className="flex gap-2 md:col-span-2">
+                  <button
+                    type="button"
+                    onClick={saveEdit}
+                    className="bg-accent px-3 py-1.5 text-sm text-paper"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="border border-line px-3 py-1.5 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => remove(e.id)}
-                className="font-ui text-xs text-danger"
-              >
-                Delete
-              </button>
-            </div>
+            ) : (
+              <div className="flex gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={selected.has(e.id)}
+                  onChange={() => toggleSelect(e.id)}
+                />
+                <div className="min-w-0 flex-1">
+                  <span className="font-ui text-[10px] uppercase text-muted">{e.entry_type}</span>
+                  <h3 className="font-display text-lg">{e.name}</h3>
+                  {entryAliases(e).length > 0 && (
+                    <p className="font-ui text-xs text-muted">
+                      Also: {entryAliases(e).join(" · ")}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted">{e.summary}</p>
+                  {e.speech_notes && (
+                    <p className="mt-1 text-xs italic text-muted">Speech: {e.speech_notes}</p>
+                  )}
+                </div>
+                <div className="font-ui flex shrink-0 flex-col gap-1 text-xs">
+                  <button type="button" onClick={() => startEdit(e)} className="text-accent">
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => remove(e.id)} className="text-danger">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
           </li>
         ))}
       </ul>

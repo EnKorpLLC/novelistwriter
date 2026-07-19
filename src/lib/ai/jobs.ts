@@ -102,6 +102,6 @@ export const JOB_META: Record<
   bible_extract: {
     label: "Bible extract",
     description:
-      "Thorough multi-pass scan: characters, places, lore/rules, and timeline notes. Reads full chapters in batches and charges per AI pass.",
+      "Multi-pass scan over full chapter batches. Matches nicknames to existing entries, stores aliases, and can merge duplicates. Charges per AI pass.",
   },
 };

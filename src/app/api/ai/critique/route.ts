@@ -18,8 +18,10 @@ import {
 import { buildBookManuscript } from "@/lib/ai/manuscript";
 import {
   estimateBibleExtractCost,
+  estimateBibleMergeCost,
   planBibleExtract,
   runBibleExtractUnit,
+  runBibleMergeUnit,
   getBiblePass,
   BIBLE_CHAPTERS_PER_BATCH,
 } from "@/lib/ai/bible-extract";
@@ -56,6 +58,10 @@ const bodySchema = z.object({
   batchIndex: z.number().int().min(0).optional(),
   /** Arcs continuity across batches (client-maintained subject list). */
   priorSubjects: z.string().optional(),
+  /** Bible merge: which entry_type to consolidate. */
+  mergeEntryType: z
+    .enum(["character", "place", "note", "lore", "rule", "timeline"])
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -155,6 +161,160 @@ export async function POST(req: Request) {
 
     const passId = parsed.data.passId;
     const batchIndex = parsed.data.batchIndex;
+
+    // ——— Merge duplicates for one entry type ———
+    if (passId === "merge") {
+      const mergeEntryType = parsed.data.mergeEntryType;
+      if (!mergeEntryType) {
+        return NextResponse.json(
+          { error: "mergeEntryType required for bible merge." },
+          { status: 400 }
+        );
+      }
+
+      const unitCost = usingByok
+        ? 1
+        : estimateBibleMergeCost({ model: extractModel, usingByok, typeCount: 1 }).perCall;
+
+      const debit = await debitCredits({
+        userId: user.id,
+        jobType: jt,
+        cost: unitCost,
+      });
+      if (!debit.ok) {
+        return NextResponse.json(
+          { error: debit.error, code: "insufficient_credits", cost: debit.cost },
+          { status: 402 }
+        );
+      }
+
+      const { data: bible } = await supabase
+        .from("bible_entries")
+        .select("id, entry_type, name, summary, speech_notes, details")
+        .eq("project_id", projectId);
+
+      const catalog = (bible || []).map((b) => ({
+        id: b.id,
+        entry_type: b.entry_type,
+        name: b.name,
+        summary: b.summary || "",
+        speech_notes: b.speech_notes || "",
+        details: (b.details as Record<string, unknown>) || {},
+      }));
+
+      const { data: job } = await supabase
+        .from("ai_jobs")
+        .insert({
+          user_id: user.id,
+          project_id: projectId,
+          chapter_id: null,
+          job_type: jt,
+          status: "running",
+          credit_cost: debit.charged,
+          input: { scope: "book", model: extractModel, passId: "merge", mergeEntryType },
+        })
+        .select("*")
+        .single();
+
+      try {
+        const merge = await runBibleMergeUnit({
+          entryType: mergeEntryType,
+          catalog,
+          model: extractModel,
+          byokAnthropic,
+          byokOpenAi,
+        });
+
+        const updated: unknown[] = [];
+        const deleted: string[] = [];
+        for (const action of merge.actions) {
+          const keep = catalog.find((c) => c.id === action.keep_id);
+          const details = {
+            ...(keep?.details || {}),
+            aliases: action.aliases,
+            source: "ai_merge",
+          };
+          const { data: row } = await supabase
+            .from("bible_entries")
+            .update({
+              name: action.name,
+              summary: action.summary,
+              speech_notes: action.speech_notes,
+              details,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", action.keep_id)
+            .eq("user_id", user.id)
+            .select("*")
+            .single();
+          if (row) updated.push(row);
+          if (action.merge_ids.length) {
+            await supabase
+              .from("bible_entries")
+              .delete()
+              .in("id", action.merge_ids)
+              .eq("user_id", user.id)
+              .eq("project_id", projectId);
+            deleted.push(...action.merge_ids);
+          }
+        }
+
+        const result = {
+          summary: merge.summary,
+          items: [],
+          extras: { updated, deleted, actions: merge.actions, mergeEntryType },
+        };
+        if (job) {
+          await supabase
+            .from("ai_jobs")
+            .update({
+              status: "complete",
+              result,
+              credit_cost: debit.charged,
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", job.id);
+        }
+        return NextResponse.json({
+          jobId: job?.id,
+          cost: debit.charged,
+          model: extractModel,
+          summary: merge.summary,
+          extras: result.extras,
+          creditsRemaining: await remainingCredits(user.id),
+        });
+      } catch (e) {
+        try {
+          await refundCredits({
+            userId: user.id,
+            amount: debit.charged,
+            jobType: jt,
+            reason: "ai_job_failed_refund",
+          });
+        } catch (refundErr) {
+          console.error("credit refund failed", refundErr);
+        }
+        if (job) {
+          await supabase
+            .from("ai_jobs")
+            .update({
+              status: "failed",
+              error: e instanceof Error ? e.message : "AI failed",
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", job.id);
+        }
+        return NextResponse.json(
+          {
+            error: e instanceof Error ? e.message : "AI failed",
+            refunded: debit.charged,
+            creditsRemaining: await remainingCredits(user.id),
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     if (!passId || typeof batchIndex !== "number") {
       return NextResponse.json(
         {
@@ -194,12 +354,17 @@ export async function POST(req: Request) {
 
     const { data: bible } = await supabase
       .from("bible_entries")
-      .select("entry_type, name")
+      .select("id, entry_type, name, summary, speech_notes, details")
       .eq("project_id", projectId);
 
-    const existingKeys = new Set(
-      (bible || []).map((b) => `${b.entry_type}:${String(b.name).toLowerCase().trim()}`)
-    );
+    const catalog = (bible || []).map((b) => ({
+      id: b.id,
+      entry_type: b.entry_type,
+      name: b.name,
+      summary: b.summary || "",
+      speech_notes: b.speech_notes || "",
+      details: (b.details as Record<string, unknown>) || {},
+    }));
 
     const { data: job } = await supabase
       .from("ai_jobs")
@@ -230,7 +395,7 @@ export async function POST(req: Request) {
         model: extractModel,
         byokAnthropic,
         byokOpenAi,
-        existingKeys,
+        catalog,
       });
 
       if (unit.empty) {
@@ -257,13 +422,38 @@ export async function POST(req: Request) {
           empty: true,
           batchCount: unit.batchCount,
           summary: unit.summary,
-          extras: { added: [], calls: 0 },
+          extras: { added: [], updated: [], calls: 0 },
           creditsRemaining: await remainingCredits(user.id),
         });
       }
 
+      const updated: unknown[] = [];
+      for (const u of unit.updates.slice(0, 80)) {
+        const prev = catalog.find((c) => c.id === u.id);
+        const { data: row } = await supabase
+          .from("bible_entries")
+          .update({
+            name: u.name,
+            summary: u.summary,
+            speech_notes: u.speech_notes,
+            details: {
+              ...(prev?.details || {}),
+              aliases: u.aliases,
+              source: "ai_extract",
+              passId,
+              batchIndex,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", u.id)
+          .eq("user_id", user.id)
+          .select("*")
+          .single();
+        if (row) updated.push(row);
+      }
+
       const inserted: unknown[] = [];
-      for (const e of unit.entries.slice(0, 80)) {
+      for (const e of unit.inserts.slice(0, 80)) {
         const { data: row } = await supabase
           .from("bible_entries")
           .insert({
@@ -273,7 +463,12 @@ export async function POST(req: Request) {
             name: e.name.trim(),
             summary: e.summary || "",
             speech_notes: e.speech_notes || "",
-            details: { source: "ai_extract", passId, batchIndex },
+            details: {
+              source: "ai_extract",
+              passId,
+              batchIndex,
+              aliases: e.aliases || [],
+            },
           })
           .select("*")
           .single();
@@ -285,7 +480,9 @@ export async function POST(req: Request) {
         items: [] as unknown[],
         extras: {
           added: inserted,
-          entries: unit.entries,
+          updated,
+          inserts: unit.inserts,
+          updates: unit.updates,
           passId,
           batchIndex,
           batchCount: unit.batchCount,

@@ -5,18 +5,41 @@ import {
   packChaptersExact,
   type ChapterBatchRow,
 } from "@/lib/ai/chapter-batches";
+import {
+  aliasesOf,
+  findMatchingCatalogEntry,
+  mergeAliasLists,
+  preferCanonicalName,
+  preferRicherText,
+  type BibleCatalogEntry,
+} from "@/lib/ai/bible-match";
 
 export type BibleExtractEntry = {
   entry_type: "character" | "place" | "note" | "lore" | "rule" | "timeline";
   name: string;
   summary?: string;
   speech_notes?: string;
+  aliases?: string[];
+  match_id?: string | null;
+};
+
+export type BibleExtractUpdate = {
+  id: string;
+  entry_type: BibleExtractEntry["entry_type"];
+  name: string;
+  summary: string;
+  speech_notes: string;
+  aliases: string[];
 };
 
 export type ChapterForExtract = ChapterBatchRow;
 
-/** Soft max chapters per API call (exact packer may use fewer if chapters are long). */
-export const BIBLE_CHAPTERS_PER_BATCH = 2;
+/**
+ * Soft max chapters per API call. Key issue fixed — larger batches OK.
+ * Still chunked so the user can stop and so Vercel stays reliable.
+ */
+export const BIBLE_CHAPTERS_PER_BATCH = 8;
+export const BIBLE_MAX_CHARS_PER_BATCH = 80000;
 
 export const BIBLE_PASSES: {
   id: string;
@@ -29,28 +52,28 @@ export const BIBLE_PASSES: {
     label: "Characters",
     types: ["character"],
     instruction:
-      "Extract EVERY named character (and clear recurring unnamed roles if important). Include speech/voice notes when evidenced. Prefer concrete names over vague labels.",
+      "Extract EVERY named character (and clear recurring unnamed roles if important). Include speech/voice notes when evidenced. Prefer the fullest formal name as `name`, and put nicknames/titles/short forms in `aliases` (e.g. name: \"Lady Sera Beaufort\", aliases: [\"Sera\", \"Lady Beaufort\"]).",
   },
   {
     id: "places",
     label: "Places",
     types: ["place"],
     instruction:
-      "Extract EVERY named location, region, building, road, realm, or distinct setting. Note what happens there or why it matters when evidenced.",
+      "Extract EVERY named location, region, building, road, realm, or distinct setting. Prefer the fullest place name; put short forms in aliases.",
   },
   {
     id: "lore_rules",
     label: "Lore & rules",
     types: ["lore", "rule"],
     instruction:
-      "Extract world lore AND hard rules: magic systems, abilities, costs/limits, prophecies, religions, political laws, technology constraints, creature rules. Use entry_type lore for background myth/world facts and rule for enforceable constraints.",
+      "Extract world lore AND hard rules: magic systems, abilities, costs/limits, prophecies, religions, political laws, technology constraints, creature rules. Use entry_type lore for background myth/world facts and rule for enforceable constraints. Prefer one canonical name; aliases for alternate labels.",
   },
   {
     id: "timeline_notes",
     label: "Timeline & notes",
     types: ["timeline", "note"],
     instruction:
-      "Extract timeline beats (when things happen relative to each other) and other bible-worthy notes that are not characters/places/rules (organizations, objects of power, debts, secrets as notes when not better as lore/rule).",
+      "Extract timeline beats and other bible-worthy notes (organizations, objects of power, debts, secrets as notes when not better as lore/rule). Prefer canonical names with aliases for variants.",
   },
 ];
 
@@ -61,12 +84,11 @@ export function getBiblePass(passId: string) {
 export function packBibleBatches(chapters: ChapterForExtract[]) {
   const ordered = [...chapters].sort((a, b) => a.sort_order - b.sort_order);
   return packChaptersExact(ordered, {
-    maxCharsPerBatch: 45000,
+    maxCharsPerBatch: BIBLE_MAX_CHARS_PER_BATCH,
     maxChaptersPerBatch: BIBLE_CHAPTERS_PER_BATCH,
   }).filter((b) => b.some((c) => (c.content_text || "").trim()));
 }
 
-/** Credits for a thorough multi-pass, full-chapter extract. */
 export function estimateBibleExtractCost(opts: {
   chapterCount: number;
   model: AiModelTier;
@@ -85,6 +107,21 @@ export function estimateBibleExtractCost(opts: {
     model: opts.model,
   });
   return { calls, cost: calls * perCall, batches: Math.max(1, batches), perCall };
+}
+
+export function estimateBibleMergeCost(opts: {
+  model: AiModelTier;
+  usingByok?: boolean;
+  typeCount?: number;
+}): { calls: number; cost: number; perCall: number } {
+  const calls = opts.typeCount ?? 6;
+  if (opts.usingByok) return { calls, cost: calls, perCall: 1 };
+  const perCall = computeCritiqueCost({
+    jobType: "bible_extract",
+    scope: "chapter",
+    model: opts.model,
+  });
+  return { calls, cost: calls * perCall, perCall };
 }
 
 export function planBibleExtract(opts: {
@@ -106,7 +143,20 @@ export function planBibleExtract(opts: {
   };
 }
 
-/** One exact batch × one category pass — safe for a single serverless request. */
+function catalogSnippet(catalog: BibleCatalogEntry[], types: string[]): string {
+  const rows = catalog
+    .filter((c) => types.includes(c.entry_type))
+    .slice(0, 120)
+    .map((c) => {
+      const als = aliasesOf(c).filter((a) => a !== c.name);
+      return `- id=${c.id} type=${c.entry_type} name=${JSON.stringify(c.name)}${
+        als.length ? ` aliases=${JSON.stringify(als)}` : ""
+      }`;
+    });
+  return rows.length ? rows.join("\n") : "(none yet)";
+}
+
+/** One exact batch × one category pass — upserts into existing when aliases match. */
 export async function runBibleExtractUnit(opts: {
   chapters: ChapterForExtract[];
   passId: string;
@@ -114,9 +164,10 @@ export async function runBibleExtractUnit(opts: {
   model: AiModelTier;
   byokAnthropic?: string | null;
   byokOpenAi?: string | null;
-  existingKeys: Set<string>;
+  catalog: BibleCatalogEntry[];
 }): Promise<{
-  entries: BibleExtractEntry[];
+  inserts: BibleExtractEntry[];
+  updates: BibleExtractUpdate[];
   summary: string;
   batchCount: number;
   batchLabel: string;
@@ -131,7 +182,8 @@ export async function runBibleExtractUnit(opts: {
   const batches = packBibleBatches(opts.chapters);
   if (!batches.length || opts.batchIndex < 0 || opts.batchIndex >= batches.length) {
     return {
-      entries: [],
+      inserts: [],
+      updates: [],
       summary: "No chapters in this batch.",
       batchCount: batches.length,
       batchLabel: "",
@@ -151,9 +203,14 @@ export async function runBibleExtractUnit(opts: {
 
 ${pass.instruction}
 
+EXISTING ENTRIES for this project (MUST reuse when the same person/place/thing appears under a nickname, title, or short form):
+${catalogSnippet(opts.catalog, pass.types)}
+
 HARD RULES:
 - Read the FULL text of every chapter in this batch. Do not skip sections.
 - Only extract what is evidenced in THIS manuscript batch.
+- If an entity matches an existing entry (same person as "Sera" / "Lady Beaufort" / "Lady Sera Beaufort"), set match_id to that entry's id and deepen summary/speech_notes/aliases — do NOT invent a separate entry.
+- Prefer the fullest formal name as name; put nicknames/titles in aliases.
 - Do not invent entities.
 - Never write manuscript prose or replacement scenes.
 - Return JSON only:
@@ -161,7 +218,14 @@ HARD RULES:
   "summary": string,
   "items": [],
   "extras": {
-    "entries": [{ "entry_type": ${pass.types.map((t) => `"${t}"`).join("|")}, "name": string, "summary"?: string, "speech_notes"?: string }]
+    "entries": [{
+      "entry_type": ${pass.types.map((t) => `"${t}"`).join("|")},
+      "name": string,
+      "summary"?: string,
+      "speech_notes"?: string,
+      "aliases"?: string[],
+      "match_id"?: string | null
+    }]
   }
 }
 entry_type MUST be one of: ${pass.types.join(", ")}.
@@ -180,26 +244,182 @@ ${manuscript}
   });
   const parsed = parseAiJson(raw);
   const allowed = new Set(pass.types);
-  const merged = new Map<string, BibleExtractEntry>();
+  const inserts: BibleExtractEntry[] = [];
+  const updates: BibleExtractUpdate[] = [];
+  const seenInsert = new Set<string>();
+  const seenUpdate = new Set<string>();
+  // Working catalog so later rows in the same response can match earlier inserts conceptually
+  const working = [...opts.catalog];
 
   for (const e of (parsed.extras?.entries || []) as BibleExtractEntry[]) {
     if (!e?.name?.trim() || !allowed.has(e.entry_type)) continue;
-    const key = `${e.entry_type}:${e.name.toLowerCase().trim()}`;
-    if (opts.existingKeys.has(key) || merged.has(key)) continue;
-    merged.set(key, {
+    const aliases = mergeAliasLists(e.aliases, [e.name]);
+    const match = findMatchingCatalogEntry(working, {
+      entry_type: e.entry_type,
+      name: e.name,
+      aliases,
+      match_id: e.match_id,
+    });
+
+    if (match) {
+      if (seenUpdate.has(match.id)) continue;
+      seenUpdate.add(match.id);
+      const nextName = preferCanonicalName(match.name, e.name.trim());
+      const nextAliases = mergeAliasLists(aliasesOf(match), aliases, [nextName]).filter(
+        (a) => normalizeCmp(a) !== normalizeCmp(nextName)
+      );
+      const upd: BibleExtractUpdate = {
+        id: match.id,
+        entry_type: e.entry_type,
+        name: nextName,
+        summary: preferRicherText(match.summary, e.summary),
+        speech_notes: preferRicherText(match.speech_notes, e.speech_notes),
+        aliases: nextAliases,
+      };
+      updates.push(upd);
+      // Refresh working catalog entry
+      const idx = working.findIndex((w) => w.id === match.id);
+      if (idx >= 0) {
+        working[idx] = {
+          ...working[idx],
+          name: upd.name,
+          summary: upd.summary,
+          speech_notes: upd.speech_notes,
+          details: { ...(working[idx].details || {}), aliases: upd.aliases },
+        };
+      }
+      continue;
+    }
+
+    const key = `${e.entry_type}:${normalizeCmp(e.name)}`;
+    if (seenInsert.has(key)) continue;
+    seenInsert.add(key);
+    const row: BibleExtractEntry = {
       entry_type: e.entry_type,
       name: e.name.trim(),
       summary: e.summary || "",
       speech_notes: e.speech_notes || "",
+      aliases: aliases.filter((a) => normalizeCmp(a) !== normalizeCmp(e.name)),
+    };
+    inserts.push(row);
+    working.push({
+      id: `pending:${key}`,
+      entry_type: row.entry_type,
+      name: row.name,
+      summary: row.summary,
+      speech_notes: row.speech_notes,
+      details: { aliases: row.aliases },
     });
   }
 
   return {
-    entries: [...merged.values()],
+    inserts,
+    updates,
     summary: parsed.summary || `${pass.label}: scanned ${batchLabel}`,
     batchCount: batches.length,
     batchLabel,
     passLabel: pass.label,
     empty: false,
+  };
+}
+
+function normalizeCmp(s: string) {
+  return s.toLowerCase().trim();
+}
+
+export type BibleMergeAction = {
+  keep_id: string;
+  merge_ids: string[];
+  name: string;
+  summary: string;
+  speech_notes: string;
+  aliases: string[];
+};
+
+/** Consolidate duplicate entries of one type (Sera / Lady Beaufort / Lady Sera Beaufort). */
+export async function runBibleMergeUnit(opts: {
+  entryType: BibleExtractEntry["entry_type"];
+  catalog: BibleCatalogEntry[];
+  model: AiModelTier;
+  byokAnthropic?: string | null;
+  byokOpenAi?: string | null;
+}): Promise<{ actions: BibleMergeAction[]; summary: string }> {
+  const rows = opts.catalog.filter((c) => c.entry_type === opts.entryType);
+  if (rows.length < 2) {
+    return { actions: [], summary: `No duplicates to merge for ${opts.entryType}.` };
+  }
+
+  const list = rows
+    .map((c) => {
+      const als = aliasesOf(c).filter((a) => a !== c.name);
+      return `- id=${c.id}\n  name: ${JSON.stringify(c.name)}\n  aliases: ${JSON.stringify(als)}\n  summary: ${JSON.stringify((c.summary || "").slice(0, 400))}\n  speech_notes: ${JSON.stringify((c.speech_notes || "").slice(0, 200))}`;
+    })
+    .join("\n");
+
+  const user = `Task: merge duplicate story-bible entries of type "${opts.entryType}".
+
+These entries may be the SAME entity under different names (nicknames, titles, short forms).
+Group them. For each group pick one keep_id (prefer the fullest formal name), list merge_ids to delete, and produce a combined name/summary/speech_notes/aliases.
+
+HARD RULES:
+- Only merge when they are clearly the same entity. When unsure, leave separate.
+- Never invent facts not present in the summaries.
+- Never write manuscript prose.
+- Return JSON only:
+{
+  "summary": string,
+  "items": [],
+  "extras": {
+    "merges": [{
+      "keep_id": string,
+      "merge_ids": string[],
+      "name": string,
+      "summary": string,
+      "speech_notes"?: string,
+      "aliases"?: string[]
+    }]
+  }
+}
+
+ENTRIES:
+${list}`;
+
+  const raw = await runCritiqueModel({
+    system: CRITIQUE_SYSTEM_PROMPT,
+    user,
+    byokAnthropic: opts.byokAnthropic,
+    byokOpenAi: opts.byokOpenAi,
+    modelTier: opts.model,
+  });
+  const parsed = parseAiJson(raw);
+  const idSet = new Set(rows.map((r) => r.id));
+  const actions: BibleMergeAction[] = [];
+
+  for (const m of (parsed.extras?.merges || []) as BibleMergeAction[]) {
+    if (!m?.keep_id || !idSet.has(m.keep_id)) continue;
+    const mergeIds = (m.merge_ids || []).filter((id) => id !== m.keep_id && idSet.has(id));
+    if (!mergeIds.length && !m.name) continue;
+    const keep = rows.find((r) => r.id === m.keep_id)!;
+    actions.push({
+      keep_id: m.keep_id,
+      merge_ids: mergeIds,
+      name: (m.name || keep.name).trim(),
+      summary: preferRicherText(keep.summary, m.summary),
+      speech_notes: preferRicherText(keep.speech_notes, m.speech_notes),
+      aliases: mergeAliasLists(
+        aliasesOf(keep),
+        m.aliases,
+        mergeIds.flatMap((id) => {
+          const r = rows.find((x) => x.id === id);
+          return r ? aliasesOf(r) : [];
+        }),
+        [m.name || keep.name]
+      ).filter((a) => normalizeCmp(a) !== normalizeCmp(m.name || keep.name)),
+    });
+  }
+
+  return {
+    actions,
+    summary: parsed.summary || `Merge pass for ${opts.entryType}: ${actions.length} group(s).`,
   };
 }
