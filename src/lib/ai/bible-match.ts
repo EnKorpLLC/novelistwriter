@@ -137,3 +137,118 @@ export function preferCanonicalName(current: string, incoming: string): string {
   if (cw > iw) return c;
   return i.length > c.length ? i : c;
 }
+
+/** Token-subset match: "Sera" ⊂ "Lady Sera Beaufort", "Lady Beaufort" ⊂ full name. */
+export function namesContainmentMatch(a: string, b: string): boolean {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const ta = tokens(a);
+  const tb = tokens(b);
+  if (!ta.length || !tb.length) {
+    return na.includes(nb) || nb.includes(na);
+  }
+  const aInB = ta.every((t) => tb.includes(t));
+  const bInA = tb.every((t) => ta.includes(t));
+  return aInB || bInA;
+}
+
+export type LocalMergeCluster = {
+  keep: BibleCatalogEntry;
+  merge: BibleCatalogEntry[];
+  name: string;
+  summary: string;
+  speech_notes: string;
+  aliases: string[];
+};
+
+/**
+ * Deterministic clustering for one entry type.
+ * Connects entries when one name's distinctive tokens are a subset of the other's
+ * (covers nicknames/titles). Then union-find collapses chains
+ * (Sera ↔ Lady Sera Beaufort ↔ Lady Beaufort).
+ */
+export function clusterEntriesForMerge(rows: BibleCatalogEntry[]): LocalMergeCluster[] {
+  if (rows.length < 2) return [];
+
+  const parent = rows.map((_, i) => i);
+  const find = (i: number): number => {
+    let p = i;
+    while (parent[p] !== p) p = parent[p];
+    let x = i;
+    while (parent[x] !== x) {
+      const n = parent[x];
+      parent[x] = p;
+      x = n;
+    }
+    return p;
+  };
+  const union = (i: number, j: number) => {
+    const a = find(i);
+    const b = find(j);
+    if (a !== b) parent[b] = a;
+  };
+
+  for (let i = 0; i < rows.length; i++) {
+    const ai = aliasesOf(rows[i]);
+    for (let j = i + 1; j < rows.length; j++) {
+      const aj = aliasesOf(rows[j]);
+      let linked = false;
+      outer: for (const x of ai) {
+        for (const y of aj) {
+          if (namesContainmentMatch(x, y)) {
+            linked = true;
+            break outer;
+          }
+        }
+      }
+      if (linked) union(i, j);
+    }
+  }
+
+  const groups = new Map<number, BibleCatalogEntry[]>();
+  for (let i = 0; i < rows.length; i++) {
+    const root = find(i);
+    const g = groups.get(root) || [];
+    g.push(rows[i]);
+    groups.set(root, g);
+  }
+
+  const clusters: LocalMergeCluster[] = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+
+    // Prefer fullest formal name as keep
+    const keep = [...group].sort((a, b) => {
+      const aw = a.name.trim().split(/\s+/).length;
+      const bw = b.name.trim().split(/\s+/).length;
+      if (bw !== aw) return bw - aw;
+      return b.name.length - a.name.length;
+    })[0];
+
+    const merge = group.filter((g) => g.id !== keep.id);
+    let summary = keep.summary || "";
+    let speech = keep.speech_notes || "";
+    for (const m of merge) {
+      summary = preferRicherText(summary, m.summary);
+      speech = preferRicherText(speech, m.speech_notes);
+    }
+    const allNames = group.flatMap((g) => aliasesOf(g));
+    const name = allNames.reduce((best, n) => preferCanonicalName(best, n), keep.name);
+    const aliases = mergeAliasLists(allNames).filter(
+      (a) => normalizeName(a) !== normalizeName(name)
+    );
+
+    clusters.push({
+      keep,
+      merge,
+      name,
+      summary,
+      speech_notes: speech,
+      aliases,
+    });
+  }
+
+  return clusters;
+}

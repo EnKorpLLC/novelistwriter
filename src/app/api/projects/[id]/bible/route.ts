@@ -13,6 +13,41 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
+
+  // Batch delete via POST — Next.js often drops DELETE request bodies
+  if (body?.action === "delete") {
+    if (body.deleteAll) {
+      const { error, count } = await supabase
+        .from("bible_entries")
+        .delete({ count: "exact" })
+        .eq("project_id", projectId)
+        .eq("user_id", user.id);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: true, deleted: count ?? 0 });
+    }
+
+    const ids = Array.isArray(body.ids)
+      ? body.ids.filter((id: unknown) => typeof id === "string")
+      : [];
+    if (!ids.length) {
+      return NextResponse.json({ error: "Provide ids[] or deleteAll: true" }, { status: 400 });
+    }
+
+    let deleted = 0;
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const { error, count } = await supabase
+        .from("bible_entries")
+        .delete({ count: "exact" })
+        .eq("project_id", projectId)
+        .eq("user_id", user.id)
+        .in("id", chunk);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      deleted += count ?? chunk.length;
+    }
+    return NextResponse.json({ ok: true, deleted });
+  }
+
   const aliases = Array.isArray(body.aliases)
     ? body.aliases.map((a: unknown) => String(a).trim()).filter(Boolean)
     : [];
@@ -33,49 +68,4 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ entry: data });
-}
-
-/** Batch delete: { ids: string[] } or { deleteAll: true } */
-export async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: projectId } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  let body: { ids?: string[]; deleteAll?: boolean } = {};
-  try {
-    body = await req.json();
-  } catch {
-    body = {};
-  }
-
-  if (body.deleteAll) {
-    const { error, count } = await supabase
-      .from("bible_entries")
-      .delete({ count: "exact" })
-      .eq("project_id", projectId)
-      .eq("user_id", user.id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, deleted: count ?? 0 });
-  }
-
-  const ids = Array.isArray(body.ids) ? body.ids.filter((id) => typeof id === "string") : [];
-  if (!ids.length) {
-    return NextResponse.json({ error: "Provide ids[] or deleteAll: true" }, { status: 400 });
-  }
-
-  const { error, count } = await supabase
-    .from("bible_entries")
-    .delete({ count: "exact" })
-    .eq("project_id", projectId)
-    .eq("user_id", user.id)
-    .in("id", ids);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, deleted: count ?? ids.length });
 }

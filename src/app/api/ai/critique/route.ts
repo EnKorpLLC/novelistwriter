@@ -18,7 +18,6 @@ import {
 import { buildBookManuscript } from "@/lib/ai/manuscript";
 import {
   estimateBibleExtractCost,
-  estimateBibleMergeCost,
   planBibleExtract,
   runBibleExtractUnit,
   runBibleMergeUnit,
@@ -162,29 +161,13 @@ export async function POST(req: Request) {
     const passId = parsed.data.passId;
     const batchIndex = parsed.data.batchIndex;
 
-    // ——— Merge duplicates for one entry type ———
+    // ——— Merge duplicates for one entry type (local clustering, free) ———
     if (passId === "merge") {
       const mergeEntryType = parsed.data.mergeEntryType;
       if (!mergeEntryType) {
         return NextResponse.json(
           { error: "mergeEntryType required for bible merge." },
           { status: 400 }
-        );
-      }
-
-      const unitCost = usingByok
-        ? 1
-        : estimateBibleMergeCost({ model: extractModel, usingByok, typeCount: 1 }).perCall;
-
-      const debit = await debitCredits({
-        userId: user.id,
-        jobType: jt,
-        cost: unitCost,
-      });
-      if (!debit.ok) {
-        return NextResponse.json(
-          { error: debit.error, code: "insufficient_credits", cost: debit.cost },
-          { status: 402 }
         );
       }
 
@@ -210,8 +193,8 @@ export async function POST(req: Request) {
           chapter_id: null,
           job_type: jt,
           status: "running",
-          credit_cost: debit.charged,
-          input: { scope: "book", model: extractModel, passId: "merge", mergeEntryType },
+          credit_cost: 0,
+          input: { scope: "book", model: extractModel, passId: "merge", mergeEntryType, local: true },
         })
         .select("*")
         .single();
@@ -232,7 +215,7 @@ export async function POST(req: Request) {
           const details = {
             ...(keep?.details || {}),
             aliases: action.aliases,
-            source: "ai_merge",
+            source: "local_merge",
           };
           const { data: row } = await supabase
             .from("bible_entries")
@@ -248,21 +231,29 @@ export async function POST(req: Request) {
             .select("*")
             .single();
           if (row) updated.push(row);
-          if (action.merge_ids.length) {
+          // Delete in chunks — Supabase .in() has practical limits
+          for (let i = 0; i < action.merge_ids.length; i += 100) {
+            const chunk = action.merge_ids.slice(i, i + 100);
             await supabase
               .from("bible_entries")
               .delete()
-              .in("id", action.merge_ids)
+              .in("id", chunk)
               .eq("user_id", user.id)
               .eq("project_id", projectId);
-            deleted.push(...action.merge_ids);
+            deleted.push(...chunk);
           }
         }
 
         const result = {
           summary: merge.summary,
           items: [],
-          extras: { updated, deleted, actions: merge.actions, mergeEntryType },
+          extras: {
+            updated,
+            deleted,
+            actions: merge.actions,
+            mergeEntryType,
+            method: merge.method,
+          },
         };
         if (job) {
           await supabase
@@ -270,44 +261,33 @@ export async function POST(req: Request) {
             .update({
               status: "complete",
               result,
-              credit_cost: debit.charged,
+              credit_cost: 0,
               completed_at: new Date().toISOString(),
             })
             .eq("id", job.id);
         }
         return NextResponse.json({
           jobId: job?.id,
-          cost: debit.charged,
+          cost: 0,
           model: extractModel,
           summary: merge.summary,
           extras: result.extras,
           creditsRemaining: await remainingCredits(user.id),
         });
       } catch (e) {
-        try {
-          await refundCredits({
-            userId: user.id,
-            amount: debit.charged,
-            jobType: jt,
-            reason: "ai_job_failed_refund",
-          });
-        } catch (refundErr) {
-          console.error("credit refund failed", refundErr);
-        }
         if (job) {
           await supabase
             .from("ai_jobs")
             .update({
               status: "failed",
-              error: e instanceof Error ? e.message : "AI failed",
+              error: e instanceof Error ? e.message : "Merge failed",
               completed_at: new Date().toISOString(),
             })
             .eq("id", job.id);
         }
         return NextResponse.json(
           {
-            error: e instanceof Error ? e.message : "AI failed",
-            refunded: debit.charged,
+            error: e instanceof Error ? e.message : "Merge failed",
             creditsRemaining: await remainingCredits(user.id),
           },
           { status: 500 }

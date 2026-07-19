@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai/chapter-batches";
 import {
   aliasesOf,
+  clusterEntriesForMerge,
   findMatchingCatalogEntry,
   mergeAliasLists,
   preferCanonicalName,
@@ -109,19 +110,13 @@ export function estimateBibleExtractCost(opts: {
   return { calls, cost: calls * perCall, batches: Math.max(1, batches), perCall };
 }
 
-export function estimateBibleMergeCost(opts: {
-  model: AiModelTier;
+export function estimateBibleMergeCost(_opts?: {
+  model?: AiModelTier;
   usingByok?: boolean;
   typeCount?: number;
 }): { calls: number; cost: number; perCall: number } {
-  const calls = opts.typeCount ?? 6;
-  if (opts.usingByok) return { calls, cost: calls, perCall: 1 };
-  const perCall = computeCritiqueCost({
-    jobType: "bible_extract",
-    scope: "chapter",
-    model: opts.model,
-  });
-  return { calls, cost: calls * perCall, perCall };
+  // Local clustering — no AI calls
+  return { calls: 0, cost: 0, perCall: 0 };
 }
 
 export function planBibleExtract(opts: {
@@ -336,90 +331,37 @@ export type BibleMergeAction = {
   aliases: string[];
 };
 
-/** Consolidate duplicate entries of one type (Sera / Lady Beaufort / Lady Sera Beaufort). */
+/** Consolidate duplicate entries of one type via local name/alias clustering (not a shy AI pass). */
 export async function runBibleMergeUnit(opts: {
   entryType: BibleExtractEntry["entry_type"];
   catalog: BibleCatalogEntry[];
   model: AiModelTier;
   byokAnthropic?: string | null;
   byokOpenAi?: string | null;
-}): Promise<{ actions: BibleMergeAction[]; summary: string }> {
+}): Promise<{ actions: BibleMergeAction[]; summary: string; method: "local" }> {
   const rows = opts.catalog.filter((c) => c.entry_type === opts.entryType);
   if (rows.length < 2) {
-    return { actions: [], summary: `No duplicates to merge for ${opts.entryType}.` };
+    return {
+      actions: [],
+      summary: `No duplicates to merge for ${opts.entryType}.`,
+      method: "local",
+    };
   }
 
-  const list = rows
-    .map((c) => {
-      const als = aliasesOf(c).filter((a) => a !== c.name);
-      return `- id=${c.id}\n  name: ${JSON.stringify(c.name)}\n  aliases: ${JSON.stringify(als)}\n  summary: ${JSON.stringify((c.summary || "").slice(0, 400))}\n  speech_notes: ${JSON.stringify((c.speech_notes || "").slice(0, 200))}`;
-    })
-    .join("\n");
+  const clusters = clusterEntriesForMerge(rows);
+  const actions: BibleMergeAction[] = clusters.map((c) => ({
+    keep_id: c.keep.id,
+    merge_ids: c.merge.map((m) => m.id),
+    name: c.name,
+    summary: c.summary,
+    speech_notes: c.speech_notes,
+    aliases: c.aliases,
+  }));
 
-  const user = `Task: merge duplicate story-bible entries of type "${opts.entryType}".
-
-These entries may be the SAME entity under different names (nicknames, titles, short forms).
-Group them. For each group pick one keep_id (prefer the fullest formal name), list merge_ids to delete, and produce a combined name/summary/speech_notes/aliases.
-
-HARD RULES:
-- Only merge when they are clearly the same entity. When unsure, leave separate.
-- Never invent facts not present in the summaries.
-- Never write manuscript prose.
-- Return JSON only:
-{
-  "summary": string,
-  "items": [],
-  "extras": {
-    "merges": [{
-      "keep_id": string,
-      "merge_ids": string[],
-      "name": string,
-      "summary": string,
-      "speech_notes"?: string,
-      "aliases"?: string[]
-    }]
-  }
-}
-
-ENTRIES:
-${list}`;
-
-  const raw = await runCritiqueModel({
-    system: CRITIQUE_SYSTEM_PROMPT,
-    user,
-    byokAnthropic: opts.byokAnthropic,
-    byokOpenAi: opts.byokOpenAi,
-    modelTier: opts.model,
-  });
-  const parsed = parseAiJson(raw);
-  const idSet = new Set(rows.map((r) => r.id));
-  const actions: BibleMergeAction[] = [];
-
-  for (const m of (parsed.extras?.merges || []) as BibleMergeAction[]) {
-    if (!m?.keep_id || !idSet.has(m.keep_id)) continue;
-    const mergeIds = (m.merge_ids || []).filter((id) => id !== m.keep_id && idSet.has(id));
-    if (!mergeIds.length && !m.name) continue;
-    const keep = rows.find((r) => r.id === m.keep_id)!;
-    actions.push({
-      keep_id: m.keep_id,
-      merge_ids: mergeIds,
-      name: (m.name || keep.name).trim(),
-      summary: preferRicherText(keep.summary, m.summary),
-      speech_notes: preferRicherText(keep.speech_notes, m.speech_notes),
-      aliases: mergeAliasLists(
-        aliasesOf(keep),
-        m.aliases,
-        mergeIds.flatMap((id) => {
-          const r = rows.find((x) => x.id === id);
-          return r ? aliasesOf(r) : [];
-        }),
-        [m.name || keep.name]
-      ).filter((a) => normalizeCmp(a) !== normalizeCmp(m.name || keep.name)),
-    });
-  }
-
+  const removed = actions.reduce((n, a) => n + a.merge_ids.length, 0);
   return {
     actions,
-    summary: parsed.summary || `Merge pass for ${opts.entryType}: ${actions.length} group(s).`,
+    summary: `Local merge for ${opts.entryType}: ${actions.length} group(s), removing ${removed} duplicate row(s) from ${rows.length}.`,
+    method: "local",
   };
 }

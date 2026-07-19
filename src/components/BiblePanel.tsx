@@ -6,7 +6,6 @@ import {
   BIBLE_CHAPTERS_PER_BATCH,
   BIBLE_PASSES,
   estimateBibleExtractCost,
-  estimateBibleMergeCost,
 } from "@/lib/ai/bible-extract";
 import type { AiModelTier } from "@/lib/ai/pricing";
 import { AI_MODEL_TIERS } from "@/lib/ai/pricing";
@@ -69,7 +68,6 @@ export function BiblePanel({
     chapterCount: Math.max(1, chapterCount),
     model: extractModel,
   });
-  const mergeEstimate = estimateBibleMergeCost({ model: extractModel });
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -129,13 +127,13 @@ export function BiblePanel({
     if (!ids.length) return;
     if (!confirm(`Delete ${ids.length} selected entr${ids.length === 1 ? "y" : "ies"}?`)) return;
     const res = await fetch(`/api/projects/${projectId}/bible`, {
-      method: "DELETE",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify({ action: "delete", ids }),
     });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(data.error || "Delete failed");
+      alert(data.error || `Delete failed (${res.status})`);
       return;
     }
     onChange(entries.filter((e) => !selected.has(e.id)));
@@ -152,13 +150,13 @@ export function BiblePanel({
       return;
     }
     const res = await fetch(`/api/projects/${projectId}/bible`, {
-      method: "DELETE",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deleteAll: true }),
+      body: JSON.stringify({ action: "delete", deleteAll: true }),
     });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(data.error || "Delete failed");
+      alert(data.error || `Delete failed (${res.status})`);
       return;
     }
     onChange([]);
@@ -337,9 +335,9 @@ export function BiblePanel({
     if (!entries.length) return;
     if (
       !confirm(
-        `AI-merge duplicate bible entries (Sera / Lady Beaufort → one row)?\n\n` +
-          `Runs one request per entry type (~${mergeEstimate.cost} credits at ${AI_MODEL_TIERS[extractModel].label}).\n` +
-          `You can Stop between types.`
+        `Merge duplicate bible entries by name/nickname/title?\n\n` +
+          `Uses local matching (Sera + Lady Beaufort → one row) — free, no AI credits.\n` +
+          `You can Stop between entry types.`
       )
     ) {
       return;
@@ -444,7 +442,7 @@ export function BiblePanel({
               onClick={mergeDuplicates}
               className="border border-line px-3 py-2 text-sm text-ink hover:bg-paper-deep disabled:opacity-50"
             >
-              {merging ? "Merging…" : `AI: merge duplicates (~${mergeEstimate.cost} cr)`}
+              {merging ? "Merging…" : "Merge duplicates (free)"}
             </button>
             <button
               type="button"
