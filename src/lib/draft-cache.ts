@@ -50,9 +50,13 @@ export function countWords(text: string): number {
 
 export function htmlToText(html: string): string {
   if (typeof window === "undefined") {
-    return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return html
+      .replace(/<hr\s*\/?>/gi, " ⁂ ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
   const div = document.createElement("div");
-  div.innerHTML = html;
+  div.innerHTML = html.replace(/<hr\s*\/?>/gi, " ⁂ ");
   return div.textContent || "";
 }

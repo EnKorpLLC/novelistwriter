@@ -143,6 +143,25 @@ export function EditorToolbar({ editor }: Props) {
       >
         “ ”
       </Btn>
+      <Btn
+        title="Scene break (fleuron)"
+        onClick={() =>
+          editor
+            .chain()
+            .focus()
+            .insertContent([
+              {
+                type: "paragraph",
+                attrs: { textAlign: "center" },
+                content: [{ type: "text", text: "⁂" }],
+              },
+              { type: "paragraph" },
+            ])
+            .run()
+        }
+      >
+        ⁂
+      </Btn>
 
       <span className="mx-1 h-4 w-px bg-line" />
 

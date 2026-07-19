@@ -78,6 +78,31 @@ body {
   margin-bottom: 1em;
 }
 
+/* Centered asterism / fleuron scene breaks */
+.ProseMirror p[style*="text-align: center"],
+.ProseMirror p[style*="text-align:center"] {
+  margin: 1.75em 0;
+  letter-spacing: 0.35em;
+  color: var(--muted);
+}
+
+.ProseMirror hr {
+  border: none;
+  margin: 2em 0;
+  height: 1.5em;
+  text-align: center;
+  overflow: visible;
+}
+
+.ProseMirror hr::before {
+  content: "⁂";
+  display: block;
+  letter-spacing: 0.35em;
+  color: var(--muted);
+  font-size: 1.1em;
+  line-height: 1.5;
+}
+
 .ProseMirror h2 {
   font-family: var(--font-display);
   font-size: 1.5rem;

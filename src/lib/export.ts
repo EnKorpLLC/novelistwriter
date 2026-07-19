@@ -25,6 +25,7 @@ export type CoverImage = {
 
 function htmlToPlain(html: string): string {
   return html
+    .replace(/<hr\s*\/?>/gi, "\n\n⁂\n\n")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n\n")
     .replace(/<[^>]+>/g, "")
