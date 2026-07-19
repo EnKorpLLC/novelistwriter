@@ -257,7 +257,7 @@ function ExtrasView({ extras }: { extras: Record<string, unknown> }) {
         </section>
       )}
 
-      {extras.voice_profile && typeof extras.voice_profile === "object" && (
+      {extras.voice_profile != null && typeof extras.voice_profile === "object" ? (
         <section>
           <h3 className="font-display text-lg text-critique">Voice profile</h3>
           <dl className="mt-3 space-y-2 text-sm text-muted">
@@ -269,9 +269,9 @@ function ExtrasView({ extras }: { extras: Record<string, unknown> }) {
             ))}
           </dl>
         </section>
-      )}
+      ) : null}
 
-      {extras.comparison && typeof extras.comparison === "object" && (
+      {extras.comparison != null && typeof extras.comparison === "object" ? (
         <section>
           <h3 className="font-display text-lg text-critique">Comparison</h3>
           <dl className="mt-3 space-y-3 text-sm text-muted">
@@ -293,7 +293,7 @@ function ExtrasView({ extras }: { extras: Record<string, unknown> }) {
             ))}
           </dl>
         </section>
-      )}
+      ) : null}
 
       {Object.keys(leftover).length > 0 && (
         <details className="print:hidden">

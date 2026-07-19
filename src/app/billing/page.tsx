@@ -40,7 +40,6 @@ function BillingInner() {
   useEffect(() => {
     if (!success) return;
     void syncPurchases();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [success]);
 
   async function checkout(body: Record<string, unknown>) {

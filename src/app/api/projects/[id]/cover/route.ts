@@ -102,7 +102,8 @@ export async function DELETE(
   }
 
   const prev = (project?.metadata as Record<string, unknown> | null) || {};
-  const { cover_path: _drop, ...restMeta } = prev;
+  const restMeta = { ...prev };
+  delete restMeta.cover_path;
 
   await supabase
     .from("projects")
