@@ -23,12 +23,12 @@ export type ArcCritiqueItem = {
   example_text?: string;
 };
 
-export const ARCS_CHAPTERS_PER_BATCH = 5;
+export const ARCS_CHAPTERS_PER_BATCH = 2;
 
 export function packArcsBatches(chapters: ChapterBatchRow[]) {
   const ordered = [...chapters].sort((a, b) => a.sort_order - b.sort_order);
   return packChaptersExact(ordered, {
-    maxCharsPerBatch: 90000,
+    maxCharsPerBatch: 45000,
     maxChaptersPerBatch: ARCS_CHAPTERS_PER_BATCH,
   }).filter((b) => b.some((c) => (c.content_text || "").trim()));
 }

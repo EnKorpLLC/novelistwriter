@@ -16,7 +16,7 @@ export type BibleExtractEntry = {
 export type ChapterForExtract = ChapterBatchRow;
 
 /** Soft max chapters per API call (exact packer may use fewer if chapters are long). */
-export const BIBLE_CHAPTERS_PER_BATCH = 5;
+export const BIBLE_CHAPTERS_PER_BATCH = 2;
 
 export const BIBLE_PASSES: {
   id: string;
@@ -61,7 +61,7 @@ export function getBiblePass(passId: string) {
 export function packBibleBatches(chapters: ChapterForExtract[]) {
   const ordered = [...chapters].sort((a, b) => a.sort_order - b.sort_order);
   return packChaptersExact(ordered, {
-    maxCharsPerBatch: 90000,
+    maxCharsPerBatch: 45000,
     maxChaptersPerBatch: BIBLE_CHAPTERS_PER_BATCH,
   }).filter((b) => b.some((c) => (c.content_text || "").trim()));
 }

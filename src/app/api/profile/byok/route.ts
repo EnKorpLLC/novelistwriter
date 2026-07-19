@@ -31,8 +31,14 @@ export async function POST(req: Request) {
   const patch: Record<string, string | null> = {
     updated_at: new Date().toISOString(),
   };
-  if (typeof anthropic === "string") patch.byok_anthropic_key = anthropic || null;
-  if (typeof openai === "string") patch.byok_openai_key = openai || null;
+  if (typeof anthropic === "string") {
+    const t = anthropic.trim().replace(/^['"]|['"]$/g, "");
+    patch.byok_anthropic_key = t || null;
+  }
+  if (typeof openai === "string") {
+    const t = openai.trim().replace(/^['"]|['"]$/g, "");
+    patch.byok_openai_key = t || null;
+  }
 
   const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

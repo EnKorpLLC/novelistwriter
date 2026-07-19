@@ -11,7 +11,7 @@ HARD RULES (never break):
 Output valid JSON only, matching the schema requested by the user message.
 Tone scales with challenge_level 0–100 (0 = gentle coach, 100 = ruthless developmental editor).`;
 
-export function revisionModeInstructions(mode: string): string {
+export function revisionModeInstructions(mode: string) {
   switch (mode) {
     case "structural":
       return "Focus on structure: scene goals, causality, chapter turns, pacing architecture, missing beats.";
@@ -39,6 +39,92 @@ export type AiJsonResult = {
   extras?: Record<string, unknown>;
 };
 
+function trimKey(key: string | null | undefined): string | null {
+  if (!key) return null;
+  // Env dashboards sometimes paste trailing newlines/spaces — those produce opaque "Connection error."
+  const t = key.trim().replace(/^['"]|['"]$/g, "");
+  return t || null;
+}
+
+function formatErrCause(err: unknown): string {
+  if (!err || typeof err !== "object") return "";
+  const e = err as { cause?: unknown; code?: string; errno?: string; message?: string };
+  const parts: string[] = [];
+  if (e.code) parts.push(String(e.code));
+  if (e.errno) parts.push(String(e.errno));
+  if (e.message) parts.push(e.message);
+  const cause = e.cause;
+  if (cause && typeof cause === "object") {
+    const c = cause as { code?: string; message?: string };
+    if (c.code) parts.push(`cause:${c.code}`);
+    if (c.message) parts.push(c.message);
+  }
+  return parts.filter(Boolean).join(" | ");
+}
+
+/** Call Anthropic Messages API via fetch — clearer errors than the SDK's "Connection error." */
+async function callAnthropicMessages(opts: {
+  apiKey: string;
+  model: string;
+  system: string;
+  user: string;
+  maxTokens?: number;
+}): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000);
+  const promptChars = opts.user.length + opts.system.length;
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": opts.apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: opts.model,
+        max_tokens: opts.maxTokens ?? 4096,
+        system: opts.system,
+        messages: [{ role: "user", content: opts.user }],
+      }),
+      signal: controller.signal,
+    });
+
+    const rawText = await res.text();
+    if (!res.ok) {
+      let detail = rawText.slice(0, 400);
+      try {
+        const j = JSON.parse(rawText) as { error?: { message?: string; type?: string } };
+        if (j.error?.message) detail = `${j.error.type || "error"}: ${j.error.message}`;
+      } catch {
+        /* keep raw */
+      }
+      throw new Error(`Anthropic HTTP ${res.status} (${opts.model}, ${promptChars} chars): ${detail}`);
+    }
+
+    const data = JSON.parse(rawText) as {
+      content?: Array<{ type: string; text?: string }>;
+    };
+    const block = data.content?.find((b) => b.type === "text");
+    return block?.text || "{}";
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(
+        `Anthropic request aborted after 120s (${opts.model}, ${promptChars} prompt chars). Try Fast model or a smaller batch.`
+      );
+    }
+    if (err instanceof Error && err.message.startsWith("Anthropic HTTP")) {
+      throw err;
+    }
+    const detail = formatErrCause(err) || (err instanceof Error ? err.message : String(err));
+    throw new Error(
+      `Anthropic network failure (${opts.model}, ${promptChars} prompt chars): ${detail}. Key length ${opts.apiKey.length} (trimmed). If smaller critiques worked, this batch may be too large — we retry with fewer chapters.`
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function runCritiqueModel(opts: {
   system?: string;
   user: string;
@@ -50,11 +136,10 @@ export async function runCritiqueModel(opts: {
   openaiModel?: string;
 }): Promise<string> {
   const provider = (process.env.AI_PROVIDER || "anthropic").toLowerCase();
-  const anthropicKey = opts.byokAnthropic || process.env.ANTHROPIC_API_KEY;
-  const openaiKey = opts.byokOpenAi || process.env.OPENAI_API_KEY;
+  const anthropicKey = trimKey(opts.byokAnthropic) || trimKey(process.env.ANTHROPIC_API_KEY);
+  const openaiKey = trimKey(opts.byokOpenAi) || trimKey(process.env.OPENAI_API_KEY);
   const tier = opts.modelTier || "standard";
 
-  // Lazy import avoids circular deps at module load in some bundlers
   const { AI_MODEL_TIERS } = await import("@/lib/ai/pricing");
   const tierDef = AI_MODEL_TIERS[tier];
   const anthropicModel = opts.anthropicModel || tierDef.anthropicModel;
@@ -76,47 +161,37 @@ export async function runCritiqueModel(opts: {
   }
 
   if (anthropicKey) {
-    const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const client = new Anthropic({
-      apiKey: anthropicKey,
-      timeout: 55_000,
-      maxRetries: 1,
-    });
+    // Prefer direct fetch — SDK wraps many failures as opaque "Connection error."
     try {
-      const res = await client.messages.create({
+      return await callAnthropicMessages({
+        apiKey: anthropicKey,
         model: anthropicModel,
-        max_tokens: 4096,
         system: opts.system || CRITIQUE_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: opts.user }],
+        user: opts.user,
       });
-      const block = res.content.find((b) => b.type === "text");
-      return block && block.type === "text" ? block.text : "{}";
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "AI request failed";
-      // Anthropic often says "Connection error." for network/TLS failures in ~1–2s —
-      // that is NOT a request timeout. Keep the original detail so the UI can show it.
-      if (/ETIMEDOUT|ECONNRESET|timed?\s*out|fetch failed/i.test(msg)) {
-        throw new Error(
-          `AI request timed out or dropped (${msg}). Try again, use Fast model, or run a smaller scope.`
-        );
+    } catch (firstErr) {
+      const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      // One quick retry for transient TLS blips
+      if (/network failure|fetch failed|ECONNRESET|UND_ERR/i.test(msg)) {
+        await new Promise((r) => setTimeout(r, 800));
+        return await callAnthropicMessages({
+          apiKey: anthropicKey,
+          model: anthropicModel,
+          system: opts.system || CRITIQUE_SYSTEM_PROMPT,
+          user: opts.user,
+        });
       }
-      if (/connection error/i.test(msg)) {
-        throw new Error(
-          `AI provider connection failed immediately (${msg}). Check ANTHROPIC_API_KEY / network, then retry — this is usually not a long-job timeout.`
-        );
-      }
-      throw err instanceof Error ? err : new Error(msg);
+      throw firstErr instanceof Error ? firstErr : new Error(msg);
     }
   }
 
-  // Deterministic demo fallback when no API keys configured
   return JSON.stringify(demoCritique(opts.user));
 }
 
 function demoCritique(user: string): AiJsonResult {
   const snippet = user.slice(0, 120).replace(/\s+/g, " ");
 
-  if (user.includes("extract story-bible") || user.includes("bible_extract")) {
+  if (user.includes("extract story-bible") || user.includes("bible_extract") || user.includes("story-bible extraction")) {
     return {
       summary: "Demo bible extract (no AI API key). Sample entities from your text — connect an API key for a real scan.",
       items: [],

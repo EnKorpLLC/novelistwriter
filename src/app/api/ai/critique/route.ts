@@ -21,13 +21,20 @@ import {
   planBibleExtract,
   runBibleExtractUnit,
   getBiblePass,
+  BIBLE_CHAPTERS_PER_BATCH,
 } from "@/lib/ai/bible-extract";
-import { estimateArcsCost, planArcsExtract, runArcsUnit } from "@/lib/ai/arcs-multipass";
+import {
+  estimateArcsCost,
+  planArcsExtract,
+  runArcsUnit,
+  ARCS_CHAPTERS_PER_BATCH,
+} from "@/lib/ai/arcs-multipass";
 import type { JobType } from "@/lib/types";
 import { z } from "zod";
 
 /** Long multipass bible extracts / book jobs — requires Vercel Pro for full 300s. */
 export const maxDuration = 300;
+export const runtime = "nodejs";
 
 const bodySchema = z.object({
   jobType: z.string(),
@@ -141,7 +148,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         plan: true,
         ...plan,
-        chaptersPerBatch: 5,
+        chaptersPerBatch: BIBLE_CHAPTERS_PER_BATCH,
         creditsRemaining: await remainingCredits(user.id),
       });
     }
@@ -373,7 +380,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         plan: true,
         ...plan,
-        chaptersPerBatch: 5,
+        chaptersPerBatch: ARCS_CHAPTERS_PER_BATCH,
         creditsRemaining: await remainingCredits(user.id),
       });
     }
