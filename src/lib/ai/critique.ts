@@ -285,9 +285,6 @@ export function parseAiJson(raw: string): AiJsonResult {
     // Close open strings if odd number of unescaped quotes — crude: strip last dangling quote fragment
     const quoteCount = (s.match(/(?<!\\)"/g) || []).length;
     if (quoteCount % 2 === 1) s += '"';
-    const opens = (s.match(/[{[]/g) || []).length;
-    const closes = (s.match(/[}\]]/g) || []).length;
-    let diff = opens - closes;
     // Prefer closing objects/arrays in reverse order of opens — stack-based
     const stack: string[] = [];
     let inStr = false;
@@ -307,7 +304,6 @@ export function parseAiJson(raw: string): AiJsonResult {
       const open = stack.pop();
       s += open === "{" ? "}" : "]";
     }
-    void diff;
     return s;
   }
 

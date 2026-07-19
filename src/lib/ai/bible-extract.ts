@@ -110,15 +110,6 @@ export function estimateBibleExtractCost(opts: {
   return { calls, cost: calls * perCall, batches: Math.max(1, batches), perCall };
 }
 
-export function estimateBibleMergeCost(_opts?: {
-  model?: AiModelTier;
-  usingByok?: boolean;
-  typeCount?: number;
-}): { calls: number; cost: number; perCall: number } {
-  // Local clustering — no AI calls
-  return { calls: 0, cost: 0, perCall: 0 };
-}
-
 export function planBibleExtract(opts: {
   chapters: ChapterForExtract[];
   model: AiModelTier;
