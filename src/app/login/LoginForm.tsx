@@ -22,6 +22,13 @@ export default function LoginForm() {
       const supabase = createClient();
       const { error: err } = await supabase.auth.signInWithPassword({ email, password });
       if (err) throw err;
+      await fetch("/api/referral", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => {
+        /* ignore */
+      });
       router.push(next);
       router.refresh();
     } catch (err) {

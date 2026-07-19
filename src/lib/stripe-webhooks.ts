@@ -3,6 +3,7 @@ import { addCredits } from "@/lib/credits";
 import { CREDIT_PACKS, SUB_ALLOWANCE } from "@/lib/types";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
+import { grantReferralRewardForPurchase } from "@/lib/referral";
 
 async function resolveUserId(session: Stripe.Checkout.Session): Promise<string | null> {
   if (session.metadata?.supabase_user_id) return session.metadata.supabase_user_id;
@@ -43,6 +44,14 @@ function creditsFromSession(session: Stripe.Checkout.Session): {
   return null;
 }
 
+async function maybeReferralReward(buyerUserId: string, stripeEventId: string) {
+  try {
+    await grantReferralRewardForPurchase({ buyerUserId, stripeEventId });
+  } catch (err) {
+    console.error("referral reward failed", stripeEventId, err);
+  }
+}
+
 /** Apply a paid Checkout session to entitlements. Idempotent via credit_ledger.stripe_event_id. */
 export async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<{
   ok: boolean;
@@ -66,13 +75,17 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
       .select("id")
       .eq("stripe_payment_intent", String(session.payment_intent || session.id))
       .maybeSingle();
-    if (existing) return { ok: true, skipped: "already_unlocked" };
+    if (existing) {
+      await maybeReferralReward(userId, eventId);
+      return { ok: true, skipped: "already_unlocked" };
+    }
 
     const { error } = await admin.from("project_unlocks").insert({
       user_id: userId,
       stripe_payment_intent: String(session.payment_intent || session.id),
     });
     if (error) throw new Error(`project_unlock failed: ${error.message}`);
+    await maybeReferralReward(userId, eventId);
     return { ok: true, applied: "project_unlock" };
   }
 
@@ -82,7 +95,10 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
       .select("id")
       .eq("stripe_event_id", eventId)
       .maybeSingle();
-    if (prior) return { ok: true, skipped: "already_credited" };
+    if (prior) {
+      await maybeReferralReward(userId, eventId);
+      return { ok: true, skipped: "already_credited" };
+    }
 
     let packInfo = creditsFromSession(session);
     if (!packInfo && !session.line_items) {
@@ -104,6 +120,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
       reason: `pack_${packInfo.pack}`,
       stripeEventId: eventId,
     });
+    await maybeReferralReward(userId, eventId);
     return { ok: true, applied: `credits_${packInfo.credits}` };
   }
 
@@ -117,6 +134,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
       updated_at: new Date().toISOString(),
     });
     if (error) throw new Error(`subscribe failed: ${error.message}`);
+    await maybeReferralReward(userId, eventId);
     return { ok: true, applied: `subscribe_${tier}` };
   }
 

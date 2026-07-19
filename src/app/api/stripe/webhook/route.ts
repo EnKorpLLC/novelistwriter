@@ -3,6 +3,7 @@ import { getStripe } from "@/lib/stripe";
 import { handleCheckoutCompleted } from "@/lib/stripe-webhooks";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { SUB_ALLOWANCE } from "@/lib/types";
+import { grantReferralRewardForPurchase } from "@/lib/referral";
 import Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -81,6 +82,21 @@ export async function POST(req: Request) {
             })
             .eq("user_id", userId);
           if (error) throw new Error(error.message);
+        }
+        // Renewals only — first payment already rewarded via checkout.session.completed
+        if (
+          userId &&
+          invoice.billing_reason === "subscription_cycle" &&
+          (invoice.amount_paid ?? 0) > 0
+        ) {
+          try {
+            await grantReferralRewardForPurchase({
+              buyerUserId: userId,
+              stripeEventId: invoice.id,
+            });
+          } catch (err) {
+            console.error("referral renewal reward failed", invoice.id, err);
+          }
         }
       }
     }

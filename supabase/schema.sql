@@ -12,6 +12,8 @@ create table if not exists public.profiles (
   critique_preferences jsonb not null default '{}'::jsonb,
   byok_anthropic_key text,
   byok_openai_key text,
+  referral_code text,
+  referred_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -232,6 +234,12 @@ create index if not exists idx_projects_user on public.projects(user_id);
 create index if not exists idx_chapters_project on public.chapters(project_id, sort_order);
 create index if not exists idx_bible_project on public.bible_entries(project_id);
 create index if not exists idx_ai_jobs_user on public.ai_jobs(user_id, created_at desc);
+create unique index if not exists profiles_referral_code_uidx
+  on public.profiles (referral_code)
+  where referral_code is not null;
+create index if not exists profiles_referred_by_idx
+  on public.profiles (referred_by)
+  where referred_by is not null;
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -239,8 +247,13 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, display_name)
-  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)));
+  insert into public.profiles (id, email, display_name, referral_code)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)),
+    upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10))
+  );
   insert into public.credit_balances (user_id, balance, free_ai_taste_remaining)
   values (new.id, 0, 3);
   return new;

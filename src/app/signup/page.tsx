@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -12,7 +12,26 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refCode, setRefCode] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) setRefCode(ref.trim().toUpperCase());
+  }, []);
+
+  async function claimPendingReferral() {
+    try {
+      await fetch("/api/referral", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(refCode ? { code: refCode } : {}),
+      });
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,11 +50,12 @@ export default function SignupPage() {
       });
       if (err) throw err;
       if (data.session) {
+        await claimPendingReferral();
         router.push("/dashboard");
         router.refresh();
         return;
       }
-      // Email confirmation required — no session until they click the link
+      // Email confirmation required — cookie still holds ref for claim after login
       setCheckEmail(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
@@ -75,6 +95,11 @@ export default function SignupPage() {
       <form onSubmit={onSubmit} className="font-ui mt-10 w-full max-w-sm space-y-4">
         <h1 className="font-display text-3xl">Create account</h1>
         <p className="text-sm text-muted">First project free. AI never writes your novel.</p>
+        {refCode && (
+          <p className="border border-line bg-paper-deep/40 px-3 py-2 text-xs text-muted">
+            Invited by a fellow writer — referral saved for 30 days if you leave and come back.
+          </p>
+        )}
         {error && <p className="text-sm text-danger">{error}</p>}
         <label className="block text-sm">
           Display name

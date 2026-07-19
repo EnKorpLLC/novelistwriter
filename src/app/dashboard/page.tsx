@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { CreateProjectButton } from "@/components/CreateProjectButton";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DeleteProjectButton } from "@/components/DeleteProjectButton";
+import { ClaimReferral } from "@/components/ClaimReferral";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 
 function formatWords(n: number) {
@@ -51,6 +52,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen">
+      <ClaimReferral />
       <header className="font-ui flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4">
         <Link href="/dashboard" className="font-display text-xl">
           Novelist Writer

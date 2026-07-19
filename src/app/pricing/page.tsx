@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SUB_ALLOWANCE } from "@/lib/types";
 
 export default function PricingPage() {
   return (
@@ -18,7 +19,7 @@ export default function PricingPage() {
             <ul className="mt-4 space-y-2 text-sm text-muted">
               <li>Core studio — $0 forever</li>
               <li>1st project — free</li>
-              <li>Extra projects — $9–12 one-time each</li>
+              <li>Extra projects — $9 one-time each</li>
               <li>AI credit packs from $5</li>
               <li>Price shown before every AI run</li>
             </ul>
@@ -27,12 +28,12 @@ export default function PricingPage() {
             <h2 className="font-display text-2xl">Optional subscription</h2>
             <ul className="mt-4 space-y-2 text-sm text-muted">
               <li>
-                <strong className="text-ink">Pro</strong> — ~$16/mo — unlimited projects + monthly
-                AI credits
+                <strong className="text-ink">Pro</strong> — $16/mo — unlimited projects +{" "}
+                {SUB_ALLOWANCE.pro} monthly AI credits
               </li>
               <li>
-                <strong className="text-ink">Studio</strong> — ~$32/mo — larger allowance, series &
-                beta seats, priority jobs
+                <strong className="text-ink">Studio</strong> — $32/mo — {SUB_ALLOWANCE.studio}{" "}
+                monthly credits, series & beta seats, BYOK, priority jobs
               </li>
             </ul>
           </div>
