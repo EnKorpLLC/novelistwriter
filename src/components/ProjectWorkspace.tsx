@@ -58,6 +58,8 @@ export function ProjectWorkspace({
   const [sessionWords, setSessionWords] = useState(0);
   const [liveChapterWords, setLiveChapterWords] = useState<number | null>(null);
   const [lookupOpen, setLookupOpen] = useState(false);
+  /** Mobile write layout: only one pane visible below lg. */
+  const [writePane, setWritePane] = useState<"chapters" | "editor" | "critique">("editor");
 
   const active = useMemo(
     () => chapters.find((c) => c.id === activeId) || chapters[0],
@@ -340,167 +342,273 @@ export function ProjectWorkspace({
         bible={bible}
       />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {tab === "write" && (
           <>
-            {!focusMode && (
-            <nav className="w-52 shrink-0 overflow-y-auto border-r border-line bg-paper-deep/30 p-2">
-              <p className="font-ui px-2 text-[10px] uppercase tracking-wide text-muted">Chapters</p>
-              <ul className="mt-2 space-y-1">
-                {chapters.map((c) => (
-                  <li key={c.id}>
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              {!focusMode && (
+                <nav
+                  className={`w-full shrink-0 overflow-y-auto border-r border-line bg-paper-deep/30 p-2 lg:block lg:w-52 ${
+                    writePane === "chapters" ? "block" : "hidden"
+                  }`}
+                >
+                  <p className="font-ui px-2 text-[10px] uppercase tracking-wide text-muted">
+                    Chapters
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {chapters.map((c) => (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveId(c.id);
+                            setWritePane("editor");
+                          }}
+                          className={`w-full truncate px-2 py-1.5 text-left text-sm ${
+                            c.id === active?.id
+                              ? "bg-accent/15 text-ink"
+                              : "text-muted hover:bg-paper"
+                          }`}
+                        >
+                          {c.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={addChapter}
+                    className="font-ui mt-3 w-full px-2 py-1 text-left text-xs text-accent"
+                  >
+                    + Chapter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteChapter}
+                    className="font-ui w-full px-2 py-1 text-left text-xs text-danger"
+                  >
+                    Delete chapter
+                  </button>
+                  <div className="mt-2 flex gap-1 px-2">
                     <button
                       type="button"
-                      onClick={() => setActiveId(c.id)}
-                      className={`w-full truncate px-2 py-1.5 text-left text-sm ${
-                        c.id === active?.id ? "bg-accent/15 text-ink" : "text-muted hover:bg-paper"
-                      }`}
+                      className="text-xs text-muted"
+                      onClick={() => reorder(-1)}
                     >
-                      {c.title}
+                      ↑
                     </button>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={addChapter}
-                className="font-ui mt-3 w-full px-2 py-1 text-left text-xs text-accent"
-              >
-                + Chapter
-              </button>
-              <button
-                type="button"
-                onClick={deleteChapter}
-                className="font-ui w-full px-2 py-1 text-left text-xs text-danger"
-              >
-                Delete chapter
-              </button>
-              <div className="mt-2 flex gap-1 px-2">
-                <button type="button" className="text-xs text-muted" onClick={() => reorder(-1)}>
-                  ↑
-                </button>
-                <button type="button" className="text-xs text-muted" onClick={() => reorder(1)}>
-                  ↓
-                </button>
-              </div>
-            </nav>
-            )}
+                    <button
+                      type="button"
+                      className="text-xs text-muted"
+                      onClick={() => reorder(1)}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </nav>
+              )}
 
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              {active && (
-                <>
-                  {!focusMode && (
-                  <div className="grid gap-2 border-b border-line p-3 md:grid-cols-3">
-                    <input
-                      className="border border-line bg-paper px-2 py-1 text-sm"
-                      value={active.title}
-                      onChange={(e) =>
-                        setChapters((prev) =>
-                          prev.map((c) =>
-                            c.id === active.id ? { ...c, title: e.target.value } : c
-                          )
-                        )
-                      }
-                      onBlur={(e) => updateChapterMeta({ title: e.target.value })}
-                    />
-                    <input
-                      placeholder="Scene goal"
-                      className="border border-line bg-paper px-2 py-1 text-sm"
-                      value={active.goal || ""}
-                      onChange={(e) =>
-                        setChapters((prev) =>
-                          prev.map((c) =>
-                            c.id === active.id ? { ...c, goal: e.target.value } : c
-                          )
-                        )
-                      }
-                      onBlur={(e) => updateChapterMeta({ goal: e.target.value })}
-                    />
-                    <input
-                      placeholder="Conflict"
-                      className="border border-line bg-paper px-2 py-1 text-sm"
-                      value={active.conflict || ""}
-                      onChange={(e) =>
-                        setChapters((prev) =>
-                          prev.map((c) =>
-                            c.id === active.id ? { ...c, conflict: e.target.value } : c
-                          )
-                        )
-                      }
-                      onBlur={(e) => updateChapterMeta({ conflict: e.target.value })}
-                    />
-                    <input
-                      placeholder="Outcome"
-                      className="border border-line bg-paper px-2 py-1 text-sm"
-                      value={active.outcome || ""}
-                      onChange={(e) =>
-                        setChapters((prev) =>
-                          prev.map((c) =>
-                            c.id === active.id ? { ...c, outcome: e.target.value } : c
-                          )
-                        )
-                      }
-                      onBlur={(e) => updateChapterMeta({ outcome: e.target.value })}
-                    />
-                    <input
-                      placeholder="POV"
-                      className="border border-line bg-paper px-2 py-1 text-sm"
-                      value={active.pov || ""}
-                      onChange={(e) =>
-                        setChapters((prev) =>
-                          prev.map((c) =>
-                            c.id === active.id ? { ...c, pov: e.target.value } : c
-                          )
-                        )
-                      }
-                      onBlur={(e) => updateChapterMeta({ pov: e.target.value })}
-                    />
-                    <input
-                      placeholder="Timeline"
-                      className="border border-line bg-paper px-2 py-1 text-sm"
-                      value={active.timeline_position || ""}
-                      onChange={(e) =>
-                        setChapters((prev) =>
-                          prev.map((c) =>
-                            c.id === active.id
-                              ? { ...c, timeline_position: e.target.value }
-                              : c
-                          )
-                        )
-                      }
-                      onBlur={(e) => updateChapterMeta({ timeline_position: e.target.value })}
-                    />
-                  </div>
-                  )}
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    <ManuscriptEditor
-                      key={active.id}
-                      chapterId={active.id}
-                      initialHtml={active.content_html}
-                      serverUpdatedAt={active.updated_at}
-                      onSave={onSave}
-                      onSelectionText={setSelectionText}
-                      onWordCount={setLiveChapterWords}
-                      onLookUp={() => setLookupOpen(true)}
-                      focusMode={focusMode}
-                    />
-                  </div>
-                </>
+              <div
+                className={`min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
+                  writePane === "editor" || focusMode ? "flex" : "hidden"
+                } lg:flex`}
+              >
+                {active && (
+                  <>
+                    {!focusMode && (
+                      <div className="hidden gap-2 border-b border-line p-3 md:grid md:grid-cols-3">
+                        <input
+                          className="border border-line bg-paper px-2 py-1 text-sm"
+                          value={active.title}
+                          onChange={(e) =>
+                            setChapters((prev) =>
+                              prev.map((c) =>
+                                c.id === active.id ? { ...c, title: e.target.value } : c
+                              )
+                            )
+                          }
+                          onBlur={(e) => updateChapterMeta({ title: e.target.value })}
+                        />
+                        <input
+                          placeholder="Scene goal"
+                          className="border border-line bg-paper px-2 py-1 text-sm"
+                          value={active.goal || ""}
+                          onChange={(e) =>
+                            setChapters((prev) =>
+                              prev.map((c) =>
+                                c.id === active.id ? { ...c, goal: e.target.value } : c
+                              )
+                            )
+                          }
+                          onBlur={(e) => updateChapterMeta({ goal: e.target.value })}
+                        />
+                        <input
+                          placeholder="Conflict"
+                          className="border border-line bg-paper px-2 py-1 text-sm"
+                          value={active.conflict || ""}
+                          onChange={(e) =>
+                            setChapters((prev) =>
+                              prev.map((c) =>
+                                c.id === active.id ? { ...c, conflict: e.target.value } : c
+                              )
+                            )
+                          }
+                          onBlur={(e) => updateChapterMeta({ conflict: e.target.value })}
+                        />
+                        <input
+                          placeholder="Outcome"
+                          className="border border-line bg-paper px-2 py-1 text-sm"
+                          value={active.outcome || ""}
+                          onChange={(e) =>
+                            setChapters((prev) =>
+                              prev.map((c) =>
+                                c.id === active.id ? { ...c, outcome: e.target.value } : c
+                              )
+                            )
+                          }
+                          onBlur={(e) => updateChapterMeta({ outcome: e.target.value })}
+                        />
+                        <input
+                          placeholder="POV"
+                          className="border border-line bg-paper px-2 py-1 text-sm"
+                          value={active.pov || ""}
+                          onChange={(e) =>
+                            setChapters((prev) =>
+                              prev.map((c) =>
+                                c.id === active.id ? { ...c, pov: e.target.value } : c
+                              )
+                            )
+                          }
+                          onBlur={(e) => updateChapterMeta({ pov: e.target.value })}
+                        />
+                        <input
+                          placeholder="Timeline"
+                          className="border border-line bg-paper px-2 py-1 text-sm"
+                          value={active.timeline_position || ""}
+                          onChange={(e) =>
+                            setChapters((prev) =>
+                              prev.map((c) =>
+                                c.id === active.id
+                                  ? { ...c, timeline_position: e.target.value }
+                                  : c
+                              )
+                            )
+                          }
+                          onBlur={(e) =>
+                            updateChapterMeta({ timeline_position: e.target.value })
+                          }
+                        />
+                      </div>
+                    )}
+                    {!focusMode && (
+                      <div className="border-b border-line p-2 md:hidden">
+                        <input
+                          className="w-full border border-line bg-paper px-2 py-1.5 text-sm"
+                          value={active.title}
+                          aria-label="Chapter title"
+                          onChange={(e) =>
+                            setChapters((prev) =>
+                              prev.map((c) =>
+                                c.id === active.id ? { ...c, title: e.target.value } : c
+                              )
+                            )
+                          }
+                          onBlur={(e) => updateChapterMeta({ title: e.target.value })}
+                        />
+                        <details className="font-ui mt-1">
+                          <summary className="cursor-pointer px-1 py-1 text-[11px] text-muted">
+                            Scene notes
+                          </summary>
+                          <div className="mt-1 grid gap-1.5">
+                            {(
+                              [
+                                ["goal", "Scene goal", active.goal],
+                                ["conflict", "Conflict", active.conflict],
+                                ["outcome", "Outcome", active.outcome],
+                                ["pov", "POV", active.pov],
+                                ["timeline_position", "Timeline", active.timeline_position],
+                              ] as const
+                            ).map(([key, placeholder, value]) => (
+                              <input
+                                key={key}
+                                placeholder={placeholder}
+                                className="border border-line bg-paper px-2 py-1 text-sm"
+                                value={value || ""}
+                                onChange={(e) =>
+                                  setChapters((prev) =>
+                                    prev.map((c) =>
+                                      c.id === active.id ? { ...c, [key]: e.target.value } : c
+                                    )
+                                  )
+                                }
+                                onBlur={(e) =>
+                                  updateChapterMeta({ [key]: e.target.value })
+                                }
+                              />
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                      <ManuscriptEditor
+                        key={active.id}
+                        chapterId={active.id}
+                        initialHtml={active.content_html}
+                        serverUpdatedAt={active.updated_at}
+                        onSave={onSave}
+                        onSelectionText={setSelectionText}
+                        onWordCount={setLiveChapterWords}
+                        onLookUp={() => setLookupOpen(true)}
+                        focusMode={focusMode}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {!focusMode && (
+                <div
+                  className={`min-h-0 w-full shrink-0 overflow-hidden lg:block lg:w-[360px] ${
+                    writePane === "critique" ? "block" : "hidden"
+                  }`}
+                >
+                  <CritiquePanel
+                    projectId={project.id}
+                    chapterId={active?.id}
+                    chapterCount={chapters.length}
+                    selectionText={selectionText}
+                    challengeLevel={challengeLevel}
+                    onChallengeChange={setChallengeLevel}
+                    onCreditsChange={setCredits}
+                  />
+                </div>
               )}
             </div>
 
-            {!focusMode && (
-            <div className="hidden w-[360px] shrink-0 lg:block">
-              <CritiquePanel
-                projectId={project.id}
-                chapterId={active?.id}
-                chapterCount={chapters.length}
-                selectionText={selectionText}
-                challengeLevel={challengeLevel}
-                onChallengeChange={setChallengeLevel}
-                onCreditsChange={setCredits}
-              />
-            </div>
+            {tab === "write" && !focusMode && (
+              <div className="font-ui flex shrink-0 border-t border-line lg:hidden">
+                {(
+                  [
+                    ["chapters", "Chapters"],
+                    ["editor", "Editor"],
+                    ["critique", "AI Actions"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setWritePane(id)}
+                    className={`flex-1 py-3 text-xs ${
+                      writePane === id
+                        ? "bg-accent text-paper"
+                        : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             )}
           </>
         )}
