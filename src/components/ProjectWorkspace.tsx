@@ -66,8 +66,9 @@ export function ProjectWorkspace({
 
   const savedChapterWords = active?.word_count ?? 0;
   const chapterWords = liveChapterWords ?? savedChapterWords;
-  const pendingDelta = Math.max(0, chapterWords - savedChapterWords);
-  const displayToday = wordsToday + pendingDelta;
+  // Net change vs last save — goes down when you delete, up when you add
+  const pendingDelta = chapterWords - savedChapterWords;
+  const displayToday = Math.max(0, wordsToday + pendingDelta);
   const displaySession = sessionWords + pendingDelta;
   const goalPct = Math.min(100, Math.round((displayToday / Math.max(1, wordGoalDaily)) * 100));
 
@@ -104,13 +105,13 @@ export function ProjectWorkspace({
         const data = (await res.json()) as {
           wordsWrittenToday?: number;
         };
-        const delta = Math.max(0, payload.wordCount - prevWords);
+        const delta = payload.wordCount - prevWords;
         if (typeof data.wordsWrittenToday === "number") {
           setWordsToday(data.wordsWrittenToday);
-        } else if (delta > 0) {
-          setWordsToday((w) => w + delta);
+        } else if (delta !== 0) {
+          setWordsToday((w) => Math.max(0, w + delta));
         }
-        if (delta > 0) setSessionWords((s) => s + delta);
+        if (delta !== 0) setSessionWords((s) => s + delta);
         const now = new Date().toISOString();
         setChapters((prev) =>
           prev.map((c) =>

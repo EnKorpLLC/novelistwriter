@@ -58,9 +58,9 @@ export async function PATCH(
   let wordsWrittenToday = day?.words_written ?? 0;
 
   if (typeof body.word_count === "number") {
-    const delta = Math.max(0, body.word_count - (before.word_count ?? 0));
-    if (delta > 0) {
-      wordsWrittenToday += delta;
+    const delta = body.word_count - (before.word_count ?? 0);
+    if (delta !== 0) {
+      wordsWrittenToday = Math.max(0, wordsWrittenToday + delta);
       await supabase.from("writing_days").upsert({
         user_id: user.id,
         day: today,
