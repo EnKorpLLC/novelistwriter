@@ -4,10 +4,13 @@ import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 
 export default async function ProjectPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ chapter?: string }>;
 }) {
   const { id } = await params;
+  const { chapter: chapterParam } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -60,10 +63,16 @@ export default async function ProjectPage({
   const creditTotal =
     (credits?.balance ?? 0) + (credits?.monthly_allowance_remaining ?? 0);
 
+  const chapterList = chapters || [];
+  const initialChapterId =
+    chapterParam && chapterList.some((c) => c.id === chapterParam)
+      ? chapterParam
+      : undefined;
+
   return (
     <ProjectWorkspace
       project={project}
-      chapters={chapters || []}
+      chapters={chapterList}
       bible={bible || []}
       matter={matter || []}
       challengeLevel={profile?.challenge_level ?? 50}
@@ -72,6 +81,7 @@ export default async function ProjectPage({
       promises={promises || []}
       arcs={arcs || []}
       initialCredits={creditTotal}
+      initialChapterId={initialChapterId}
     />
   );
 }

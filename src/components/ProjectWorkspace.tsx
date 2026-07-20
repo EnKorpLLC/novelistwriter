@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { ManuscriptEditor } from "@/components/ManuscriptEditor";
 import { CritiquePanel } from "@/components/CritiquePanel";
 import { BiblePanel } from "@/components/BiblePanel";
@@ -29,7 +30,21 @@ type Props = {
   promises: { id: string; description: string; status: string }[];
   arcs: { id: string; arc_type: string; subject: string; notes: string }[];
   initialCredits: number;
+  /** From ?chapter= — keeps the open chapter across refresh */
+  initialChapterId?: string;
 };
+
+function chapterStorageKey(projectId: string) {
+  return `nw_active_chapter_${projectId}`;
+}
+
+function resolveChapterId(
+  chapters: Chapter[],
+  preferred?: string | null
+): string {
+  if (preferred && chapters.some((c) => c.id === preferred)) return preferred;
+  return chapters[0]?.id || "";
+}
 
 export function ProjectWorkspace({
   project,
@@ -42,12 +57,17 @@ export function ProjectWorkspace({
   promises,
   arcs: initialArcs,
   initialCredits,
+  initialChapterId,
 }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [chapters, setChapters] = useState(initialChapters);
   const [bible, setBible] = useState(initialBible);
   const [arcs, setArcs] = useState(initialArcs);
   const [projectTitle, setProjectTitle] = useState(project.title);
-  const [activeId, setActiveId] = useState(chapters[0]?.id || "");
+  const [activeId, setActiveId] = useState(() =>
+    resolveChapterId(initialChapters, initialChapterId)
+  );
   const [tab, setTab] = useState<"write" | "bible" | "tools">("write");
   const [focusMode, setFocusMode] = useState(false);
   const [selectionText, setSelectionText] = useState("");
@@ -60,6 +80,47 @@ export function ProjectWorkspace({
   const [lookupOpen, setLookupOpen] = useState(false);
   /** Mobile write layout: only one pane visible below lg. */
   const [writePane, setWritePane] = useState<"chapters" | "editor" | "critique">("editor");
+
+  const selectChapter = useCallback(
+    (id: string) => {
+      if (!id) return;
+      setActiveId(id);
+      try {
+        localStorage.setItem(chapterStorageKey(project.id), id);
+      } catch {
+        /* ignore */
+      }
+      const params = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : ""
+      );
+      params.set("chapter", id);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [project.id, pathname, router]
+  );
+
+  // Restore from localStorage when URL had no chapter (first visit / old bookmark)
+  useEffect(() => {
+    if (initialChapterId) return;
+    try {
+      const stored = localStorage.getItem(chapterStorageKey(project.id));
+      if (stored && stored !== activeId && chapters.some((c) => c.id === stored)) {
+        selectChapter(stored);
+      } else if (activeId) {
+        // Persist current so the URL catches up
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("chapter") !== activeId) {
+          params.set("chapter", activeId);
+          router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        }
+        localStorage.setItem(chapterStorageKey(project.id), activeId);
+      }
+    } catch {
+      /* ignore */
+    }
+    // intentionally once on mount for this project
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
 
   const active = useMemo(
     () => chapters.find((c) => c.id === activeId) || chapters[0],
@@ -142,7 +203,7 @@ export function ProjectWorkspace({
     const data = await res.json();
     if (res.ok && data.chapter) {
       setChapters((prev) => [...prev, data.chapter]);
-      setActiveId(data.chapter.id);
+      selectChapter(data.chapter.id);
     }
   }
 
@@ -175,7 +236,8 @@ export function ProjectWorkspace({
     }
     const next = chapters.filter((c) => c.id !== active.id);
     setChapters(next);
-    setActiveId(next[0]?.id || "");
+    if (next[0]?.id) selectChapter(next[0].id);
+    else setActiveId("");
   }
 
   async function reorder(dir: -1 | 1) {
@@ -361,7 +423,7 @@ export function ProjectWorkspace({
                         <button
                           type="button"
                           onClick={() => {
-                            setActiveId(c.id);
+                            selectChapter(c.id);
                             setWritePane("editor");
                           }}
                           className={`w-full truncate px-2 py-1.5 text-left text-sm ${
