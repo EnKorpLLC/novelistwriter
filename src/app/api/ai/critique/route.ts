@@ -1081,7 +1081,8 @@ Never provide replacement manuscript paragraphs. example_text must be labeled il
     voice_analysis: "Task: analyze author voice (diction, rhythm, POV habits). extras.voice_profile = object.",
     discover_comps: "Task: discover comparable authors/books with reasons. extras.comps = [{name, type:'author'|'book', why}].",
     targeted_compare: `Task: compare manuscript to target author "${opts.targetAuthor || ""}" and/or book "${opts.targetBook || ""}". extras.comparison = {similarities, gaps, craft_differences}. Do NOT rewrite to sound like them.`,
-    reading_list: "Task: recommend books to read based on content, POV, voice. extras.reading_list = [{title, author, why}].",
+    reading_list:
+      "Task: recommend books to study based on content, POV, and voice. extras.reading_list MUST be a non-empty array of 5–12 objects: [{title, author, why}]. Put the overview in summary; put every book in extras.reading_list (not only in summary prose).",
     sensitivity: "Task: optional sensitivity/authenticity advisory flags only. Never rewrite.",
     blurb_critique: "Task: critique the blurb/marketing copy only — do not write a replacement blurb.",
     beta_summary: "Task: summarize themes in provided beta feedback (in manuscript field).",

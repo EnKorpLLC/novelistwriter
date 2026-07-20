@@ -30,21 +30,21 @@ const RENDERED_EXTRA_KEYS = new Set([
   "demo",
 ]);
 
+function formatExtraItem(v: unknown): string {
+  if (typeof v === "string") return v.trim();
+  if (!v || typeof v !== "object") return "";
+  const o = v as Record<string, unknown>;
+  const title = String(o.title || o.name || "").trim();
+  const author = String(o.author || "").trim();
+  const why = String(o.why || o.description || "").trim();
+  const type = String(o.type || "").trim();
+  const head = title && author ? `${title} — ${author}` : title || author;
+  return [head, type, why].filter(Boolean).join(" — ");
+}
+
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((v) => {
-      if (typeof v === "string") return v.trim();
-      if (v && typeof v === "object" && "description" in v) {
-        return String((v as { description: unknown }).description || "").trim();
-      }
-      if (v && typeof v === "object" && "name" in v) {
-        const o = v as { name?: string; why?: string; type?: string };
-        return [o.name, o.type, o.why].filter(Boolean).join(" — ");
-      }
-      return "";
-    })
-    .filter(Boolean);
+  return value.map(formatExtraItem).filter(Boolean);
 }
 
 function extrasToMarkdown(extras: Record<string, unknown>): string[] {
@@ -214,11 +214,13 @@ function ExtrasView({ extras }: { extras: Record<string, unknown> }) {
       {reading.length > 0 && (
         <section>
           <h3 className="font-display text-lg text-critique">Reading list</h3>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-muted">
+          <ol className="mt-3 list-decimal space-y-4 pl-5 text-muted">
             {reading.map((r, i) => (
-              <li key={i}>{r}</li>
+              <li key={i} className="leading-relaxed pl-1">
+                {r}
+              </li>
             ))}
-          </ul>
+          </ol>
         </section>
       )}
 
