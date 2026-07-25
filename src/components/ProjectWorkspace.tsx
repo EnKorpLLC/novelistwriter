@@ -9,6 +9,7 @@ import { BiblePanel } from "@/components/BiblePanel";
 import { ProjectTools } from "@/components/ProjectTools";
 import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
+import { clientLocalDay } from "@/lib/local-day";
 
 type Matter = {
   id: string;
@@ -122,6 +123,22 @@ export function ProjectWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
+  // Sync "today" to the browser's local calendar day (SSR may have used UTC before cookie exists)
+  useEffect(() => {
+    const day = clientLocalDay();
+    void (async () => {
+      try {
+        const res = await fetch(`/api/writing-day?day=${encodeURIComponent(day)}`);
+        const data = await res.json();
+        if (res.ok && typeof data.wordsWritten === "number") {
+          setWordsToday(data.wordsWritten);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [project.id]);
+
   const active = useMemo(
     () => chapters.find((c) => c.id === activeId) || chapters[0],
     [chapters, activeId]
@@ -162,6 +179,7 @@ export function ProjectWorkspace({
           content_html: payload.html,
           content_text: payload.text,
           word_count: payload.wordCount,
+          writing_day: clientLocalDay(),
         }),
       });
       if (res.ok) {

@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { CreateProjectButton } from "@/components/CreateProjectButton";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DeleteProjectButton } from "@/components/DeleteProjectButton";
 import { ClaimReferral } from "@/components/ClaimReferral";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
+import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
 
 function formatWords(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
@@ -39,7 +41,11 @@ export default async function DashboardPage() {
     stats.set(row.project_id, cur);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const jar = await cookies();
+  const tzRaw = jar.get(TIMEZONE_COOKIE)?.value;
+  const today = resolveWritingDay({
+    timeZone: tzRaw ? decodeURIComponent(tzRaw) : null,
+  });
   const { data: day } = await supabase
     .from("writing_days")
     .select("words_written")

@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
+import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
 
 export default async function ProjectPage({
   params,
@@ -25,7 +27,11 @@ export default async function ProjectPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const jar = await cookies();
+  const tzRaw = jar.get(TIMEZONE_COOKIE)?.value;
+  const today = resolveWritingDay({
+    timeZone: tzRaw ? decodeURIComponent(tzRaw) : null,
+  });
 
   const [
     { data: chapters },

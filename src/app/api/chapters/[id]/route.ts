@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
 
 export async function PATCH(
   req: Request,
@@ -48,7 +50,13 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const jar = await cookies();
+  const tzRaw = jar.get(TIMEZONE_COOKIE)?.value;
+  const today = resolveWritingDay({
+    writingDay: body.writing_day,
+    timeZone: tzRaw ? decodeURIComponent(tzRaw) : null,
+  });
+
   const { data: day } = await supabase
     .from("writing_days")
     .select("words_written")
@@ -69,7 +77,7 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ chapter: data, wordsWrittenToday });
+  return NextResponse.json({ chapter: data, wordsWrittenToday, writingDay: today });
 }
 
 export async function DELETE(

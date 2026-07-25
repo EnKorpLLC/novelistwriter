@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Serif_4, DM_Sans } from "next/font/google";
+import { LocalTimezoneCookie } from "@/components/LocalTimezoneCookie";
 import "./globals.css";
 
 const display = Fraunces({
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           } as React.CSSProperties
         }
       >
+        <LocalTimezoneCookie />
         {children}
       </body>
     </html>
