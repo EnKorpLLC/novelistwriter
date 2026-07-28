@@ -89,3 +89,30 @@ export function isValidModelTier(v: string): v is AiModelTier {
 export function isValidScope(v: string): v is AiScope {
   return v === "selection" || v === "chapter" || v === "book";
 }
+
+/** Output token budget — book/deep jobs need more or JSON cuts mid-sentence. */
+export function maxTokensForCritique(opts: {
+  scope: AiScope;
+  model: AiModelTier;
+  jobType?: string;
+}): number {
+  let n = 4096;
+  if (opts.scope === "book") n = 8192;
+  if (opts.model === "deep") n = Math.max(n, 12288);
+  if (opts.scope === "book" && opts.model === "deep") n = 16384;
+
+  const heavy = new Set([
+    "developmental",
+    "structural",
+    "continuity",
+    "plotholes",
+    "lore_lock",
+    "voice_analysis",
+    "custom_persona",
+    "pacing",
+  ]);
+  if (opts.jobType && heavy.has(opts.jobType) && opts.scope === "book") {
+    n = Math.max(n, opts.model === "deep" ? 16384 : 8192);
+  }
+  return n;
+}

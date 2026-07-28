@@ -136,7 +136,7 @@ MANUSCRIPT:
 ${manuscript}
 """`;
 
-  const raw = await runCritiqueModel({
+  const modelOut = await runCritiqueModel({
     system: CRITIQUE_SYSTEM_PROMPT,
     user,
     byokAnthropic: opts.byokAnthropic,
@@ -144,7 +144,7 @@ ${manuscript}
     modelTier: opts.model,
     maxTokens: 8192,
   });
-  const parsed = parseAiJson(raw);
+  const parsed = parseAiJson(modelOut.text);
   const arcs = ((parsed.extras?.arcs || []) as ArcTrackResult[]).map((a) => ({
     ...a,
     arc_type:

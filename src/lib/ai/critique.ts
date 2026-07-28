@@ -64,9 +64,11 @@ async function callAnthropicMessages(opts: {
   system: string;
   user: string;
   maxTokens?: number;
-}): Promise<string> {
+}): Promise<{ text: string; truncated: boolean }> {
+  const maxTokens = opts.maxTokens ?? 4096;
+  const timeoutMs = maxTokens >= 16384 ? 240_000 : maxTokens >= 8192 ? 180_000 : 120_000;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 120_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const promptChars = opts.user.length + opts.system.length;
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -78,7 +80,7 @@ async function callAnthropicMessages(opts: {
       },
       body: JSON.stringify({
         model: opts.model,
-        max_tokens: opts.maxTokens ?? 4096,
+        max_tokens: maxTokens,
         system: opts.system,
         messages: [{ role: "user", content: opts.user }],
       }),
@@ -101,13 +103,17 @@ async function callAnthropicMessages(opts: {
 
     const data = JSON.parse(rawText) as {
       content?: Array<{ type: string; text?: string }>;
+      stop_reason?: string;
     };
     const block = data.content?.find((b) => b.type === "text");
-    return block?.text || "{}";
+    return {
+      text: block?.text || "{}",
+      truncated: data.stop_reason === "max_tokens",
+    };
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(
-        `Anthropic request aborted after 120s (${opts.model}, ${promptChars} prompt chars). Try Fast model or a smaller batch.`
+        `Anthropic request aborted after ${Math.round(timeoutMs / 1000)}s (${opts.model}, ${promptChars} prompt chars). Try Fast model, chapter scope, or a smaller batch.`
       );
     }
     if (err instanceof Error && err.message.startsWith("Anthropic HTTP")) {
@@ -123,6 +129,8 @@ async function callAnthropicMessages(opts: {
   }
 }
 
+export type CritiqueModelResult = { text: string; truncated: boolean };
+
 export async function runCritiqueModel(opts: {
   system?: string;
   user: string;
@@ -132,12 +140,13 @@ export async function runCritiqueModel(opts: {
   anthropicModel?: string;
   openaiModel?: string;
   maxTokens?: number;
-}): Promise<string> {
+}): Promise<CritiqueModelResult> {
   const provider = (process.env.AI_PROVIDER || "anthropic").toLowerCase();
   const anthropicKey =
     sanitizeApiKey(opts.byokAnthropic) || sanitizeApiKey(process.env.ANTHROPIC_API_KEY);
   const openaiKey = sanitizeApiKey(opts.byokOpenAi) || sanitizeApiKey(process.env.OPENAI_API_KEY);
   const tier = opts.modelTier || "standard";
+  const maxTokens = opts.maxTokens ?? 4096;
 
   const { AI_MODEL_TIERS } = await import("@/lib/ai/pricing");
   const tierDef = AI_MODEL_TIERS[tier];
@@ -150,14 +159,16 @@ export async function runCritiqueModel(opts: {
     const res = await client.chat.completions.create({
       model: openaiModel,
       temperature: 0.4,
-      max_tokens: opts.maxTokens ?? 4096,
+      max_tokens: maxTokens,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: opts.system || CRITIQUE_SYSTEM_PROMPT },
         { role: "user", content: opts.user },
       ],
     });
-    return res.choices[0]?.message?.content || "{}";
+    const text = res.choices[0]?.message?.content || "{}";
+    const truncated = res.choices[0]?.finish_reason === "length";
+    return { text, truncated };
   }
 
   if (anthropicKey) {
@@ -167,7 +178,7 @@ export async function runCritiqueModel(opts: {
         model: anthropicModel,
         system: opts.system || CRITIQUE_SYSTEM_PROMPT,
         user: opts.user,
-        maxTokens: opts.maxTokens ?? 4096,
+        maxTokens,
       });
     } catch (firstErr) {
       const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
@@ -178,14 +189,14 @@ export async function runCritiqueModel(opts: {
           model: anthropicModel,
           system: opts.system || CRITIQUE_SYSTEM_PROMPT,
           user: opts.user,
-          maxTokens: opts.maxTokens ?? 4096,
+          maxTokens,
         });
       }
       throw firstErr instanceof Error ? firstErr : new Error(msg);
     }
   }
 
-  return JSON.stringify(demoCritique(opts.user));
+  return { text: JSON.stringify(demoCritique(opts.user)), truncated: false };
 }
 
 function demoCritique(user: string): AiJsonResult {

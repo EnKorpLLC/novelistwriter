@@ -28,6 +28,7 @@ const RENDERED_EXTRA_KEYS = new Set([
   "added",
   "skipped",
   "demo",
+  "truncated",
 ]);
 
 function formatExtraItem(v: unknown): string {
@@ -383,8 +384,16 @@ export function CritiqueReportModal({ report, onClose }: Props) {
         </header>
 
         <div className="critique-report-body min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
+          {report.extras?.truncated ? (
+            <p className="font-ui mb-4 border border-warn bg-paper-deep px-3 py-2 text-sm text-ink">
+              This report hit the model output limit and may end mid-sentence. Re-run on{" "}
+              <strong>chapter</strong> scope for fuller notes, or run again.
+            </p>
+          ) : null}
           {report.summary && (
-            <p className="mb-6 text-base leading-relaxed text-ink">{report.summary}</p>
+            <p className="mb-6 whitespace-pre-wrap text-base leading-relaxed text-ink">
+              {report.summary}
+            </p>
           )}
           {report.items.length > 0 && (
             <ul className="space-y-5">

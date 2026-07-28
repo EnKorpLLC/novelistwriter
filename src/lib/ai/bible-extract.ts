@@ -221,14 +221,14 @@ MANUSCRIPT:
 ${manuscript}
 """`;
 
-  const raw = await runCritiqueModel({
+  const modelOut = await runCritiqueModel({
     system: CRITIQUE_SYSTEM_PROMPT,
     user,
     byokAnthropic: opts.byokAnthropic,
     byokOpenAi: opts.byokOpenAi,
     modelTier: opts.model,
   });
-  const parsed = parseAiJson(raw);
+  const parsed = parseAiJson(modelOut.text);
   const allowed = new Set(pass.types);
   const inserts: BibleExtractEntry[] = [];
   const updates: BibleExtractUpdate[] = [];

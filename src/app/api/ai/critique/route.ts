@@ -12,6 +12,7 @@ import {
   defaultScopeForJob,
   isValidModelTier,
   isValidScope,
+  maxTokensForCritique,
   type AiModelTier,
   type AiScope,
 } from "@/lib/ai/pricing";
@@ -910,14 +911,27 @@ export async function POST(req: Request) {
   });
 
   try {
-    const raw = await runCritiqueModel({
+    const modelOut = await runCritiqueModel({
       system: CRITIQUE_SYSTEM_PROMPT,
       user: userPrompt,
       byokAnthropic,
       byokOpenAi,
       modelTier: effectiveModel,
+      maxTokens: maxTokensForCritique({
+        scope,
+        model: effectiveModel,
+        jobType: jt,
+      }),
     });
-    const result = parseAiJson(raw);
+    const result = parseAiJson(modelOut.text);
+    if (modelOut.truncated) {
+      result.extras = { ...(result.extras || {}), truncated: true };
+      const note =
+        "This report was cut short by the model output limit — some notes may end mid-sentence. Re-run on chapter scope for fuller coverage, or run again.";
+      result.summary = result.summary?.trim()
+        ? `${result.summary.trim()}\n\n${note}`
+        : note;
+    }
 
     if (job) {
       await supabase
@@ -1063,6 +1077,11 @@ Return JSON: {
   "summary": string,
   "items": [{ "severity": "must_fix"|"consider"|"style", "confidence": 0-1, "category": string, "title": string, "body": string, "citation_excerpt"?: string, "example_text"?: string }],
   "extras": object
+}
+${
+  opts.scope === "book"
+    ? "For full-manuscript scope: return at most 10 highest-priority items; keep each body to 2–4 sentences; finish the complete JSON (do not stop mid-object)."
+    : "Keep bodies focused; finish the complete JSON."
 }
 Never provide replacement manuscript paragraphs. example_text must be labeled illustrative only.`;
 
