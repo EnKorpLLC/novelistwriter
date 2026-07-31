@@ -34,6 +34,10 @@ type Props = {
   projectId: string;
   chapters: Chapter[];
   bible: BibleEntry[];
+  /** Highlight query in the manuscript editor (chapters) */
+  onHighlightQuery?: (query: string | null) => void;
+  /** Open a chapter hit in the editor and highlight the query */
+  onOpenChapter?: (chapterId: string, query: string) => void;
 };
 
 type Filter = "all" | SourceKind;
@@ -153,6 +157,8 @@ export function ReferenceLookupPanel({
   projectId,
   chapters,
   bible,
+  onHighlightQuery,
+  onOpenChapter,
 }: Props) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -175,6 +181,16 @@ export function ReferenceLookupPanel({
     const t = window.setTimeout(() => inputRef.current?.focus(), 50);
     return () => window.clearTimeout(t);
   }, [open]);
+
+  // Mirror Look up query as editor highlights (chapter text)
+  useEffect(() => {
+    if (!open) {
+      onHighlightQuery?.(null);
+      return;
+    }
+    const q = query.trim();
+    onHighlightQuery?.(q.length >= 2 ? q : null);
+  }, [open, query, onHighlightQuery]);
 
   useEffect(() => {
     if (!open) return;
@@ -380,7 +396,13 @@ export function ReferenceLookupPanel({
                     <button
                       type="button"
                       className="w-full px-3 py-2.5 text-left hover:bg-paper-deep/50"
-                      onClick={() => setActive(hit)}
+                      onClick={() => {
+                        setActive(hit);
+                        if (hit.kind === "chapter") {
+                          const chapterId = hit.id.replace(/^chapter:/, "");
+                          onOpenChapter?.(chapterId, query.trim());
+                        }
+                      }}
                     >
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-sm text-ink">{hit.title}</span>
@@ -414,6 +436,18 @@ export function ReferenceLookupPanel({
                 {active.subtitle ? ` · ${active.subtitle}` : ""}
               </p>
             </div>
+            {active.kind === "chapter" && onOpenChapter && (
+              <button
+                type="button"
+                onClick={() => {
+                  const chapterId = active.id.replace(/^chapter:/, "");
+                  onOpenChapter(chapterId, query.trim());
+                }}
+                className="shrink-0 border border-line px-2 py-1 text-[10px] text-muted hover:border-accent hover:text-ink"
+              >
+                Highlight in editor
+              </button>
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
             <pre className="font-ui whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">

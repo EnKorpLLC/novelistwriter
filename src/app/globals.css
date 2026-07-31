@@ -122,6 +122,18 @@ body {
   padding-top: 3rem;
 }
 
+/* Find / Look up match highlights */
+.ProseMirror .search-match {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 1px;
+}
+
+.ProseMirror .search-match-current {
+  background: color-mix(in srgb, var(--warn) 35%, transparent);
+  border-radius: 1px;
+  outline: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
+}
+
 /* Critique report print: only the open report */
 @media print {
   body * {

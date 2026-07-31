@@ -5,6 +5,8 @@ import type { Editor } from "@tiptap/react";
 type Props = {
   editor: Editor | null;
   onLookUp?: () => void;
+  onFind?: () => void;
+  onReplace?: () => void;
 };
 
 const FONTS = [
@@ -42,7 +44,7 @@ function Btn({
   );
 }
 
-export function EditorToolbar({ editor, onLookUp }: Props) {
+export function EditorToolbar({ editor, onLookUp, onFind, onReplace }: Props) {
   if (!editor) return null;
 
   return (
@@ -197,12 +199,24 @@ export function EditorToolbar({ editor, onLookUp }: Props) {
         Redo
       </Btn>
 
-      {onLookUp && (
+      {(onFind || onReplace || onLookUp) && (
         <>
           <span className="mx-1 h-4 w-px bg-line" />
-          <Btn title="Look up (Ctrl/Cmd+Shift+F)" onClick={onLookUp}>
-            Look up
-          </Btn>
+          {onFind && (
+            <Btn title="Find in chapter (Ctrl/Cmd+F)" onClick={onFind}>
+              Find
+            </Btn>
+          )}
+          {onReplace && (
+            <Btn title="Replace in chapter (Ctrl/Cmd+H)" onClick={onReplace}>
+              Replace
+            </Btn>
+          )}
+          {onLookUp && (
+            <Btn title="Look up (Ctrl/Cmd+Shift+F)" onClick={onLookUp}>
+              Look up
+            </Btn>
+          )}
         </>
       )}
     </div>

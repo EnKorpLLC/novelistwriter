@@ -79,6 +79,7 @@ export function ProjectWorkspace({
   const [sessionWords, setSessionWords] = useState(0);
   const [liveChapterWords, setLiveChapterWords] = useState<number | null>(null);
   const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupHighlight, setLookupHighlight] = useState<string | null>(null);
   /** Mobile write layout: only one pane visible below lg. */
   const [writePane, setWritePane] = useState<"chapters" | "editor" | "critique">("editor");
 
@@ -258,9 +259,9 @@ export function ProjectWorkspace({
     else setActiveId("");
   }
 
-  async function reorder(dir: -1 | 1) {
-    if (!active) return;
-    const idx = chapters.findIndex((c) => c.id === active.id);
+  async function reorderChapter(chapterId: string, dir: -1 | 1) {
+    const idx = chapters.findIndex((c) => c.id === chapterId);
+    if (idx < 0) return;
     const swap = idx + dir;
     if (swap < 0 || swap >= chapters.length) return;
     const next = [...chapters];
@@ -420,6 +421,13 @@ export function ProjectWorkspace({
         projectId={project.id}
         chapters={chapters}
         bible={bible}
+        onHighlightQuery={setLookupHighlight}
+        onOpenChapter={(chapterId, query) => {
+          selectChapter(chapterId);
+          setLookupHighlight(query.length >= 2 ? query : null);
+          setWritePane("editor");
+          setTab("write");
+        }}
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -436,15 +444,15 @@ export function ProjectWorkspace({
                     Chapters
                   </p>
                   <ul className="mt-2 space-y-1">
-                    {chapters.map((c) => (
-                      <li key={c.id}>
+                    {chapters.map((c, i) => (
+                      <li key={c.id} className="flex items-stretch gap-0.5">
                         <button
                           type="button"
                           onClick={() => {
                             selectChapter(c.id);
                             setWritePane("editor");
                           }}
-                          className={`w-full truncate px-2 py-1.5 text-left text-sm ${
+                          className={`min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm ${
                             c.id === active?.id
                               ? "bg-accent/15 text-ink"
                               : "text-muted hover:bg-paper"
@@ -452,6 +460,32 @@ export function ProjectWorkspace({
                         >
                           {c.title}
                         </button>
+                        <div className="flex shrink-0 flex-col justify-center">
+                          <button
+                            type="button"
+                            title="Move up"
+                            disabled={i === 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void reorderChapter(c.id, -1);
+                            }}
+                            className="px-1.5 text-[10px] leading-none text-muted hover:text-ink disabled:opacity-25"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            title="Move down"
+                            disabled={i === chapters.length - 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void reorderChapter(c.id, 1);
+                            }}
+                            className="px-1.5 text-[10px] leading-none text-muted hover:text-ink disabled:opacity-25"
+                          >
+                            ↓
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -469,22 +503,6 @@ export function ProjectWorkspace({
                   >
                     Delete chapter
                   </button>
-                  <div className="mt-2 flex gap-1 px-2">
-                    <button
-                      type="button"
-                      className="text-xs text-muted"
-                      onClick={() => reorder(-1)}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      className="text-xs text-muted"
-                      onClick={() => reorder(1)}
-                    >
-                      ↓
-                    </button>
-                  </div>
                 </nav>
               )}
 
@@ -641,6 +659,7 @@ export function ProjectWorkspace({
                         onWordCount={setLiveChapterWords}
                         onLookUp={() => setLookupOpen(true)}
                         focusMode={focusMode}
+                        highlightQuery={lookupOpen ? lookupHighlight : null}
                       />
                     </div>
                   </>

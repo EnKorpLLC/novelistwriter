@@ -19,7 +19,9 @@ import {
   clearDraftLocal,
 } from "@/lib/draft-cache";
 import { FontSize } from "@/lib/tiptap-font-size";
+import { SearchHighlight } from "@/lib/tiptap-search-highlight";
 import { EditorToolbar } from "@/components/EditorToolbar";
+import { FindReplaceBar } from "@/components/FindReplaceBar";
 
 type Props = {
   chapterId: string;
@@ -31,6 +33,8 @@ type Props = {
   onWordCount?: (wordCount: number) => void;
   onLookUp?: () => void;
   focusMode?: boolean;
+  /** Highlight from Look up (ignored while Find bar is open) */
+  highlightQuery?: string | null;
 };
 
 /** Blocks ProseMirror’s scroll-into-view while the chapter is first loading */
@@ -64,6 +68,7 @@ export function ManuscriptEditor({
   onWordCount,
   onLookUp,
   focusMode,
+  highlightQuery,
 }: Props) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSynced = useRef(initialHtml);
@@ -73,6 +78,9 @@ export function ManuscriptEditor({
   onWordCountRef.current = onWordCount;
   const [saveHint, setSaveHint] = useState("All changes saved");
   const [, setTick] = useState(0);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findReplaceMode, setFindReplaceMode] = useState(false);
+  const [findSeed, setFindSeed] = useState("");
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -86,6 +94,7 @@ export function ManuscriptEditor({
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Placeholder.configure({ placeholder: "Write your chapter…" }),
       CharacterCount,
+      SearchHighlight,
       createSuppressScrollExtension(suppressScrollRef),
     ],
     content: initialHtml || "<p></p>",
@@ -192,6 +201,29 @@ export function ManuscriptEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
+  // Look up → highlight matches in the open chapter (Find bar owns highlights when open)
+  useEffect(() => {
+    if (!editor || findOpen) return;
+    const q = (highlightQuery || "").trim();
+    if (q.length >= 2) {
+      editor.commands.setSearchHighlight(q, { caseSensitive: false, currentIndex: 0 });
+    } else {
+      editor.commands.clearSearchHighlight();
+    }
+  }, [editor, highlightQuery, findOpen]);
+
+  const openFind = useCallback(
+    (replace = false) => {
+      if (!editor) return;
+      const { from, to, empty } = editor.state.selection;
+      const selected = empty ? "" : editor.state.doc.textBetween(from, to, " ");
+      setFindSeed(selected.slice(0, 80));
+      setFindReplaceMode(replace);
+      setFindOpen(true);
+    },
+    [editor]
+  );
+
   const forceSave = useCallback(async () => {
     if (!editor) return;
     const html = editor.getHTML();
@@ -213,16 +245,40 @@ export function ManuscriptEditor({
         e.preventDefault();
         void forceSave();
       }
+      // Ctrl/Cmd+Shift+F is Look up (handled in workspace)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        openFind(false);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        openFind(true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [forceSave]);
+  }, [forceSave, openFind]);
 
   const words = editor?.storage.characterCount?.words?.() ?? countWords(editor?.getText() || "");
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <EditorToolbar editor={editor} onLookUp={onLookUp} />
+      <EditorToolbar
+        editor={editor}
+        onLookUp={onLookUp}
+        onFind={() => openFind(false)}
+        onReplace={() => openFind(true)}
+      />
+      <FindReplaceBar
+        editor={editor}
+        open={findOpen}
+        onClose={() => {
+          setFindOpen(false);
+          setFindReplaceMode(false);
+        }}
+        initialQuery={findSeed}
+        showReplace={findReplaceMode}
+      />
       <div className="font-ui flex shrink-0 items-center justify-between border-b border-line px-4 py-2 text-xs text-muted">
         <span>{words} words</span>
         <span>
