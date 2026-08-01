@@ -186,10 +186,36 @@ function escapeReg(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Update “Chapter N” / “Chapter N: subtitle” to match a new 1-based position.
+ * Custom titles without a Chapter number are left unchanged.
+ */
+export function applyChapterNumber(title: string, number: number): string {
+  const t = (title || "").trim();
+  if (!t) return `Chapter ${number}`;
+  const withRest = t.match(/^Chapter\s+\d+\s*[:.\-–—]\s*(.*)$/i);
+  if (withRest) {
+    const rest = (withRest[1] || "").trim();
+    return rest ? `Chapter ${number}: ${rest}` : `Chapter ${number}`;
+  }
+  if (/^Chapter\s+\d+\s*$/i.test(t)) {
+    return `Chapter ${number}`;
+  }
+  return title;
+}
+
 export function novelist2ChapterHeading(sortOrder: number, title: string): string {
   const n = sortOrder + 1;
-  if (/^Chapter\s+\d+\s*:/i.test(title.trim())) return title.trim();
-  return `Chapter ${n}: ${title.trim() || `Chapter ${n}`}`;
+  const t = (title || "").trim();
+  const withRest = t.match(/^Chapter\s+\d+\s*[:.\-–—]\s*(.*)$/i);
+  if (withRest) {
+    const rest = (withRest[1] || "").trim();
+    return rest ? `Chapter ${n}: ${rest}` : `Chapter ${n}`;
+  }
+  if (/^Chapter\s+\d+\s*$/i.test(t)) {
+    return `Chapter ${n}`;
+  }
+  return `Chapter ${n}: ${t || `Chapter ${n}`}`;
 }
 
 export function plainToMatterHtml(text: string): string {

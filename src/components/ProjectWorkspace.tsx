@@ -10,6 +10,7 @@ import { ProjectTools } from "@/components/ProjectTools";
 import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
 import { clientLocalDay } from "@/lib/local-day";
+import { applyChapterNumber } from "@/lib/novelist2-docx";
 
 type Matter = {
   id: string;
@@ -266,13 +267,31 @@ export function ProjectWorkspace({
     if (swap < 0 || swap >= chapters.length) return;
     const next = [...chapters];
     [next[idx], next[swap]] = [next[swap], next[idx]];
-    const withOrder = next.map((c, i) => ({ ...c, sort_order: i }));
+    const withOrder = next.map((c, i) => ({
+      ...c,
+      sort_order: i,
+      title: applyChapterNumber(c.title, i + 1),
+    }));
     setChapters(withOrder);
-    await fetch(`/api/projects/${project.id}/chapters/reorder`, {
+    const res = await fetch(`/api/projects/${project.id}/chapters/reorder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ order: withOrder.map((c) => c.id) }),
     });
+    if (res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        chapters?: { id: string; sort_order: number; title: string }[];
+      };
+      if (data.chapters?.length) {
+        const byId = new Map(data.chapters.map((c) => [c.id, c]));
+        setChapters((prev) =>
+          prev.map((c) => {
+            const u = byId.get(c.id);
+            return u ? { ...c, sort_order: u.sort_order, title: u.title } : c;
+          })
+        );
+      }
+    }
   }
 
   async function saveProjectTitle() {
