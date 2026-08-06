@@ -7,7 +7,7 @@ import {
   TextRun,
   ImageRun,
 } from "docx";
-import JSZip from "jszip";
+import epub from "epub-gen-memory";
 import type { Chapter } from "@/lib/types";
 import { novelist2ChapterHeading } from "@/lib/novelist2-docx";
 
@@ -284,7 +284,47 @@ function epubCoverMeta(type: CoverImage["type"]): { ext: string; media: string }
   return { ext: "jpg", media: "image/jpeg" };
 }
 
-/** Minimal EPUB 3 package suitable for KDP upload */
+/** TipTap HTML → clean fragment safe for EPUB generators. */
+function htmlForEpub(html: string | null | undefined): string {
+  let s = (html || "").trim();
+  if (!s) return "<p></p>";
+  s = s
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/\scontenteditable="[^"]*"/gi, "")
+    .replace(/\sdata-[a-z0-9-]+="[^"]*"/gi, "")
+    .replace(/\sspellcheck="[^"]*"/gi, "")
+    // Void elements must be self-closing for XHTML serializers
+    .replace(/<(br|hr|img|meta|link|input|source|area|col|embed|wbr)(\s[^>/]*?)?\s*>/gi, "<$1$2 />")
+    // Unescaped ampersands in text (leave existing entities alone)
+    .replace(/&(?!(?:#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]+);)/g, "&amp;");
+  return s || "<p></p>";
+}
+
+function plainTextToEpubHtml(text: string): string {
+  const parts = text
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (!parts.length) return "<p></p>";
+  return parts
+    .map((p) => `<p>${escapeXml(p).replace(/\n/g, "<br />")}</p>`)
+    .join("\n");
+}
+
+function escapeXml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * EPUB 2 package via epub-gen-memory.
+ * Consumer Google Play Books often hangs forever on minimal/invalid EPUB 3 files;
+ * EPUB 2 with cleaned HTML uploads reliably (also accepted by KDP).
+ */
 export async function exportEpub(opts: {
   title: string;
   authorName?: string;
@@ -292,7 +332,6 @@ export async function exportEpub(opts: {
   matter: MatterBlock[];
   cover?: CoverImage | null;
 }): Promise<Blob> {
-  const zip = new JSZip();
   const orderedChapters = [...opts.chapters].sort((a, b) => a.sort_order - b.sort_order);
   const front = opts.matter
     .filter((m) => m.enabled && m.matter_type.startsWith("front_"))
@@ -301,150 +340,79 @@ export async function exportEpub(opts: {
     .filter((m) => m.enabled && m.matter_type.startsWith("back_"))
     .sort((a, b) => a.sort_order - b.sort_order);
 
-  type SpineItem = { id: string; href: string; title: string; html: string };
-  const items: SpineItem[] = [];
+  type EpubChapter = {
+    title: string;
+    content: string;
+    beforeToc?: boolean;
+    excludeFromToc?: boolean;
+  };
 
-  let i = 0;
+  const content: EpubChapter[] = [];
+
   for (const block of front) {
-    i += 1;
-    const id = `front${i}`;
-    items.push({
-      id,
-      href: `${id}.xhtml`,
+    // Skip empty TOC placeholder pages — epub-gen builds its own TOC
+    if (block.matter_type === "front_toc") continue;
+    content.push({
       title: block.title || "Front matter",
-      html: wrapXhtml(
-        block.title || "Front matter",
-        block.content_html || `<p>${htmlToPlain(block.content_html)}</p>`
-      ),
+      content: htmlForEpub(block.content_html),
+      beforeToc: true,
     });
   }
-  orderedChapters.forEach((ch, idx) => {
-    const id = `chap${idx + 1}`;
-    const body =
-      ch.content_html ||
-      ch.content_text
-        .split(/\n\n+/)
-        .map((p) => `<p>${escapeXml(p)}</p>`)
-        .join("\n");
-    items.push({
-      id,
-      href: `${id}.xhtml`,
-      title: ch.title,
-      html: wrapXhtml(ch.title, body),
+
+  for (const ch of orderedChapters) {
+    const body = ch.content_html?.trim()
+      ? htmlForEpub(ch.content_html)
+      : plainTextToEpubHtml(ch.content_text || "");
+    content.push({
+      title: ch.title || "Untitled",
+      content: body,
     });
-  });
+  }
+
   for (const block of back) {
-    i += 1;
-    const id = `back${i}`;
-    items.push({
-      id,
-      href: `${id}.xhtml`,
+    content.push({
       title: block.title || "Back matter",
-      html: wrapXhtml(
-        block.title || "Back matter",
-        block.content_html || `<p>${htmlToPlain(block.content_html)}</p>`
-      ),
+      content: htmlForEpub(block.content_html),
     });
   }
 
-  zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
-  zip.folder("META-INF")?.file(
-    "container.xml",
-    `<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`
-  );
-
-  const oebps = zip.folder("OEBPS");
-  items.forEach((item) => oebps?.file(item.href, item.html));
-
-  let coverManifest = "";
-  let coverMeta = "";
-  let coverHref = "";
-  if (opts.cover) {
-    const { ext, media } = epubCoverMeta(opts.cover.type);
-    coverHref = `cover.${ext}`;
-    oebps?.file(coverHref, opts.cover.data);
-    coverManifest = `<item id="cover-image" href="${coverHref}" media-type="${media}" properties="cover-image"/>`;
-    coverMeta = `<meta name="cover" content="cover-image"/>`;
-    oebps?.file(
-      "cover.xhtml",
-      `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>Cover</title></head>
-<body style="text-align:center;margin:0;padding:0;">
-<img src="${coverHref}" alt="Cover" style="max-width:100%;height:auto;"/>
-</body></html>`
-    );
+  if (!content.length) {
+    content.push({ title: "Manuscript", content: "<p></p>" });
   }
 
-  const manifest = items
-    .map((item) => `<item id="${item.id}" href="${item.href}" media-type="application/xhtml+xml"/>`)
-    .join("\n");
-  const spine = items.map((item) => `<itemref idref="${item.id}"/>`).join("\n");
-  const navLis = items
-    .map((item) => `<li><a href="${item.href}">${escapeXml(item.title)}</a></li>`)
-    .join("\n");
+  // Play Books / many readers only reliably accept JPEG/PNG covers
+  let cover: File | undefined;
+  if (opts.cover && (opts.cover.type === "jpg" || opts.cover.type === "png")) {
+    const { ext, media } = epubCoverMeta(opts.cover.type);
+    const bytes = Buffer.from(opts.cover.data);
+    cover = new File([bytes], `cover.${ext}`, { type: media });
+  }
 
-  oebps?.file(
-    "content.opf",
-    `<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="BookId">urn:uuid:${cryptoRandom()}</dc:identifier>
-    <dc:title>${escapeXml(opts.title)}</dc:title>
-    <dc:creator>${escapeXml(opts.authorName || "Author")}</dc:creator>
-    <dc:language>en</dc:language>
-    <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d+Z$/, "Z")}</meta>
-    ${coverMeta}
-  </metadata>
-  <manifest>
-    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-    ${opts.cover ? `<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>` : ""}
-    ${coverManifest}
-    ${manifest}
-  </manifest>
-  <spine>
-    ${opts.cover ? `<itemref idref="cover"/>` : ""}
-    <itemref idref="nav"/>
-    ${spine}
-  </spine>
-</package>`
+  const buffer = await epub(
+    {
+      title: opts.title || "Untitled",
+      author: opts.authorName || "Author",
+      publisher: "Novelist Writer",
+      lang: "en",
+      version: 2,
+      cover,
+      tocTitle: "Contents",
+      tocInTOC: false,
+      numberChaptersInTOC: false,
+      prependChapterTitles: true,
+      ignoreFailedDownloads: true,
+      css: `
+body { font-family: Georgia, "Times New Roman", serif; line-height: 1.6; margin: 1em; }
+h1 { font-size: 1.35em; margin: 0 0 1em; page-break-after: avoid; text-align: center; }
+p { margin: 0 0 0.85em; text-indent: 1.25em; }
+p:first-of-type { text-indent: 0; }
+blockquote { margin: 1em 1.5em; font-style: italic; }
+`,
+    },
+    content
   );
 
-  oebps?.file(
-    "nav.xhtml",
-    `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head><title>Contents</title></head>
-<body>
-<nav epub:type="toc"><ol>${navLis}</ol></nav>
-</body></html>`
-  );
-
-  return zip.generateAsync({ type: "blob", mimeType: "application/epub+zip" });
-}
-
-function wrapXhtml(title: string, body: string) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>${escapeXml(title)}</title></head>
-<body>
-<h1>${escapeXml(title)}</h1>
-${body}
-</body></html>`;
-}
-
-function escapeXml(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function cryptoRandom() {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  return new Blob([Buffer.from(buffer)], { type: "application/epub+zip" });
 }
 
 export const KDP_CHECKLIST = [

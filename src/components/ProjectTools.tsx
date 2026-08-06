@@ -426,7 +426,7 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
         <h3 className="font-display text-xl">Manuscript build</h3>
         <p className="mt-1 text-sm text-muted">
           Export like Novelist 2.0: DOCX with title, Contents, and “Chapter N: Title” sections.
-          EPUB available for KDP ebook upload.
+          EPUB (version 2) for KDP and Google Play Books.
         </p>
         <div className="font-ui mt-4 grid gap-4 border border-line md:grid-cols-2">
           <div className="border-b border-line p-4 md:border-b-0 md:border-r">
@@ -435,7 +435,7 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
               {(
                 [
                   ["docx", "Microsoft Word (DOCX) — Novelist 2.0 style"],
-                  ["epub", "EPUB — KDP ebook"],
+                  ["epub", "EPUB — KDP / Google Play Books"],
                 ] as const
               ).map(([id, label]) => (
                 <li key={id}>
