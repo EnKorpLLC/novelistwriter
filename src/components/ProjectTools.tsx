@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Chapter, Project } from "@/lib/types";
-import { KDP_CHECKLIST } from "@/lib/export";
+import { KDP_CHECKLIST } from "@/lib/kdp-checklist";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { saveAs } from "file-saver";
 

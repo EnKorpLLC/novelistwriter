@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { exportDocx, exportEpub, validateEpubStructure, type CoverImage } from "@/lib/export";
+import { exportDocx, exportEpub, type CoverImage } from "@/lib/export";
+import { validateEpubStructure } from "@/lib/kdp-checklist";
 import { projectCoverPath } from "@/lib/cover";
 
 function coverTypeFromPath(path: string): CoverImage["type"] {
