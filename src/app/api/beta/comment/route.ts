@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
-  const { token, projectId, chapterId, body } = await req.json();
+  const { token, projectId, chapterId, body, excerpt } = await req.json();
   if (!token || !projectId || !body) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
@@ -21,11 +21,15 @@ export async function POST(req: Request) {
 
   await admin.from("beta_invites").update({ status: "accepted" }).eq("id", invite.id);
 
+  const excerptText =
+    typeof excerpt === "string" ? excerpt.replace(/\s+/g, " ").trim().slice(0, 2000) : "";
+
   const { error } = await admin.from("beta_comments").insert({
     project_id: projectId,
     chapter_id: chapterId || null,
     invite_id: invite.id,
     body,
+    excerpt: excerptText || null,
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

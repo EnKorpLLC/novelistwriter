@@ -328,6 +328,11 @@ export function BetaPanel({ projectId, chapters }: Props) {
                             {new Date(c.createdAt).toLocaleString()}
                           </time>
                         </div>
+                        {c.excerpt && (
+                          <blockquote className="mt-2 border-l-2 border-accent/50 pl-3 text-sm italic text-muted">
+                            “{c.excerpt}”
+                          </blockquote>
+                        )}
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
                           {c.body}
                         </p>
