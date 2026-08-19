@@ -83,6 +83,8 @@ body {
   font-family: var(--font-body);
   line-height: 1.75;
   font-size: 1.125rem;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .manuscript-prose p {
