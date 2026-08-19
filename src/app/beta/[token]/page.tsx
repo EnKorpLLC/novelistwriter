@@ -31,7 +31,7 @@ export default async function BetaPage({
       .eq("token", token)
       .maybeSingle();
     invite = data as InviteRow | null;
-    if (invite && invite.status !== "revoked") {
+    if (invite && (invite.status === "pending" || invite.status === "accepted")) {
       const { data: ch } = await admin
         .from("chapters")
         .select("id, title, content_html, sort_order")
@@ -43,7 +43,20 @@ export default async function BetaPage({
     notFound();
   }
 
-  if (!invite || invite.status === "revoked") notFound();
+  if (!invite || (invite.status !== "pending" && invite.status !== "accepted")) {
+    if (invite?.status === "requested") {
+      return (
+        <div className="mx-auto max-w-lg px-6 py-16">
+          <p className="font-ui text-xs uppercase tracking-wide text-muted">Beta read</p>
+          <h1 className="font-display mt-2 text-3xl">Waiting for approval</h1>
+          <p className="mt-3 text-sm text-muted">
+            Your request is in the author’s Beta tab. You’ll get a reading link if they approve it.
+          </p>
+        </div>
+      );
+    }
+    notFound();
+  }
 
   const projectTitle = Array.isArray(invite.projects)
     ? invite.projects[0]?.title

@@ -3,6 +3,7 @@
 1. Create a GitHub repo and push this project.
 2. Import the repo in Vercel; set env vars from `.env.example`.
 3. Create a Supabase project; run `supabase/schema.sql`; create private Storage bucket `manuscripts`.
+   Existing projects: also run `supabase/migration_beta.sql` (beta request / deny statuses).
 4. In Stripe, create products/prices for project unlock, credit packs, Pro/Studio; paste price IDs into env.
 5. Point Stripe webhook to `https://YOUR_DOMAIN/api/stripe/webhook` for:
    - `checkout.session.completed`

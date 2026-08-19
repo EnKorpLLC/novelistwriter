@@ -2,63 +2,63 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { appUrl } from "@/lib/stripe";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: projectId } = await params;
+async function requireProject(projectId: string) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+  if (!user) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   const { data: project } = await supabase
     .from("projects")
     .select("id")
     .eq("id", projectId)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!project) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+  return { supabase, user };
+}
 
-  const [{ data: invites }, { data: comments }] = await Promise.all([
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: projectId } = await params;
+  const auth = await requireProject(projectId);
+  if ("error" in auth && auth.error) return auth.error;
+  const { supabase } = auth;
+
+  const [{ data: invites }, { data: comments }, { data: chapters }] = await Promise.all([
     supabase
       .from("beta_invites")
       .select("id, email, token, status, created_at")
       .eq("project_id", projectId)
-      .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("beta_comments")
       .select("id, body, excerpt, chapter_id, invite_id, created_at")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false })
-      .limit(100),
+      .limit(2000),
+    supabase.from("chapters").select("id, title, sort_order").eq("project_id", projectId).order("sort_order"),
   ]);
 
-  const chapterIds = [
-    ...new Set((comments || []).map((c) => c.chapter_id).filter(Boolean)),
-  ] as string[];
   const inviteIds = [
     ...new Set((comments || []).map((c) => c.invite_id).filter(Boolean)),
   ] as string[];
-
-  const [{ data: chapters }, { data: commentInvites }] = await Promise.all([
-    chapterIds.length
-      ? supabase.from("chapters").select("id, title").in("id", chapterIds)
-      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
-    inviteIds.length
-      ? supabase.from("beta_invites").select("id, email").in("id", inviteIds)
-      : Promise.resolve({ data: [] as { id: string; email: string }[] }),
-  ]);
+  const { data: commentInvites } = inviteIds.length
+    ? await supabase.from("beta_invites").select("id, email").in("id", inviteIds)
+    : { data: [] as { id: string; email: string }[] };
 
   const chapterTitle = new Map((chapters || []).map((c) => [c.id, c.title]));
+  const chapterOrder = new Map((chapters || []).map((c) => [c.id, c.sort_order]));
   const inviteEmail = new Map((commentInvites || []).map((i) => [i.id, i.email]));
 
   return NextResponse.json({
+    applyLink: appUrl(`/beta/apply/${projectId}`),
+    chapters: chapters || [],
     invites: (invites || []).map((i) => ({
       ...i,
-      link: appUrl(`/beta/${i.token}`),
+      link: i.status === "requested" || i.status === "denied" ? null : appUrl(`/beta/${i.token}`),
     })),
     comments: (comments || []).map((c) => ({
       id: c.id,
@@ -66,6 +66,7 @@ export async function GET(
       excerpt: c.excerpt,
       chapterId: c.chapter_id,
       chapterTitle: c.chapter_id ? chapterTitle.get(c.chapter_id) || "Chapter" : null,
+      chapterOrder: c.chapter_id != null ? (chapterOrder.get(c.chapter_id) ?? 9999) : -1,
       readerEmail: c.invite_id ? inviteEmail.get(c.invite_id) || null : null,
       createdAt: c.created_at,
     })),
@@ -77,21 +78,50 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireProject(projectId);
+  if ("error" in auth && auth.error) return auth.error;
+  const { supabase, user } = auth;
 
   const { email } = await req.json();
-  if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+  const trimmed = String(email || "")
+    .trim()
+    .toLowerCase();
+  if (!trimmed || !trimmed.includes("@")) {
+    return NextResponse.json({ error: "Email required" }, { status: 400 });
+  }
+
+  const { data: existing } = await supabase
+    .from("beta_invites")
+    .select("id, status, token")
+    .eq("project_id", projectId)
+    .ilike("email", trimmed)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.status === "revoked" || existing.status === "denied") {
+      const { data, error } = await supabase
+        .from("beta_invites")
+        .update({ status: "pending", email: trimmed })
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ invite: data, link: appUrl(`/beta/${data.token}`) });
+    }
+    return NextResponse.json({
+      invite: existing,
+      link: appUrl(`/beta/${existing.token}`),
+      error: "That email is already on the list.",
+    });
+  }
 
   const { data, error } = await supabase
     .from("beta_invites")
     .insert({
       project_id: projectId,
       user_id: user.id,
-      email,
+      email: trimmed,
+      status: "pending",
     })
     .select("*")
     .single();
@@ -101,5 +131,42 @@ export async function POST(
   return NextResponse.json({
     invite: data,
     link: appUrl(`/beta/${data.token}`),
+  });
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: projectId } = await params;
+  const auth = await requireProject(projectId);
+  if ("error" in auth && auth.error) return auth.error;
+  const { supabase } = auth;
+
+  const { inviteId, action } = (await req.json()) as {
+    inviteId?: string;
+    action?: "approve" | "deny" | "remove";
+  };
+  if (!inviteId || !action) {
+    return NextResponse.json({ error: "inviteId and action required" }, { status: 400 });
+  }
+
+  const status =
+    action === "approve" ? "pending" : action === "deny" ? "denied" : "revoked";
+
+  const { data, error } = await supabase
+    .from("beta_invites")
+    .update({ status })
+    .eq("id", inviteId)
+    .eq("project_id", projectId)
+    .select("id, email, token, status")
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  return NextResponse.json({
+    invite: data,
+    link: status === "pending" ? appUrl(`/beta/${data.token}`) : null,
   });
 }

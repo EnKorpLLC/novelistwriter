@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     .eq("project_id", projectId)
     .maybeSingle();
 
-  if (!invite || invite.status === "revoked") {
+  if (!invite || (invite.status !== "pending" && invite.status !== "accepted")) {
     return NextResponse.json({ error: "Invalid invite" }, { status: 403 });
   }
 

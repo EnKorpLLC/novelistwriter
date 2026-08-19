@@ -216,7 +216,7 @@ create table if not exists public.beta_invites (
   user_id uuid not null references auth.users(id) on delete cascade,
   email text not null,
   token text not null unique default encode(gen_random_bytes(24), 'hex'),
-  status text not null default 'pending' check (status in ('pending', 'accepted', 'revoked')),
+  status text not null default 'pending' check (status in ('pending', 'requested', 'accepted', 'denied', 'revoked')),
   created_at timestamptz not null default now()
 );
 

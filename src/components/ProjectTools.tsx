@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import type { Chapter, Project } from "@/lib/types";
 import { KDP_CHECKLIST } from "@/lib/kdp-checklist";
@@ -58,20 +58,6 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
   const [versions, setVersions] = useState<
     { id: string; label: string; created_at: string; word_count: number }[]
   >([]);
-  const [betaEmail, setBetaEmail] = useState("");
-  const [betaComments, setBetaComments] = useState<
-    {
-      id: string;
-      body: string;
-      chapterTitle: string | null;
-      readerEmail: string | null;
-      createdAt: string;
-    }[]
-  >([]);
-  const [betaInvites, setBetaInvites] = useState<
-    { id: string; email: string; status: string; link: string; created_at: string }[]
-  >([]);
-  const [betaLoading, setBetaLoading] = useState(false);
   const [seriesTitle, setSeriesTitle] = useState("");
   const [byokNote, setByokNote] = useState("");
   const [buildFormat, setBuildFormat] = useState<"docx" | "epub">("docx");
@@ -81,11 +67,6 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
     coverPublicUrl(projectCoverPath(project))
   );
   const [coverBusy, setCoverBusy] = useState(false);
-
-  useEffect(() => {
-    void loadBeta();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.id]);
 
   async function saveMeta() {
     await fetch(`/api/projects/${project.id}`, {
@@ -213,35 +194,6 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
     const res = await fetch(`/api/projects/${project.id}/versions`);
     const data = await res.json();
     setVersions(data.versions || []);
-  }
-
-  async function inviteBeta() {
-    const res = await fetch(`/api/projects/${project.id}/beta`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: betaEmail }),
-    });
-    const data = await res.json();
-    if (!res.ok) alert(data.error || "Invite failed");
-    else {
-      alert(`Invite created. Share link: ${data.link}`);
-      setBetaEmail("");
-      void loadBeta();
-    }
-  }
-
-  async function loadBeta() {
-    setBetaLoading(true);
-    try {
-      const res = await fetch(`/api/projects/${project.id}/beta`);
-      const data = await res.json();
-      if (res.ok) {
-        setBetaInvites(data.invites || []);
-        setBetaComments(data.comments || []);
-      }
-    } finally {
-      setBetaLoading(false);
-    }
   }
 
   async function createSeries() {
@@ -605,95 +557,6 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
           <button type="button" onClick={createSeries} className="bg-accent px-4 py-2 text-paper">
             Link series
           </button>
-        </div>
-      </section>
-
-      <section>
-        <h3 className="font-display text-xl">Beta readers</h3>
-        <p className="mt-1 text-sm text-muted">
-          Invite readers with a private link. Their comments appear here (not on the projects
-          dashboard).
-        </p>
-        <div className="font-ui mt-3 flex flex-wrap gap-2">
-          <input
-            className="min-w-[12rem] flex-1 border border-line px-3 py-2"
-            placeholder="reader@email.com"
-            value={betaEmail}
-            onChange={(e) => setBetaEmail(e.target.value)}
-          />
-          <button type="button" onClick={inviteBeta} className="border border-line px-4 py-2">
-            Invite
-          </button>
-          <button
-            type="button"
-            onClick={() => void loadBeta()}
-            className="border border-line px-4 py-2 text-muted"
-          >
-            {betaLoading ? "Loading…" : "Refresh feedback"}
-          </button>
-        </div>
-
-        {betaInvites.length > 0 && (
-          <ul className="font-ui mt-4 space-y-2 text-sm">
-            {betaInvites.map((inv) => (
-              <li
-                key={inv.id}
-                className="flex flex-wrap items-baseline justify-between gap-2 border border-line px-3 py-2"
-              >
-                <span>
-                  {inv.email}{" "}
-                  <span className="text-[10px] uppercase tracking-wide text-muted">
-                    {inv.status}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  className="text-xs text-accent hover:underline"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(inv.link);
-                    alert("Link copied");
-                  }}
-                >
-                  Copy link
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-6">
-          <p className="font-ui text-[10px] uppercase tracking-wide text-muted">Reader comments</p>
-          {betaComments.length === 0 ? (
-            <p className="mt-2 text-sm text-muted">
-              No comments yet.{" "}
-              <button
-                type="button"
-                className="text-accent hover:underline"
-                onClick={() => void loadBeta()}
-              >
-                Load feedback
-              </button>
-            </p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {betaComments.map((c) => (
-                <li key={c.id} className="border border-line bg-paper-deep/30 px-3 py-3">
-                  <div className="font-ui flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-muted">
-                    <span>
-                      {c.readerEmail || "Reader"}
-                      {c.chapterTitle ? ` · ${c.chapterTitle}` : ""}
-                    </span>
-                    <time dateTime={c.createdAt}>
-                      {new Date(c.createdAt).toLocaleString()}
-                    </time>
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                    {c.body}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </section>
 

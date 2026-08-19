@@ -7,6 +7,7 @@ import { ManuscriptEditor } from "@/components/ManuscriptEditor";
 import { CritiquePanel } from "@/components/CritiquePanel";
 import { BiblePanel } from "@/components/BiblePanel";
 import { ProjectTools } from "@/components/ProjectTools";
+import { BetaPanel } from "@/components/BetaPanel";
 import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
 import { clientLocalDay } from "@/lib/local-day";
@@ -70,7 +71,7 @@ export function ProjectWorkspace({
   const [activeId, setActiveId] = useState(() =>
     resolveChapterId(initialChapters, initialChapterId)
   );
-  const [tab, setTab] = useState<"write" | "bible" | "tools">("write");
+  const [tab, setTab] = useState<"write" | "bible" | "beta" | "tools">("write");
   const [focusMode, setFocusMode] = useState(false);
   const [selectionText, setSelectionText] = useState("");
   const [challengeLevel, setChallengeLevel] = useState(initialChallenge);
@@ -380,7 +381,7 @@ export function ProjectWorkspace({
             >
               Credits: <strong className="text-ink">{credits}</strong>
             </Link>
-            {(["write", "bible", "tools"] as const).map((t) => (
+            {(["write", "bible", "beta", "tools"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -743,6 +744,8 @@ export function ProjectWorkspace({
             onCreditsChange={setCredits}
           />
         )}
+
+        {tab === "beta" && <BetaPanel projectId={project.id} chapters={chapters} />}
 
         {tab === "tools" && (
           <ProjectTools project={project} chapters={chapters} matter={matter} />
