@@ -78,6 +78,68 @@ body {
   margin-bottom: 1em;
 }
 
+/* Shared manuscript reading styles (editor + beta reader) */
+.manuscript-prose {
+  font-family: var(--font-body);
+  line-height: 1.75;
+  font-size: 1.125rem;
+}
+
+.manuscript-prose p {
+  margin-bottom: 1em;
+}
+
+.manuscript-prose p[style*="text-align: center"],
+.manuscript-prose p[style*="text-align:center"] {
+  margin: 1.75em 0;
+  letter-spacing: 0.35em;
+  color: var(--muted);
+  text-indent: 0;
+}
+
+.manuscript-prose hr {
+  border: none;
+  margin: 2em 0;
+  height: 1.5em;
+  text-align: center;
+  overflow: visible;
+}
+
+.manuscript-prose hr::before {
+  content: "⁂";
+  display: block;
+  letter-spacing: 0.35em;
+  color: var(--muted);
+  font-size: 1.1em;
+  line-height: 1.5;
+}
+
+.manuscript-prose h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  margin: 1.5em 0 0.75em;
+}
+
+.manuscript-prose em,
+.manuscript-prose i {
+  font-style: italic;
+}
+
+.manuscript-prose strong,
+.manuscript-prose b {
+  font-weight: 700;
+}
+
+.manuscript-prose u {
+  text-decoration: underline;
+}
+
+.manuscript-prose blockquote {
+  margin: 1em 1.5em;
+  font-style: italic;
+  color: var(--muted);
+}
+
 /* Centered asterism / fleuron scene breaks */
 .ProseMirror p[style*="text-align: center"],
 .ProseMirror p[style*="text-align:center"] {

@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { BetaReaderClient } from "@/components/BetaReaderClient";
 
 type InviteRow = {
@@ -11,10 +12,13 @@ type InviteRow = {
 
 export default async function BetaPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ chapter?: string }>;
 }) {
   const { token } = await params;
+  const { chapter: chapterParam } = await searchParams;
 
   let invite: InviteRow | null = null;
   let chapters: { id: string; title: string; content_html: string; sort_order: number }[] = [];
@@ -45,15 +49,23 @@ export default async function BetaPage({
     ? invite.projects[0]?.title
     : invite.projects?.title;
 
+  const initialChapterId =
+    chapterParam && chapters.some((c) => c.id === chapterParam)
+      ? chapterParam
+      : undefined;
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
       <p className="font-ui text-xs uppercase tracking-wide text-muted">Beta read</p>
       <h1 className="font-display mt-2 text-3xl">{projectTitle || "Manuscript"}</h1>
-      <BetaReaderClient
-        token={token}
-        projectId={invite.project_id}
-        chapters={chapters}
-      />
+      <Suspense fallback={<p className="mt-8 text-sm text-muted">Loading…</p>}>
+        <BetaReaderClient
+          token={token}
+          projectId={invite.project_id}
+          chapters={chapters}
+          initialChapterId={initialChapterId}
+        />
+      </Suspense>
     </div>
   );
 }
