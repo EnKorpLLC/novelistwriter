@@ -83,6 +83,16 @@ export function BetaReaderClient({
   }, [active]);
 
   const chapter = chapters.find((c) => c.id === active);
+  const chapterIndex = chapters.findIndex((c) => c.id === active);
+  const prevChapter = chapterIndex > 0 ? chapters[chapterIndex - 1] : null;
+  const nextChapter = chapterIndex >= 0 && chapterIndex < chapters.length - 1
+    ? chapters[chapterIndex + 1]
+    : null;
+
+  function goToChapter(id: string) {
+    selectChapter(id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function submit() {
     const res = await fetch("/api/beta/comment", {
@@ -100,29 +110,50 @@ export function BetaReaderClient({
 
   return (
     <div className="mt-8">
-      <div className="font-ui flex flex-wrap gap-2">
-        {chapters.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => selectChapter(c.id)}
-            className={`px-3 py-1 text-sm ${
-              c.id === active ? "bg-accent text-paper" : "border border-line"
-            }`}
-          >
-            {c.title}
-          </button>
-        ))}
-      </div>
+      <label className="font-ui block text-[10px] uppercase tracking-wide text-muted">
+        Chapter
+        <select
+          className="mt-1 block w-full border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+          value={active}
+          onChange={(e) => goToChapter(e.target.value)}
+        >
+          {chapters.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <h2 className="font-display mt-8 text-2xl">{chapter?.title || "Chapter"}</h2>
       <article
-        className="manuscript-prose mt-8 max-w-none"
+        className="manuscript-prose mt-4 max-w-none"
         dangerouslySetInnerHTML={{ __html: chapter?.content_html || "<p>Empty</p>" }}
       />
-      <div className="font-ui mt-10 border-t border-line pt-6">
-        <h2 className="font-display text-xl">Leave feedback</h2>
+
+      <div className="font-ui mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-6">
+        <button
+          type="button"
+          disabled={!prevChapter}
+          onClick={() => prevChapter && goToChapter(prevChapter.id)}
+          className="border border-line px-4 py-2 text-sm disabled:opacity-30"
+        >
+          ← Previous chapter
+        </button>
+        <button
+          type="button"
+          disabled={!nextChapter}
+          onClick={() => nextChapter && goToChapter(nextChapter.id)}
+          className="border border-line px-4 py-2 text-sm disabled:opacity-30"
+        >
+          Next chapter →
+        </button>
+      </div>
+
+      <div className="font-ui mt-8 border-t border-line pt-6">
+        <h3 className="font-display text-xl">Leave feedback</h3>
         <p className="mt-1 text-xs text-muted">
-          Feedback is for {chapter?.title || "this chapter"}. The author sees it in Tools → Beta
-          readers.
+          Feedback is for {chapter?.title || "this chapter"}. The author sees it in the Beta tab.
         </p>
         <textarea
           className="mt-2 w-full border border-line p-3"
