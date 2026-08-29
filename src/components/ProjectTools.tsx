@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Chapter, Project } from "@/lib/types";
 import { KDP_CHECKLIST } from "@/lib/kdp-checklist";
-import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
+import { coverPublicUrl } from "@/lib/cover";
 import { saveAs } from "file-saver";
 
 function htmlToEditable(html: string): string {
@@ -39,9 +39,17 @@ type Props = {
   project: Project;
   chapters: Chapter[];
   matter: Matter[];
+  coverPath: string | null;
+  onCoverChange: (path: string | null, version?: number) => void;
 };
 
-export function ProjectTools({ project, chapters, matter: initialMatter }: Props) {
+export function ProjectTools({
+  project,
+  chapters,
+  matter: initialMatter,
+  coverPath,
+  onCoverChange,
+}: Props) {
   const [matter, setMatter] = useState(initialMatter);
   const [title, setTitle] = useState(project.title);
   const [blurb, setBlurb] = useState(project.blurb || "");
@@ -63,10 +71,9 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
   const [buildFormat, setBuildFormat] = useState<"docx" | "epub">("docx");
   const [includeIds, setIncludeIds] = useState<string[]>(() => chapters.map((c) => c.id));
   const [building, setBuilding] = useState(false);
-  const [coverUrl, setCoverUrl] = useState<string | null>(() =>
-    coverPublicUrl(projectCoverPath(project))
-  );
+  const [coverVersion, setCoverVersion] = useState(() => Date.now());
   const [coverBusy, setCoverBusy] = useState(false);
+  const coverUrl = coverPath ? coverPublicUrl(coverPath, coverVersion) : null;
 
   async function saveMeta() {
     await fetch(`/api/projects/${project.id}`, {
@@ -162,7 +169,8 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
         alert(data.error || "Cover upload failed");
         return;
       }
-      setCoverUrl(data.url || coverPublicUrl(data.path));
+      setCoverVersion(data.version ?? Date.now());
+      onCoverChange(data.path, data.version);
     } finally {
       setCoverBusy(false);
     }
@@ -178,7 +186,8 @@ export function ProjectTools({ project, chapters, matter: initialMatter }: Props
         alert(data.error || "Could not remove cover");
         return;
       }
-      setCoverUrl(null);
+      onCoverChange(null);
+      setCoverVersion(Date.now());
     } finally {
       setCoverBusy(false);
     }

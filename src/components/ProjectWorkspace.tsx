@@ -12,6 +12,7 @@ import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
 import { clientLocalDay } from "@/lib/local-day";
 import { applyChapterNumber } from "@/lib/novelist2-docx";
+import { projectCoverPath } from "@/lib/cover";
 
 type Matter = {
   id: string;
@@ -68,6 +69,7 @@ export function ProjectWorkspace({
   const [bible, setBible] = useState(initialBible);
   const [arcs, setArcs] = useState(initialArcs);
   const [projectTitle, setProjectTitle] = useState(project.title);
+  const [coverPath, setCoverPath] = useState<string | null>(() => projectCoverPath(project));
   const [activeId, setActiveId] = useState(() =>
     resolveChapterId(initialChapters, initialChapterId)
   );
@@ -748,7 +750,13 @@ export function ProjectWorkspace({
         {tab === "beta" && <BetaPanel projectId={project.id} chapters={chapters} />}
 
         {tab === "tools" && (
-          <ProjectTools project={project} chapters={chapters} matter={matter} />
+          <ProjectTools
+            project={project}
+            chapters={chapters}
+            matter={matter}
+            coverPath={coverPath}
+            onCoverChange={setCoverPath}
+          />
         )}
       </div>
     </div>

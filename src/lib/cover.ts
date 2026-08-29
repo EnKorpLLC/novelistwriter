@@ -1,9 +1,17 @@
-export function coverPublicUrl(coverPath: string | null | undefined): string | null {
+export function coverPublicUrl(
+  coverPath: string | null | undefined,
+  version?: string | number
+): string | null {
   if (!coverPath) return null;
-  if (coverPath.startsWith("http")) return coverPath;
+  if (coverPath.startsWith("http")) {
+    const v = version != null ? `v=${version}` : "";
+    if (!v) return coverPath;
+    return coverPath.includes("?") ? `${coverPath}&${v}` : `${coverPath}?${v}`;
+  }
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
-  return `${base.replace(/\/$/, "")}/storage/v1/object/public/covers/${coverPath}`;
+  const url = `${base.replace(/\/$/, "")}/storage/v1/object/public/covers/${coverPath}`;
+  return version != null ? `${url}?v=${version}` : url;
 }
 
 export function projectCoverPath(project: {

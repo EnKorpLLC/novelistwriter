@@ -104,7 +104,10 @@ export default async function DashboardPage() {
           )}
           {(projects ?? []).map((p) => {
             const s = stats.get(p.id) ?? { chapters: 0, words: 0 };
-            const coverUrl = coverPublicUrl(projectCoverPath(p));
+            const coverUrl = coverPublicUrl(
+              projectCoverPath(p),
+              p.updated_at ? Date.parse(p.updated_at) : undefined
+            );
             return (
               <li
                 key={p.id}

@@ -3,6 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp"]);
+const EXTENSIONS = ["jpg", "png", "webp"] as const;
+
+function coverPaths(userId: string, projectId: string) {
+  return EXTENSIONS.map((ext) => `${userId}/${projectId}.${ext}`);
+}
 
 export async function POST(
   req: Request,
@@ -37,6 +42,9 @@ export async function POST(
   const path = `${user.id}/${projectId}.${ext}`;
   const buf = Buffer.from(await file.arrayBuffer());
 
+  // Drop any prior cover files (other extensions or stale uploads)
+  await supabase.storage.from("covers").remove(coverPaths(user.id, projectId));
+
   const { error: upErr } = await supabase.storage.from("covers").upload(path, buf, {
     contentType: file.type,
     upsert: true,
@@ -51,28 +59,40 @@ export async function POST(
     );
   }
 
+  const prev = (project.metadata as Record<string, unknown> | null) || {};
+  const { cover_path: _oldMeta, ...restMeta } = prev as { cover_path?: string };
+  const updatedAt = new Date().toISOString();
+
   const { error: dbErr } = await supabase
     .from("projects")
-    .update({ cover_path: path, updated_at: new Date().toISOString() })
+    .update({
+      cover_path: path,
+      metadata: restMeta,
+      updated_at: updatedAt,
+    })
     .eq("id", projectId)
     .eq("user_id", user.id);
 
   if (dbErr) {
     // Column may not exist yet — store in metadata as fallback
-    const prev = (project.metadata as Record<string, unknown> | null) || {};
     await supabase
       .from("projects")
       .update({
-        metadata: { ...prev, cover_path: path },
-        updated_at: new Date().toISOString(),
+        metadata: { ...restMeta, cover_path: path },
+        updated_at: updatedAt,
       })
       .eq("id", projectId)
       .eq("user_id", user.id);
   }
 
   const { data: pub } = supabase.storage.from("covers").getPublicUrl(path);
+  const version = Date.parse(updatedAt);
 
-  return NextResponse.json({ path, url: pub.publicUrl });
+  return NextResponse.json({
+    path,
+    url: `${pub.publicUrl}?v=${version}`,
+    version,
+  });
 }
 
 export async function DELETE(
@@ -93,17 +113,10 @@ export async function DELETE(
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const path =
-    project?.cover_path ||
-    (project?.metadata as { cover_path?: string } | null)?.cover_path;
-
-  if (path) {
-    await supabase.storage.from("covers").remove([path]);
-  }
+  await supabase.storage.from("covers").remove(coverPaths(user.id, projectId));
 
   const prev = (project?.metadata as Record<string, unknown> | null) || {};
-  const restMeta = { ...prev };
-  delete restMeta.cover_path;
+  const { cover_path: _meta, ...restMeta } = prev as { cover_path?: string };
 
   await supabase
     .from("projects")
