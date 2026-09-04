@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { appUrl } from "@/lib/stripe";
-import { normalizeBetaFormFields } from "@/lib/beta-form";
+import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 
 async function requireProject(projectId: string) {
   const supabase = await createClient();
@@ -83,11 +83,11 @@ export async function GET(
     list.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
-  const formFields = normalizeBetaFormFields(project.beta_application_form);
+  const applicationForm = normalizeBetaApplicationForm(project.beta_application_form);
 
   return NextResponse.json({
     applyLink: appUrl(`/beta/apply/${projectId}`),
-    applicationForm: formFields,
+    applicationForm,
     chapters: chapters || [],
     invites: (invites || []).map((i) => {
       const chapterProgress = progressByInvite.get(i.id) || [];
@@ -146,11 +146,15 @@ export async function POST(
   const body = await req.json();
 
   if (body?.action === "saveForm") {
-    const fields = normalizeBetaFormFields(body.fields);
+    const applicationForm = normalizeBetaApplicationForm({
+      intro: body.intro,
+      contentWarnings: body.contentWarnings,
+      fields: body.fields,
+    });
     const { error } = await supabase
       .from("projects")
       .update({
-        beta_application_form: fields,
+        beta_application_form: applicationForm,
         updated_at: new Date().toISOString(),
       })
       .eq("id", projectId)
@@ -167,7 +171,7 @@ export async function POST(
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, applicationForm: fields });
+    return NextResponse.json({ ok: true, applicationForm });
   }
 
   const trimmed = String(body.email || "")

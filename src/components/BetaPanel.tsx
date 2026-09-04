@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Chapter } from "@/lib/types";
-import type { BetaFormField } from "@/lib/beta-form";
-import { newFormFieldId } from "@/lib/beta-form";
+import type { BetaApplicationForm, BetaFormField, BetaFormFollowUp } from "@/lib/beta-form";
+import { applicationAnswerLines, newFormFieldId, normalizeBetaApplicationForm } from "@/lib/beta-form";
 
 type ChapterProgress = {
   chapterId: string;
@@ -47,6 +47,10 @@ export function BetaPanel({ projectId, chapters }: Props) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [formFields, setFormFields] = useState<BetaFormField[]>([]);
+  const [draftIntro, setDraftIntro] = useState("");
+  const [draftWarnings, setDraftWarnings] = useState("");
+  const [includeIntro, setIncludeIntro] = useState(false);
+  const [includeWarnings, setIncludeWarnings] = useState(false);
   const [draftFields, setDraftFields] = useState<BetaFormField[]>([]);
   const [applyLink, setApplyLink] = useState("");
   const [loading, setLoading] = useState(true);
@@ -64,9 +68,13 @@ export function BetaPanel({ projectId, chapters }: Props) {
         setInvites(data.invites || []);
         setComments(data.comments || []);
         setApplyLink(data.applyLink || "");
-        const fields = (data.applicationForm || []) as BetaFormField[];
-        setFormFields(fields);
-        setDraftFields(fields);
+        const form = normalizeBetaApplicationForm(data.applicationForm);
+        setFormFields(form.fields);
+        setDraftFields(form.fields);
+        setDraftIntro(form.intro);
+        setDraftWarnings(form.contentWarnings);
+        setIncludeIntro(Boolean(form.intro));
+        setIncludeWarnings(Boolean(form.contentWarnings));
       }
     } finally {
       setLoading(false);
@@ -168,18 +176,33 @@ export function BetaPanel({ projectId, chapters }: Props) {
   async function saveForm() {
     setSavingForm(true);
     try {
+      const payload: BetaApplicationForm = {
+        intro: includeIntro ? draftIntro : "",
+        contentWarnings: includeWarnings ? draftWarnings : "",
+        fields: draftFields,
+      };
       const res = await fetch(`/api/projects/${projectId}/beta`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveForm", fields: draftFields }),
+        body: JSON.stringify({
+          action: "saveForm",
+          intro: payload.intro,
+          contentWarnings: payload.contentWarnings,
+          fields: payload.fields,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setNote(data.error || "Could not save form");
         return;
       }
-      setFormFields(data.applicationForm || draftFields);
-      setDraftFields(data.applicationForm || draftFields);
+      const form = normalizeBetaApplicationForm(data.applicationForm || payload);
+      setFormFields(form.fields);
+      setDraftFields(form.fields);
+      setDraftIntro(form.intro);
+      setDraftWarnings(form.contentWarnings);
+      setIncludeIntro(Boolean(form.intro));
+      setIncludeWarnings(Boolean(form.contentWarnings));
       setNote("Application form saved.");
     } finally {
       setSavingForm(false);
@@ -187,14 +210,42 @@ export function BetaPanel({ projectId, chapters }: Props) {
   }
 
   function answerLines(inv: Invite) {
-    const answers = inv.applicationAnswers || {};
-    return formFields
-      .map((f) => {
-        const v = answers[f.id];
-        if (!v) return null;
-        return { label: f.label, value: v };
+    return applicationAnswerLines(
+      {
+        intro: draftIntro,
+        contentWarnings: draftWarnings,
+        fields: formFields,
+      },
+      inv.applicationAnswers || {}
+    );
+  }
+
+  function updateField(idx: number, patch: Partial<BetaFormField>) {
+    setDraftFields((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  function updateFollowUp(
+    idx: number,
+    branch: "followUpYes" | "followUpNo",
+    patch: Partial<BetaFormFollowUp> | null
+  ) {
+    setDraftFields((rows) =>
+      rows.map((r, i) => {
+        if (i !== idx) return r;
+        if (patch === null) {
+          const next = { ...r };
+          delete next[branch];
+          return next;
+        }
+        const prev = r[branch] || {
+          enabled: true,
+          label: "",
+          type: "short" as const,
+          required: false,
+        };
+        return { ...r, [branch]: { ...prev, ...patch, enabled: true } };
       })
-      .filter(Boolean) as { label: string; value: string }[];
+    );
   }
 
   return (
@@ -211,59 +262,156 @@ export function BetaPanel({ projectId, chapters }: Props) {
           <section className="font-ui border border-line p-4">
             <h3 className="font-display text-lg">Application form</h3>
             <p className="mt-1 text-xs text-muted">
-              Questions appear on your public apply link. Email is always collected.
+              Optional intro and content warnings, then questions. Email is always collected.
             </p>
-            <ul className="mt-3 space-y-2">
+
+            <div className="mt-4 space-y-3 border border-line p-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={includeIntro}
+                  onChange={(e) => setIncludeIntro(e.target.checked)}
+                />
+                Add intro paragraph
+              </label>
+              {includeIntro && (
+                <textarea
+                  className="w-full border border-line px-2 py-1.5 text-sm"
+                  rows={3}
+                  value={draftIntro}
+                  onChange={(e) => setDraftIntro(e.target.value)}
+                  placeholder="Welcome applicants / what you’re looking for…"
+                />
+              )}
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={includeWarnings}
+                  onChange={(e) => setIncludeWarnings(e.target.checked)}
+                />
+                Add content / trigger warnings paragraph
+              </label>
+              {includeWarnings && (
+                <textarea
+                  className="w-full border border-line px-2 py-1.5 text-sm"
+                  rows={3}
+                  value={draftWarnings}
+                  onChange={(e) => setDraftWarnings(e.target.value)}
+                  placeholder="List content or trigger warnings applicants should know…"
+                />
+              )}
+            </div>
+
+            <ul className="mt-3 space-y-3">
               {draftFields.map((field, idx) => (
-                <li key={field.id} className="grid gap-2 border border-line p-2 md:grid-cols-[1fr_8rem_auto_auto]">
-                  <input
-                    className="border border-line px-2 py-1.5 text-sm"
-                    value={field.label}
-                    placeholder="Question"
-                    onChange={(e) =>
-                      setDraftFields((rows) =>
-                        rows.map((r, i) => (i === idx ? { ...r, label: e.target.value } : r))
-                      )
-                    }
-                  />
-                  <select
-                    className="border border-line px-2 py-1.5 text-sm"
-                    value={field.type}
-                    onChange={(e) =>
-                      setDraftFields((rows) =>
-                        rows.map((r, i) =>
-                          i === idx
-                            ? { ...r, type: e.target.value as BetaFormField["type"] }
-                            : r
-                        )
-                      )
-                    }
-                  >
-                    <option value="short">Short answer</option>
-                    <option value="long">Long answer</option>
-                    <option value="yesno">Yes / No</option>
-                  </select>
-                  <label className="flex items-center gap-1 text-xs text-muted">
+                <li key={field.id} className="space-y-2 border border-line p-3">
+                  <div className="grid gap-2 md:grid-cols-[1fr_8rem_auto_auto]">
                     <input
-                      type="checkbox"
-                      checked={Boolean(field.required)}
-                      onChange={(e) =>
-                        setDraftFields((rows) =>
-                          rows.map((r, i) =>
-                            i === idx ? { ...r, required: e.target.checked } : r
-                          )
-                        )
-                      }
+                      className="border border-line px-2 py-1.5 text-sm"
+                      value={field.label}
+                      placeholder="Question"
+                      onChange={(e) => updateField(idx, { label: e.target.value })}
                     />
-                    Required
-                  </label>
-                  <button
-                    type="button"
-                    className="text-xs text-danger"
-                    onClick={() => setDraftFields((rows) => rows.filter((_, i) => i !== idx))}
-                  >
-                    Remove
-                  </button>
+                    <select
+                      className="border border-line px-2 py-1.5 text-sm"
+                      value={field.type}
+                      onChange={(e) => {
+                        const type = e.target.value as BetaFormField["type"];
+                        updateField(idx, {
+                          type,
+                          ...(type !== "yesno"
+                            ? { followUpYes: undefined, followUpNo: undefined }
+                            : {}),
+                        });
+                      }}
+                    >
+                      <option value="short">Short answer</option>
+                      <option value="long">Long answer</option>
+                      <option value="yesno">Yes / No</option>
+                    </select>
+                    <label className="flex items-center gap-1 text-xs text-muted">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(field.required)}
+                        onChange={(e) => updateField(idx, { required: e.target.checked })}
+                      />
+                      Required
+                    </label>
+                    <button
+                      type="button"
+                      className="text-xs text-danger"
+                      onClick={() => setDraftFields((rows) => rows.filter((_, i) => i !== idx))}
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  {field.type === "yesno" && (
+                    <div className="space-y-2 border-t border-line pt-2">
+                      {(
+                        [
+                          ["followUpYes", "If they answer Yes", field.followUpYes],
+                          ["followUpNo", "If they answer No", field.followUpNo],
+                        ] as const
+                      ).map(([key, title, follow]) => (
+                        <div key={key} className="rounded-sm bg-paper-deep/30 p-2">
+                          <label className="flex items-center gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(follow?.enabled)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  updateFollowUp(idx, key, {
+                                    enabled: true,
+                                    label: follow?.label || "",
+                                    type: follow?.type || "short",
+                                    required: follow?.required || false,
+                                  });
+                                } else {
+                                  updateFollowUp(idx, key, null);
+                                }
+                              }}
+                            />
+                            Add related question {title.toLowerCase()}
+                          </label>
+                          {follow?.enabled && (
+                            <div className="mt-2 grid gap-2 md:grid-cols-[1fr_7rem_auto]">
+                              <input
+                                className="border border-line px-2 py-1.5 text-sm"
+                                value={follow.label}
+                                placeholder="Follow-up question"
+                                onChange={(e) =>
+                                  updateFollowUp(idx, key, { label: e.target.value })
+                                }
+                              />
+                              <select
+                                className="border border-line px-2 py-1.5 text-sm"
+                                value={follow.type}
+                                onChange={(e) =>
+                                  updateFollowUp(idx, key, {
+                                    type: e.target.value === "long" ? "long" : "short",
+                                  })
+                                }
+                              >
+                                <option value="short">Short</option>
+                                <option value="long">Long</option>
+                              </select>
+                              <label className="flex items-center gap-1 text-xs text-muted">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(follow.required)}
+                                  onChange={(e) =>
+                                    updateFollowUp(idx, key, { required: e.target.checked })
+                                  }
+                                />
+                                Required
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

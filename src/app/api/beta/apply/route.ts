@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import {
   missingRequiredAnswers,
-  normalizeBetaFormFields,
+  normalizeBetaApplicationForm,
   sanitizeApplicationAnswers,
 } from "@/lib/beta-form";
 
@@ -18,9 +18,12 @@ export async function GET(req: Request) {
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const form = normalizeBetaApplicationForm(project.beta_application_form);
   return NextResponse.json({
     title: project.title,
-    fields: normalizeBetaFormFields(project.beta_application_form),
+    form,
+    // legacy alias
+    fields: form.fields,
   });
 }
 
@@ -43,9 +46,9 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const fields = normalizeBetaFormFields(project.beta_application_form);
-  const answers = sanitizeApplicationAnswers(fields, body.answers);
-  const missing = missingRequiredAnswers(fields, answers);
+  const form = normalizeBetaApplicationForm(project.beta_application_form);
+  const answers = sanitizeApplicationAnswers(form.fields, body.answers);
+  const missing = missingRequiredAnswers(form.fields, answers);
   if (missing.length) {
     return NextResponse.json(
       { error: `Please answer: ${missing.join(", ")}` },
