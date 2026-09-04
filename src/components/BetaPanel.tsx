@@ -1061,203 +1061,245 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
             </section>
           )}
 
-          <section>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-display text-xl">Readers</h3>
-              <button
-                type="button"
-                className="font-ui border border-line px-3 py-1.5 text-xs text-accent hover:border-accent"
-                onClick={exportEmailsCsv}
-              >
-                Export emails (CSV)
-              </button>
-            </div>
-            {loading && readers.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">Loading…</p>
-            ) : readers.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">No active readers yet.</p>
-            ) : (
-              <ul className="font-ui mt-3 space-y-2">
-                {readers.map((inv) => {
-                  const isDnf = inv.status === "dnf";
-                  const detailsOpen = expandedInvite === inv.id;
-                  const answersOpen = answersOpenId === inv.id;
-                  const lines = answerLines(inv);
-                  return (
-                    <li
-                      key={inv.id}
-                      className={`border px-3 py-2 ${
-                        isDnf
-                          ? "border-danger/50 bg-danger/10 text-danger"
-                          : "border-line"
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className={`min-w-0 flex-1 text-sm ${isDnf ? "text-danger" : ""}`}>
-                          <span className="font-medium">{inviteLabel(inv)}</span>{" "}
-                          <span
-                            className={`text-[10px] uppercase tracking-wide ${
-                              isDnf ? "text-danger" : "text-muted"
-                            }`}
-                          >
-                            {isDnf ? "DNF" : inv.status === "accepted" ? "reading" : "invited"}
-                          </span>
-                          {inv.currentChapter && (
-                            <span
-                              className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}
-                            >
-                              Now: {inv.currentChapter.title} · {inv.currentChapter.percent}%
+          <section className="font-ui border border-line p-4">
+            <button
+              type="button"
+              className="flex w-full items-baseline justify-between gap-3 text-left"
+              onClick={() => setReadersOpen((o) => !o)}
+              aria-expanded={readersOpen}
+            >
+              <span>
+                <span className="font-display block text-lg text-ink">Readers</span>
+                <span className="mt-1 block text-xs text-muted">
+                  {readers.length} active reader{readers.length === 1 ? "" : "s"}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs text-accent">
+                {readersOpen ? "Collapse" : "Expand"}
+              </span>
+            </button>
+
+            {readersOpen && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  className="border border-line px-3 py-1.5 text-xs text-accent hover:border-accent"
+                  onClick={exportReadersCsv}
+                >
+                  Export readers (CSV)
+                </button>
+                {loading && readers.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted">Loading…</p>
+                ) : readers.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted">No active readers yet.</p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {readers.map((inv) => {
+                      const isDnf = inv.status === "dnf";
+                      const detailsOpen = expandedInvite === inv.id;
+                      const answersOpen = answersOpenId === inv.id;
+                      const lines = answerLines(inv);
+                      return (
+                        <li
+                          key={inv.id}
+                          className={`border px-3 py-2 ${
+                            isDnf
+                              ? "border-danger/50 bg-danger/10 text-danger"
+                              : "border-line"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className={`min-w-0 flex-1 text-sm ${isDnf ? "text-danger" : ""}`}>
+                              <span className="font-medium">{inviteLabel(inv)}</span>{" "}
+                              <span
+                                className={`text-[10px] uppercase tracking-wide ${
+                                  isDnf ? "text-danger" : "text-muted"
+                                }`}
+                              >
+                                {isDnf ? "DNF" : inv.status === "accepted" ? "reading" : "invited"}
+                              </span>
+                              {inv.currentChapter && (
+                                <span
+                                  className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}
+                                >
+                                  Now: {inv.currentChapter.title} · {inv.currentChapter.percent}%
+                                </span>
+                              )}
+                              <span
+                                className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}
+                              >
+                                Last read:{" "}
+                                {inv.lastReadAt
+                                  ? new Date(inv.lastReadAt).toLocaleString()
+                                  : "Never"}
+                              </span>
+                            </div>
+                            <span className="flex flex-wrap gap-2">
+                              {inv.link && !isDnf && (
+                                <button
+                                  type="button"
+                                  className="text-xs text-accent hover:underline"
+                                  onClick={() => {
+                                    void navigator.clipboard.writeText(inv.link!);
+                                    setNote("Reading link copied.");
+                                  }}
+                                >
+                                  Copy link
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="text-xs text-danger hover:underline"
+                                onClick={() => void act(inv.id, "remove")}
+                              >
+                                Remove
+                              </button>
                             </span>
-                          )}
-                          <span
-                            className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}
-                          >
-                            Last read:{" "}
-                            {inv.lastReadAt
-                              ? new Date(inv.lastReadAt).toLocaleString()
-                              : "Never"}
-                          </span>
-                        </div>
-                        <span className="flex flex-wrap gap-2">
-                          {inv.link && !isDnf && (
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                            {lines.length > 0 && (
+                              <button
+                                type="button"
+                                className={isDnf ? "text-danger underline" : "text-accent hover:underline"}
+                                onClick={() => setAnswersOpenId(answersOpen ? null : inv.id)}
+                              >
+                                {answersOpen ? "Hide answers" : "View answers"}
+                              </button>
+                            )}
                             <button
                               type="button"
-                              className="text-xs text-accent hover:underline"
-                              onClick={() => {
-                                void navigator.clipboard.writeText(inv.link!);
-                                setNote("Reading link copied.");
-                              }}
+                              className={isDnf ? "text-danger/80 underline" : "text-muted hover:underline"}
+                              onClick={() => setExpandedInvite(detailsOpen ? null : inv.id)}
                             >
-                              Copy link
+                              {detailsOpen ? "Hide progress" : "Chapter progress"}
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            className="text-xs text-danger hover:underline"
-                            onClick={() => void act(inv.id, "remove")}
-                          >
-                            Remove
-                          </button>
-                        </span>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap gap-3 text-xs">
-                        {lines.length > 0 && (
-                          <button
-                            type="button"
-                            className={isDnf ? "text-danger underline" : "text-accent hover:underline"}
-                            onClick={() => setAnswersOpenId(answersOpen ? null : inv.id)}
-                          >
-                            {answersOpen ? "Hide answers" : "View answers"}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className={isDnf ? "text-danger/80 underline" : "text-muted hover:underline"}
-                          onClick={() => setExpandedInvite(detailsOpen ? null : inv.id)}
-                        >
-                          {detailsOpen ? "Hide progress" : "Chapter progress"}
-                        </button>
-                      </div>
-
-                      {answersOpen && lines.length > 0 && (
-                        <div
-                          className={`mt-3 space-y-2 border-t pt-3 text-sm ${
-                            isDnf ? "border-danger/30" : "border-line"
-                          }`}
-                        >
-                          {lines.map((line) => (
-                            <div key={line.label}>
-                              <p className="text-[10px] uppercase tracking-wide opacity-70">
-                                {line.label}
-                              </p>
-                              <p className="whitespace-pre-wrap">{line.value}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {detailsOpen && (
-                        <div
-                          className={`mt-3 space-y-3 border-t pt-3 text-sm ${
-                            isDnf ? "border-danger/30" : "border-line"
-                          }`}
-                        >
-                          {isDnf && inv.dnfReason && (
-                            <div>
-                              <p className="text-[10px] uppercase tracking-wide">DNF reason</p>
-                              <p className="mt-1 whitespace-pre-wrap">{inv.dnfReason}</p>
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wide opacity-80">
-                              Chapters read
-                            </p>
-                            {(inv.chapterProgress || []).length === 0 ? (
-                              <p className="mt-1 text-xs opacity-70">No reading progress yet.</p>
-                            ) : (
-                              <ul className="mt-1 space-y-1">
-                                {(inv.chapterProgress || []).map((ch) => (
-                                  <li
-                                    key={ch.chapterId}
-                                    className="flex justify-between gap-2 text-xs"
-                                  >
-                                    <span className="truncate">{ch.title}</span>
-                                    <span>{ch.percent}%</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
                           </div>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {closed.length > 0 && (
-              <p className="mt-3 text-[11px] text-muted">
-                {closed.filter((i) => i.status === "denied").length} denied ·{" "}
-                {closed.filter((i) => i.status === "revoked").length} removed
-              </p>
+
+                          {answersOpen && lines.length > 0 && (
+                            <div
+                              className={`mt-3 space-y-2 border-t pt-3 text-sm ${
+                                isDnf ? "border-danger/30" : "border-line"
+                              }`}
+                            >
+                              {lines.map((line) => (
+                                <div key={line.label}>
+                                  <p className="text-[10px] uppercase tracking-wide opacity-70">
+                                    {line.label}
+                                  </p>
+                                  <p className="whitespace-pre-wrap">{line.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {detailsOpen && (
+                            <div
+                              className={`mt-3 space-y-3 border-t pt-3 text-sm ${
+                                isDnf ? "border-danger/30" : "border-line"
+                              }`}
+                            >
+                              {isDnf && inv.dnfReason && (
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wide">DNF reason</p>
+                                  <p className="mt-1 whitespace-pre-wrap">{inv.dnfReason}</p>
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide opacity-80">
+                                  Chapters read
+                                </p>
+                                {(inv.chapterProgress || []).length === 0 ? (
+                                  <p className="mt-1 text-xs opacity-70">No reading progress yet.</p>
+                                ) : (
+                                  <ul className="mt-1 space-y-1">
+                                    {(inv.chapterProgress || []).map((ch) => (
+                                      <li
+                                        key={ch.chapterId}
+                                        className="flex justify-between gap-2 text-xs"
+                                      >
+                                        <span className="truncate">{ch.title}</span>
+                                        <span>{ch.percent}%</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {closed.length > 0 && (
+                  <p className="mt-3 text-[11px] text-muted">
+                    {closed.filter((i) => i.status === "denied").length} denied ·{" "}
+                    {closed.filter((i) => i.status === "revoked").length} removed
+                  </p>
+                )}
+              </div>
             )}
           </section>
 
-          <section>
-            <h3 className="font-display text-xl">Contacts</h3>
-            <p className="mt-1 text-sm text-muted">
-              Kept after the beta period ends. Export uses this list when available.
-            </p>
-            {contacts.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">No contacts yet.</p>
-            ) : (
-              <ul className="font-ui mt-3 space-y-2">
-                {contacts.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex flex-wrap items-center justify-between gap-2 border border-line px-3 py-2"
-                  >
-                    <span className="text-sm">
-                      {c.displayName ? (
-                        <>
-                          <span className="font-medium">{c.displayName}</span>
-                          <span className="text-muted"> — {c.email}</span>
-                        </>
-                      ) : (
-                        c.email
-                      )}
-                    </span>
-                    <button
-                      type="button"
-                      className="text-xs text-danger hover:underline"
-                      onClick={() => void deleteContact(c.id)}
-                    >
-                      Delete
-                    </button>
-                  </li>
-                ))}
-              </ul>
+          <section className="font-ui border border-line p-4">
+            <button
+              type="button"
+              className="flex w-full items-baseline justify-between gap-3 text-left"
+              onClick={() => setContactsOpen((o) => !o)}
+              aria-expanded={contactsOpen}
+            >
+              <span>
+                <span className="font-display block text-lg text-ink">Contacts</span>
+                <span className="mt-1 block text-xs text-muted">
+                  {contacts.length} saved · kept after the beta period ends
+                </span>
+              </span>
+              <span className="shrink-0 text-xs text-accent">
+                {contactsOpen ? "Collapse" : "Expand"}
+              </span>
+            </button>
+
+            {contactsOpen && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  className="border border-line px-3 py-1.5 text-xs text-accent hover:border-accent"
+                  onClick={exportContactsCsv}
+                >
+                  Export contacts (CSV)
+                </button>
+                {contacts.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted">No contacts yet.</p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {contacts.map((c) => (
+                      <li
+                        key={c.id}
+                        className="flex flex-wrap items-center justify-between gap-2 border border-line px-3 py-2"
+                      >
+                        <span className="text-sm">
+                          {c.displayName ? (
+                            <>
+                              <span className="font-medium">{c.displayName}</span>
+                              <span className="text-muted"> — {c.email}</span>
+                            </>
+                          ) : (
+                            c.email
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-xs text-danger hover:underline"
+                          onClick={() => void deleteContact(c.id)}
+                        >
+                          Delete
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </section>
 
