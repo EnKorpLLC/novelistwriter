@@ -9,10 +9,10 @@ export default async function ProjectPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ chapter?: string }>;
+  searchParams: Promise<{ chapter?: string; tab?: string }>;
 }) {
   const { id } = await params;
-  const { chapter: chapterParam } = await searchParams;
+  const { chapter: chapterParam, tab: tabParam } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -74,6 +74,13 @@ export default async function ProjectPage({
     chapterParam && chapterList.some((c) => c.id === chapterParam)
       ? chapterParam
       : undefined;
+  const initialTab =
+    tabParam === "write" ||
+    tabParam === "bible" ||
+    tabParam === "beta" ||
+    tabParam === "tools"
+      ? tabParam
+      : undefined;
 
   return (
     <ProjectWorkspace
@@ -88,6 +95,7 @@ export default async function ProjectPage({
       arcs={arcs || []}
       initialCredits={creditTotal}
       initialChapterId={initialChapterId}
+      initialTab={initialTab}
     />
   );
 }

@@ -36,10 +36,22 @@ type Props = {
   initialCredits: number;
   /** From ?chapter= — keeps the open chapter across refresh */
   initialChapterId?: string;
+  /** From ?tab= — keeps write/bible/beta/tools across refresh */
+  initialTab?: "write" | "bible" | "beta" | "tools";
 };
+
+type WorkspaceTab = "write" | "bible" | "beta" | "tools";
 
 function chapterStorageKey(projectId: string) {
   return `nw_active_chapter_${projectId}`;
+}
+
+function tabStorageKey(projectId: string) {
+  return `nw_active_tab_${projectId}`;
+}
+
+function isWorkspaceTab(value: string | null | undefined): value is WorkspaceTab {
+  return value === "write" || value === "bible" || value === "beta" || value === "tools";
 }
 
 function resolveChapterId(
@@ -62,6 +74,7 @@ export function ProjectWorkspace({
   arcs: initialArcs,
   initialCredits,
   initialChapterId,
+  initialTab,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -73,7 +86,9 @@ export function ProjectWorkspace({
   const [activeId, setActiveId] = useState(() =>
     resolveChapterId(initialChapters, initialChapterId)
   );
-  const [tab, setTab] = useState<"write" | "bible" | "beta" | "tools">("write");
+  const [tab, setTab] = useState<WorkspaceTab>(() =>
+    isWorkspaceTab(initialTab) ? initialTab : "write"
+  );
   const [focusMode, setFocusMode] = useState(false);
   const [selectionText, setSelectionText] = useState("");
   const [challengeLevel, setChallengeLevel] = useState(initialChallenge);
@@ -100,9 +115,30 @@ export function ProjectWorkspace({
         typeof window !== "undefined" ? window.location.search : ""
       );
       params.set("chapter", id);
+      if (tab !== "write") params.set("tab", tab);
+      else params.delete("tab");
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [project.id, pathname, router]
+    [project.id, pathname, router, tab]
+  );
+
+  const selectTab = useCallback(
+    (next: WorkspaceTab) => {
+      setTab(next);
+      try {
+        localStorage.setItem(tabStorageKey(project.id), next);
+      } catch {
+        /* ignore */
+      }
+      const params = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : ""
+      );
+      if (next === "write") params.delete("tab");
+      else params.set("tab", next);
+      if (activeId) params.set("chapter", activeId);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [project.id, pathname, router, activeId]
   );
 
   // Restore from localStorage when URL had no chapter (first visit / old bookmark)
@@ -125,6 +161,29 @@ export function ProjectWorkspace({
       /* ignore */
     }
     // intentionally once on mount for this project
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
+
+  // Restore tab from localStorage when URL had no ?tab=
+  useEffect(() => {
+    if (isWorkspaceTab(initialTab)) {
+      try {
+        localStorage.setItem(tabStorageKey(project.id), initialTab);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(tabStorageKey(project.id));
+      if (isWorkspaceTab(stored) && stored !== tab) {
+        selectTab(stored);
+      } else if (tab !== "write") {
+        selectTab(tab);
+      }
+    } catch {
+      /* ignore */
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
@@ -387,7 +446,7 @@ export function ProjectWorkspace({
               <button
                 key={t}
                 type="button"
-                onClick={() => setTab(t)}
+                onClick={() => selectTab(t)}
                 className={`px-3 py-1 capitalize ${tab === t ? "bg-accent text-paper" : "text-muted hover:text-ink"}`}
               >
                 {t}
@@ -448,7 +507,7 @@ export function ProjectWorkspace({
           selectChapter(chapterId);
           setLookupHighlight(query.length >= 2 ? query : null);
           setWritePane("editor");
-          setTab("write");
+          selectTab("write");
         }}
       />
 
