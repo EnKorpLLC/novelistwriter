@@ -61,6 +61,8 @@ export function BetaPanel({ projectId, chapters }: Props) {
   const [savingForm, setSavingForm] = useState(false);
   const [showCompleted, setShowCompleted] = useState(true);
   const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
+  const [formEditorOpen, setFormEditorOpen] = useState(false);
+  const [answersOpenId, setAnswersOpenId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -315,183 +317,205 @@ export function BetaPanel({ projectId, chapters }: Props) {
           </div>
 
           <section className="font-ui border border-line p-4">
-            <h3 className="font-display text-lg">Application form</h3>
-            <p className="mt-1 text-xs text-muted">
-              Optional intro and content warnings, then questions. Email is always collected.
-            </p>
+            <button
+              type="button"
+              className="flex w-full items-baseline justify-between gap-3 text-left"
+              onClick={() => setFormEditorOpen((o) => !o)}
+              aria-expanded={formEditorOpen}
+            >
+              <span>
+                <span className="font-display block text-lg text-ink">Application form</span>
+                <span className="mt-1 block text-xs text-muted">
+                  {formFields.length
+                    ? `${formFields.length} question${formFields.length === 1 ? "" : "s"} saved`
+                    : "Optional intro and questions for applicants"}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs text-accent">
+                {formEditorOpen ? "Collapse" : "Edit"}
+              </span>
+            </button>
 
-            <div className="mt-4 space-y-3 border border-line p-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={includeIntro}
-                  onChange={(e) => setIncludeIntro(e.target.checked)}
-                />
-                Add intro paragraph
-              </label>
-              {includeIntro && (
-                <textarea
-                  className="w-full border border-line px-2 py-1.5 text-sm"
-                  rows={3}
-                  value={draftIntro}
-                  onChange={(e) => setDraftIntro(e.target.value)}
-                  placeholder="Welcome applicants / what you’re looking for…"
-                />
-              )}
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={includeWarnings}
-                  onChange={(e) => setIncludeWarnings(e.target.checked)}
-                />
-                Add content / trigger warnings paragraph
-              </label>
-              {includeWarnings && (
-                <textarea
-                  className="w-full border border-line px-2 py-1.5 text-sm"
-                  rows={3}
-                  value={draftWarnings}
-                  onChange={(e) => setDraftWarnings(e.target.value)}
-                  placeholder="List content or trigger warnings applicants should know…"
-                />
-              )}
-            </div>
+            {formEditorOpen && (
+              <div className="mt-4">
+                <p className="text-xs text-muted">
+                  Optional intro and content warnings, then questions. Email is always collected.
+                </p>
 
-            <ul className="mt-3 space-y-3">
-              {draftFields.map((field, idx) => (
-                <li key={field.id} className="space-y-2 border border-line p-3">
-                  <div className="grid gap-2 md:grid-cols-[1fr_8rem_auto_auto]">
+                <div className="mt-4 space-y-3 border border-line p-3">
+                  <label className="flex items-center gap-2 text-sm">
                     <input
-                      className="border border-line px-2 py-1.5 text-sm"
-                      value={field.label}
-                      placeholder="Question"
-                      onChange={(e) => updateField(idx, { label: e.target.value })}
+                      type="checkbox"
+                      checked={includeIntro}
+                      onChange={(e) => setIncludeIntro(e.target.checked)}
                     />
-                    <select
-                      className="border border-line px-2 py-1.5 text-sm"
-                      value={field.type}
-                      onChange={(e) => {
-                        const type = e.target.value as BetaFormField["type"];
-                        updateField(idx, {
-                          type,
-                          ...(type !== "yesno"
-                            ? { followUpYes: undefined, followUpNo: undefined }
-                            : {}),
-                        });
-                      }}
-                    >
-                      <option value="short">Short answer</option>
-                      <option value="long">Long answer</option>
-                      <option value="yesno">Yes / No</option>
-                    </select>
-                    <label className="flex items-center gap-1 text-xs text-muted">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(field.required)}
-                        onChange={(e) => updateField(idx, { required: e.target.checked })}
-                      />
-                      Required
-                    </label>
-                    <button
-                      type="button"
-                      className="text-xs text-danger"
-                      onClick={() => setDraftFields((rows) => rows.filter((_, i) => i !== idx))}
-                    >
-                      Remove
-                    </button>
-                  </div>
+                    Add intro paragraph
+                  </label>
+                  {includeIntro && (
+                    <textarea
+                      className="w-full border border-line px-2 py-1.5 text-sm"
+                      rows={3}
+                      value={draftIntro}
+                      onChange={(e) => setDraftIntro(e.target.value)}
+                      placeholder="Welcome applicants / what you’re looking for…"
+                    />
+                  )}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={includeWarnings}
+                      onChange={(e) => setIncludeWarnings(e.target.checked)}
+                    />
+                    Add content / trigger warnings paragraph
+                  </label>
+                  {includeWarnings && (
+                    <textarea
+                      className="w-full border border-line px-2 py-1.5 text-sm"
+                      rows={3}
+                      value={draftWarnings}
+                      onChange={(e) => setDraftWarnings(e.target.value)}
+                      placeholder="List content or trigger warnings applicants should know…"
+                    />
+                  )}
+                </div>
 
-                  {field.type === "yesno" && (
-                    <div className="space-y-2 border-t border-line pt-2">
-                      {(
-                        [
-                          ["followUpYes", "If they answer Yes", field.followUpYes],
-                          ["followUpNo", "If they answer No", field.followUpNo],
-                        ] as const
-                      ).map(([key, title, follow]) => (
-                        <div key={key} className="rounded-sm bg-paper-deep/30 p-2">
-                          <label className="flex items-center gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(follow?.enabled)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  updateFollowUp(idx, key, {
-                                    enabled: true,
-                                    label: follow?.label || "",
-                                    type: follow?.type || "short",
-                                    required: follow?.required || false,
-                                  });
-                                } else {
-                                  updateFollowUp(idx, key, null);
-                                }
-                              }}
-                            />
-                            Add related question {title.toLowerCase()}
-                          </label>
-                          {follow?.enabled && (
-                            <div className="mt-2 grid gap-2 md:grid-cols-[1fr_7rem_auto]">
-                              <input
-                                className="border border-line px-2 py-1.5 text-sm"
-                                value={follow.label}
-                                placeholder="Follow-up question"
-                                onChange={(e) =>
-                                  updateFollowUp(idx, key, { label: e.target.value })
-                                }
-                              />
-                              <select
-                                className="border border-line px-2 py-1.5 text-sm"
-                                value={follow.type}
-                                onChange={(e) =>
-                                  updateFollowUp(idx, key, {
-                                    type: e.target.value === "long" ? "long" : "short",
-                                  })
-                                }
-                              >
-                                <option value="short">Short</option>
-                                <option value="long">Long</option>
-                              </select>
-                              <label className="flex items-center gap-1 text-xs text-muted">
+                <ul className="mt-3 space-y-3">
+                  {draftFields.map((field, idx) => (
+                    <li key={field.id} className="space-y-2 border border-line p-3">
+                      <div className="grid gap-2 md:grid-cols-[1fr_8rem_auto_auto]">
+                        <input
+                          className="border border-line px-2 py-1.5 text-sm"
+                          value={field.label}
+                          placeholder="Question"
+                          onChange={(e) => updateField(idx, { label: e.target.value })}
+                        />
+                        <select
+                          className="border border-line px-2 py-1.5 text-sm"
+                          value={field.type}
+                          onChange={(e) => {
+                            const type = e.target.value as BetaFormField["type"];
+                            updateField(idx, {
+                              type,
+                              ...(type !== "yesno"
+                                ? { followUpYes: undefined, followUpNo: undefined }
+                                : {}),
+                            });
+                          }}
+                        >
+                          <option value="short">Short answer</option>
+                          <option value="long">Long answer</option>
+                          <option value="yesno">Yes / No</option>
+                        </select>
+                        <label className="flex items-center gap-1 text-xs text-muted">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(field.required)}
+                            onChange={(e) => updateField(idx, { required: e.target.checked })}
+                          />
+                          Required
+                        </label>
+                        <button
+                          type="button"
+                          className="text-xs text-danger"
+                          onClick={() => setDraftFields((rows) => rows.filter((_, i) => i !== idx))}
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      {field.type === "yesno" && (
+                        <div className="space-y-2 border-t border-line pt-2">
+                          {(
+                            [
+                              ["followUpYes", "If they answer Yes", field.followUpYes],
+                              ["followUpNo", "If they answer No", field.followUpNo],
+                            ] as const
+                          ).map(([key, title, follow]) => (
+                            <div key={key} className="rounded-sm bg-paper-deep/30 p-2">
+                              <label className="flex items-center gap-2 text-xs">
                                 <input
                                   type="checkbox"
-                                  checked={Boolean(follow.required)}
-                                  onChange={(e) =>
-                                    updateFollowUp(idx, key, { required: e.target.checked })
-                                  }
+                                  checked={Boolean(follow?.enabled)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      updateFollowUp(idx, key, {
+                                        enabled: true,
+                                        label: follow?.label || "",
+                                        type: follow?.type || "short",
+                                        required: follow?.required || false,
+                                      });
+                                    } else {
+                                      updateFollowUp(idx, key, null);
+                                    }
+                                  }}
                                 />
-                                Required
+                                Add related question {title.toLowerCase()}
                               </label>
+                              {follow?.enabled && (
+                                <div className="mt-2 grid gap-2 md:grid-cols-[1fr_7rem_auto]">
+                                  <input
+                                    className="border border-line px-2 py-1.5 text-sm"
+                                    value={follow.label}
+                                    placeholder="Follow-up question"
+                                    onChange={(e) =>
+                                      updateFollowUp(idx, key, { label: e.target.value })
+                                    }
+                                  />
+                                  <select
+                                    className="border border-line px-2 py-1.5 text-sm"
+                                    value={follow.type}
+                                    onChange={(e) =>
+                                      updateFollowUp(idx, key, {
+                                        type: e.target.value === "long" ? "long" : "short",
+                                      })
+                                    }
+                                  >
+                                    <option value="short">Short</option>
+                                    <option value="long">Long</option>
+                                  </select>
+                                  <label className="flex items-center gap-1 text-xs text-muted">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(follow.required)}
+                                      onChange={(e) =>
+                                        updateFollowUp(idx, key, { required: e.target.checked })
+                                      }
+                                    />
+                                    Required
+                                  </label>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="border border-line px-3 py-1.5 text-xs"
-                onClick={() =>
-                  setDraftFields((rows) => [
-                    ...rows,
-                    { id: newFormFieldId(), label: "", type: "short", required: false },
-                  ])
-                }
-              >
-                + Question
-              </button>
-              <button
-                type="button"
-                disabled={savingForm}
-                className="bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-50"
-                onClick={() => void saveForm()}
-              >
-                {savingForm ? "Saving…" : "Save form"}
-              </button>
-            </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="border border-line px-3 py-1.5 text-xs"
+                    onClick={() =>
+                      setDraftFields((rows) => [
+                        ...rows,
+                        { id: newFormFieldId(), label: "", type: "short", required: false },
+                      ])
+                    }
+                  >
+                    + Question
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingForm}
+                    className="bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-50"
+                    onClick={() => void saveForm()}
+                  >
+                    {savingForm ? "Saving…" : "Save form"}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="font-ui grid gap-4 border border-line p-4 md:grid-cols-2">
@@ -608,7 +632,8 @@ export function BetaPanel({ projectId, chapters }: Props) {
               <ul className="font-ui mt-3 space-y-2">
                 {readers.map((inv) => {
                   const isDnf = inv.status === "dnf";
-                  const open = expandedInvite === inv.id;
+                  const detailsOpen = expandedInvite === inv.id;
+                  const answersOpen = answersOpenId === inv.id;
                   const lines = answerLines(inv);
                   return (
                     <li
@@ -620,11 +645,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
                       }`}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <button
-                          type="button"
-                          className={`min-w-0 flex-1 text-left text-sm ${isDnf ? "text-danger" : ""}`}
-                          onClick={() => setExpandedInvite(open ? null : inv.id)}
-                        >
+                        <div className={`min-w-0 flex-1 text-sm ${isDnf ? "text-danger" : ""}`}>
                           <span className="font-medium">{inv.email}</span>{" "}
                           <span
                             className={`text-[10px] uppercase tracking-wide ${
@@ -634,12 +655,14 @@ export function BetaPanel({ projectId, chapters }: Props) {
                             {isDnf ? "DNF" : inv.status === "accepted" ? "reading" : "invited"}
                           </span>
                           {inv.currentChapter && (
-                            <span className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}>
+                            <span
+                              className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}
+                            >
                               Now: {inv.currentChapter.title} · {inv.currentChapter.percent}%
                             </span>
                           )}
-                        </button>
-                        <span className="flex gap-2">
+                        </div>
+                        <span className="flex flex-wrap gap-2">
                           {inv.link && !isDnf && (
                             <button
                               type="button"
@@ -654,7 +677,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
                           )}
                           <button
                             type="button"
-                            className={`text-xs hover:underline ${isDnf ? "text-danger" : "text-danger"}`}
+                            className="text-xs text-danger hover:underline"
                             onClick={() => {
                               if (confirm(`Remove ${inv.email}? Their link will stop working.`)) {
                                 void act(inv.id, "remove");
@@ -665,27 +688,53 @@ export function BetaPanel({ projectId, chapters }: Props) {
                           </button>
                         </span>
                       </div>
-                      {open && (
-                        <div className={`mt-3 space-y-3 border-t pt-3 text-sm ${isDnf ? "border-danger/30" : "border-line"}`}>
+
+                      <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                        {lines.length > 0 && (
+                          <button
+                            type="button"
+                            className={isDnf ? "text-danger underline" : "text-accent hover:underline"}
+                            onClick={() => setAnswersOpenId(answersOpen ? null : inv.id)}
+                          >
+                            {answersOpen ? "Hide answers" : "View answers"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className={isDnf ? "text-danger/80 underline" : "text-muted hover:underline"}
+                          onClick={() => setExpandedInvite(detailsOpen ? null : inv.id)}
+                        >
+                          {detailsOpen ? "Hide progress" : "Chapter progress"}
+                        </button>
+                      </div>
+
+                      {answersOpen && lines.length > 0 && (
+                        <div
+                          className={`mt-3 space-y-2 border-t pt-3 text-sm ${
+                            isDnf ? "border-danger/30" : "border-line"
+                          }`}
+                        >
+                          {lines.map((line) => (
+                            <div key={line.label}>
+                              <p className="text-[10px] uppercase tracking-wide opacity-70">
+                                {line.label}
+                              </p>
+                              <p className="whitespace-pre-wrap">{line.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {detailsOpen && (
+                        <div
+                          className={`mt-3 space-y-3 border-t pt-3 text-sm ${
+                            isDnf ? "border-danger/30" : "border-line"
+                          }`}
+                        >
                           {isDnf && inv.dnfReason && (
                             <div>
                               <p className="text-[10px] uppercase tracking-wide">DNF reason</p>
                               <p className="mt-1 whitespace-pre-wrap">{inv.dnfReason}</p>
-                            </div>
-                          )}
-                          {lines.length > 0 && (
-                            <div className="space-y-2">
-                              <p className="text-[10px] uppercase tracking-wide opacity-80">
-                                Application
-                              </p>
-                              {lines.map((line) => (
-                                <div key={line.label}>
-                                  <p className="text-[10px] uppercase tracking-wide opacity-70">
-                                    {line.label}
-                                  </p>
-                                  <p className="whitespace-pre-wrap">{line.value}</p>
-                                </div>
-                              ))}
                             </div>
                           )}
                           <div>
@@ -697,7 +746,10 @@ export function BetaPanel({ projectId, chapters }: Props) {
                             ) : (
                               <ul className="mt-1 space-y-1">
                                 {(inv.chapterProgress || []).map((ch) => (
-                                  <li key={ch.chapterId} className="flex justify-between gap-2 text-xs">
+                                  <li
+                                    key={ch.chapterId}
+                                    className="flex justify-between gap-2 text-xs"
+                                  >
                                     <span className="truncate">{ch.title}</span>
                                     <span>{ch.percent}%</span>
                                   </li>

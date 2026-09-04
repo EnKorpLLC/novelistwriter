@@ -3,6 +3,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { BetaFormFields } from "@/components/BetaFormFields";
+import type { BetaApplicationForm } from "@/lib/beta-form";
 
 type Chapter = {
   id: string;
@@ -17,8 +19,12 @@ type HighlightPop = {
   composing: boolean;
 };
 
-function storageKey(token: string) {
+function chapterStorageKey(token: string) {
   return `nw_beta_chapter_${token}`;
+}
+
+function sessionStorageKey(token: string) {
+  return `nw_beta_session_${token}`;
 }
 
 function selectionInNode(root: HTMLElement | null): string {
@@ -72,12 +78,14 @@ const BetaManuscript = memo(function BetaManuscript({
 export function BetaReaderClient({
   token,
   projectId,
-  chapters,
+  form,
+  needsApplication: needsApplicationProp,
   initialChapterId,
 }: {
   token: string;
   projectId: string;
-  chapters: Chapter[];
+  form: BetaApplicationForm;
+  needsApplication: boolean;
   initialChapterId?: string;
 }) {
   const router = useRouter();
@@ -90,17 +98,16 @@ export function BetaReaderClient({
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSentPercent = useRef(0);
 
-  const resolveId = useCallback(
-    (preferred?: string | null) => {
-      if (preferred && chapters.some((c) => c.id === preferred)) return preferred;
-      return chapters[0]?.id || "";
-    },
-    [chapters]
-  );
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [unlocked, setUnlocked] = useState(false);
+  const [unlockChecking, setUnlockChecking] = useState(true);
+  const [gateNeedsApplication, setGateNeedsApplication] = useState(needsApplicationProp);
+  const [email, setEmail] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [unlockMsg, setUnlockMsg] = useState("");
 
-  const [active, setActive] = useState(() =>
-    resolveId(initialChapterId || searchParams.get("chapter"))
-  );
+  const [active, setActive] = useState("");
   const [generalBody, setGeneralBody] = useState("");
   const [generalMsg, setGeneralMsg] = useState("");
   const [pop, setPop] = useState<HighlightPop | null>(null);
@@ -120,7 +127,83 @@ export function BetaReaderClient({
     setMounted(true);
   }, []);
 
+  const applyUnlockSuccess = useCallback(
+    (data: { chapters?: Chapter[]; status?: string }) => {
+      const list = Array.isArray(data.chapters) ? data.chapters : [];
+      setChapters(list);
+      setUnlocked(true);
+      setGateNeedsApplication(false);
+      if (data.status === "dnf") setDnf(true);
+
+      const preferred = initialChapterId || searchParams.get("chapter");
+      let id =
+        preferred && list.some((c) => c.id === preferred) ? preferred : list[0]?.id || "";
+      if (!preferred || !list.some((c) => c.id === preferred)) {
+        try {
+          const stored = localStorage.getItem(chapterStorageKey(token));
+          if (stored && list.some((c) => c.id === stored)) id = stored;
+        } catch {
+          /* ignore */
+        }
+      }
+      setActive(id);
+    },
+    [initialChapterId, searchParams, token]
+  );
+
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      let storedEmail = "";
+      try {
+        storedEmail = sessionStorage.getItem(sessionStorageKey(token)) || "";
+      } catch {
+        /* ignore */
+      }
+
+      if (!storedEmail) {
+        if (!cancelled) setUnlockChecking(false);
+        return;
+      }
+
+      setEmail(storedEmail);
+      try {
+        const res = await fetch("/api/beta/unlock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, email: storedEmail }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data.ok) {
+          applyUnlockSuccess(data);
+        } else {
+          try {
+            sessionStorage.removeItem(sessionStorageKey(token));
+          } catch {
+            /* ignore */
+          }
+          if (data.needsApplication) setGateNeedsApplication(true);
+        }
+      } catch {
+        if (!cancelled) {
+          try {
+            sessionStorage.removeItem(sessionStorageKey(token));
+          } catch {
+            /* ignore */
+          }
+        }
+      } finally {
+        if (!cancelled) setUnlockChecking(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, applyUnlockSuccess]);
+
+  useEffect(() => {
+    if (!unlocked) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -137,11 +220,11 @@ export function BetaReaderClient({
     return () => {
       cancelled = true;
     };
-  }, [token, projectId]);
+  }, [unlocked, token, projectId]);
 
   const reportProgress = useCallback(
     (chapterId: string, percent: number) => {
-      if (!chapterId || dnf) return;
+      if (!unlocked || !chapterId || dnf) return;
       const pct = Math.max(0, Math.min(100, Math.round(percent)));
       if (pct < lastSentPercent.current && pct < 100) return;
       if (Math.abs(pct - lastSentPercent.current) < 3 && pct < 100) return;
@@ -152,10 +235,11 @@ export function BetaReaderClient({
         body: JSON.stringify({ token, projectId, chapterId, percent: pct }),
       });
     },
-    [token, projectId, dnf]
+    [unlocked, token, projectId, dnf]
   );
 
   useEffect(() => {
+    if (!unlocked) return;
     lastSentPercent.current = 0;
     if (!active || dnf) return;
     reportProgress(active, 1);
@@ -181,12 +265,13 @@ export function BetaReaderClient({
       window.removeEventListener("resize", measure);
       if (progressTimer.current) clearTimeout(progressTimer.current);
     };
-  }, [active, dnf, reportProgress]);
+  }, [unlocked, active, dnf, reportProgress]);
 
   useEffect(() => {
+    if (!unlocked) return;
     if (initialChapterId && chapters.some((c) => c.id === initialChapterId)) return;
     try {
-      const stored = localStorage.getItem(storageKey(token));
+      const stored = localStorage.getItem(chapterStorageKey(token));
       if (stored && chapters.some((c) => c.id === stored)) {
         setActive(stored);
       }
@@ -194,7 +279,7 @@ export function BetaReaderClient({
       /* ignore */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [unlocked, token, chapters]);
 
   const selectChapter = useCallback(
     (id: string) => {
@@ -203,7 +288,7 @@ export function BetaReaderClient({
       setPop(null);
       setPopBody("");
       try {
-        localStorage.setItem(storageKey(token), id);
+        localStorage.setItem(chapterStorageKey(token), id);
       } catch {
         /* ignore */
       }
@@ -215,13 +300,13 @@ export function BetaReaderClient({
   );
 
   useEffect(() => {
-    if (!active) return;
+    if (!unlocked || !active) return;
     if (searchParams.get("chapter") === active) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("chapter", active);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [unlocked, active]);
 
   const showPromptFromSelection = useCallback(() => {
     if (composingRef.current || pointingRef.current) return;
@@ -251,6 +336,7 @@ export function BetaReaderClient({
   }, []);
 
   useEffect(() => {
+    if (!unlocked) return;
     function idleDelay() {
       return window.matchMedia("(pointer: coarse)").matches ? 1100 : 450;
     }
@@ -295,9 +381,10 @@ export function BetaReaderClient({
       document.removeEventListener("pointercancel", onPointerUp);
       if (delayRef.current) clearTimeout(delayRef.current);
     };
-  }, [showPromptFromSelection]);
+  }, [unlocked, showPromptFromSelection]);
 
   useEffect(() => {
+    if (!unlocked) return;
     function reposition() {
       if (!pop || pop.composing) return;
       const rect = selectionRect();
@@ -314,7 +401,40 @@ export function BetaReaderClient({
       vv?.removeEventListener("scroll", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
-  }, [pop]);
+  }, [unlocked, pop]);
+
+  async function submitUnlock(e: React.FormEvent) {
+    e.preventDefault();
+    setUnlockBusy(true);
+    setUnlockMsg("");
+    try {
+      const res = await fetch("/api/beta/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          email,
+          ...(gateNeedsApplication ? { answers } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        if (data.needsApplication) setGateNeedsApplication(true);
+        setUnlockMsg(data.error || "Could not unlock manuscript.");
+        return;
+      }
+      try {
+        sessionStorage.setItem(sessionStorageKey(token), email.trim().toLowerCase());
+      } catch {
+        /* ignore */
+      }
+      applyUnlockSuccess(data);
+    } catch {
+      setUnlockMsg("Could not unlock manuscript.");
+    } finally {
+      setUnlockBusy(false);
+    }
+  }
 
   const chapter = chapters.find((c) => c.id === active);
   const chapterIndex = chapters.findIndex((c) => c.id === active);
@@ -402,6 +522,54 @@ export function BetaReaderClient({
     } finally {
       setDnfBusy(false);
     }
+  }
+
+  if (unlockChecking) {
+    return <p className="font-ui mt-8 text-sm text-muted">Checking access…</p>;
+  }
+
+  if (!unlocked) {
+    return (
+      <form onSubmit={(e) => void submitUnlock(e)} className="font-ui mt-8 space-y-4">
+        <h2 className="font-display text-xl">
+          {gateNeedsApplication ? "Complete the application" : "Confirm your email"}
+        </h2>
+        <p className="text-sm text-muted">
+          {gateNeedsApplication
+            ? "Fill this out once with the email on your invite. Later visits only need that email again."
+            : "Enter the email on this invite to unlock the manuscript. You’ll need it again if you leave and come back later."}
+        </p>
+        {gateNeedsApplication ? (
+          <BetaFormFields
+            form={form}
+            email={email}
+            onEmailChange={setEmail}
+            answers={answers}
+            onAnswersChange={setAnswers}
+          />
+        ) : (
+          <label className="block text-sm">
+            <span className="text-[10px] uppercase tracking-wide text-muted">Email</span>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@email.com"
+              className="mt-1 w-full border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+          </label>
+        )}
+        <button
+          type="submit"
+          disabled={unlockBusy || !email.trim()}
+          className="bg-accent px-4 py-2 text-paper disabled:opacity-50"
+        >
+          {unlockBusy ? "Unlocking…" : "Continue"}
+        </button>
+        {unlockMsg && <p className="text-sm text-muted">{unlockMsg}</p>}
+      </form>
+    );
   }
 
   const popEl =
