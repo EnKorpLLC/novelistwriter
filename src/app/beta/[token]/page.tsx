@@ -31,7 +31,7 @@ export default async function BetaPage({
       .eq("token", token)
       .maybeSingle();
     invite = data as InviteRow | null;
-    if (invite && (invite.status === "pending" || invite.status === "accepted")) {
+    if (invite && (invite.status === "pending" || invite.status === "accepted" || invite.status === "dnf")) {
       const { data: ch } = await admin
         .from("chapters")
         .select("id, title, content_html, sort_order")
@@ -43,7 +43,10 @@ export default async function BetaPage({
     notFound();
   }
 
-  if (!invite || (invite.status !== "pending" && invite.status !== "accepted")) {
+  if (
+    !invite ||
+    (invite.status !== "pending" && invite.status !== "accepted" && invite.status !== "dnf")
+  ) {
     if (invite?.status === "requested") {
       return (
         <div className="mx-auto max-w-lg px-6 py-16">

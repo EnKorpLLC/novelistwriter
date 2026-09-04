@@ -2,6 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Chapter } from "@/lib/types";
+import type { BetaFormField } from "@/lib/beta-form";
+import { newFormFieldId } from "@/lib/beta-form";
+
+type ChapterProgress = {
+  chapterId: string;
+  title: string;
+  percent: number;
+};
 
 type Invite = {
   id: string;
@@ -9,6 +17,11 @@ type Invite = {
   status: string;
   link: string | null;
   created_at: string;
+  applicationAnswers?: Record<string, string>;
+  dnfReason?: string | null;
+  dnfAt?: string | null;
+  chapterProgress?: ChapterProgress[];
+  currentChapter?: { id: string; title: string; percent: number } | null;
 };
 
 type Comment = {
@@ -33,10 +46,14 @@ export function BetaPanel({ projectId, chapters }: Props) {
   const [email, setEmail] = useState("");
   const [invites, setInvites] = useState<Invite[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [formFields, setFormFields] = useState<BetaFormField[]>([]);
+  const [draftFields, setDraftFields] = useState<BetaFormField[]>([]);
   const [applyLink, setApplyLink] = useState("");
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState("");
   const [activeChapter, setActiveChapter] = useState<string | null>(null);
+  const [expandedInvite, setExpandedInvite] = useState<string | null>(null);
+  const [savingForm, setSavingForm] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -47,6 +64,9 @@ export function BetaPanel({ projectId, chapters }: Props) {
         setInvites(data.invites || []);
         setComments(data.comments || []);
         setApplyLink(data.applyLink || "");
+        const fields = (data.applicationForm || []) as BetaFormField[];
+        setFormFields(fields);
+        setDraftFields(fields);
       }
     } finally {
       setLoading(false);
@@ -60,7 +80,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
 
   const requests = invites.filter((i) => i.status === "requested");
   const readers = invites.filter(
-    (i) => i.status === "pending" || i.status === "accepted"
+    (i) => i.status === "pending" || i.status === "accepted" || i.status === "dnf"
   );
   const closed = invites.filter((i) => i.status === "denied" || i.status === "revoked");
 
@@ -145,6 +165,38 @@ export function BetaPanel({ projectId, chapters }: Props) {
     void load();
   }
 
+  async function saveForm() {
+    setSavingForm(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/beta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveForm", fields: draftFields }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not save form");
+        return;
+      }
+      setFormFields(data.applicationForm || draftFields);
+      setDraftFields(data.applicationForm || draftFields);
+      setNote("Application form saved.");
+    } finally {
+      setSavingForm(false);
+    }
+  }
+
+  function answerLines(inv: Invite) {
+    const answers = inv.applicationAnswers || {};
+    return formFields
+      .map((f) => {
+        const v = answers[f.id];
+        if (!v) return null;
+        return { label: f.label, value: v };
+      })
+      .filter(Boolean) as { label: string; value: string }[];
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -152,9 +204,92 @@ export function BetaPanel({ projectId, chapters }: Props) {
           <div>
             <h2 className="font-display text-2xl">Beta readers</h2>
             <p className="mt-1 text-sm text-muted">
-              Invite people, share an apply link, approve requests, and read comments by chapter.
+              Build an application form, invite people, track reading progress, and review comments.
             </p>
           </div>
+
+          <section className="font-ui border border-line p-4">
+            <h3 className="font-display text-lg">Application form</h3>
+            <p className="mt-1 text-xs text-muted">
+              Questions appear on your public apply link. Email is always collected.
+            </p>
+            <ul className="mt-3 space-y-2">
+              {draftFields.map((field, idx) => (
+                <li key={field.id} className="grid gap-2 border border-line p-2 md:grid-cols-[1fr_8rem_auto_auto]">
+                  <input
+                    className="border border-line px-2 py-1.5 text-sm"
+                    value={field.label}
+                    placeholder="Question"
+                    onChange={(e) =>
+                      setDraftFields((rows) =>
+                        rows.map((r, i) => (i === idx ? { ...r, label: e.target.value } : r))
+                      )
+                    }
+                  />
+                  <select
+                    className="border border-line px-2 py-1.5 text-sm"
+                    value={field.type}
+                    onChange={(e) =>
+                      setDraftFields((rows) =>
+                        rows.map((r, i) =>
+                          i === idx
+                            ? { ...r, type: e.target.value as BetaFormField["type"] }
+                            : r
+                        )
+                      )
+                    }
+                  >
+                    <option value="short">Short answer</option>
+                    <option value="long">Long answer</option>
+                    <option value="yesno">Yes / No</option>
+                  </select>
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(field.required)}
+                      onChange={(e) =>
+                        setDraftFields((rows) =>
+                          rows.map((r, i) =>
+                            i === idx ? { ...r, required: e.target.checked } : r
+                          )
+                        )
+                      }
+                    />
+                    Required
+                  </label>
+                  <button
+                    type="button"
+                    className="text-xs text-danger"
+                    onClick={() => setDraftFields((rows) => rows.filter((_, i) => i !== idx))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="border border-line px-3 py-1.5 text-xs"
+                onClick={() =>
+                  setDraftFields((rows) => [
+                    ...rows,
+                    { id: newFormFieldId(), label: "", type: "short", required: false },
+                  ])
+                }
+              >
+                + Question
+              </button>
+              <button
+                type="button"
+                disabled={savingForm}
+                className="bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-50"
+                onClick={() => void saveForm()}
+              >
+                {savingForm ? "Saving…" : "Save form"}
+              </button>
+            </div>
+          </section>
 
           <section className="font-ui grid gap-4 border border-line p-4 md:grid-cols-2">
             <div>
@@ -174,7 +309,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
             <div>
               <p className="text-[10px] uppercase tracking-wide text-muted">Application link</p>
               <p className="mt-1 text-xs text-muted">
-                Share this if people should request access first.
+                Share this so readers fill out your form first.
               </p>
               <button
                 type="button"
@@ -194,37 +329,68 @@ export function BetaPanel({ projectId, chapters }: Props) {
           {requests.length > 0 && (
             <section>
               <h3 className="font-display text-xl">Requests</h3>
-              <p className="mt-1 text-sm text-muted">Approve to send them a reading link, or deny.</p>
+              <p className="mt-1 text-sm text-muted">Review answers, then approve or deny.</p>
               <ul className="font-ui mt-3 space-y-2">
-                {requests.map((inv) => (
-                  <li
-                    key={inv.id}
-                    className="flex flex-wrap items-center justify-between gap-2 border border-accent/40 bg-accent/5 px-3 py-2"
-                  >
-                    <span className="text-sm">
-                      {inv.email}
-                      <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
-                        requested
-                      </span>
-                    </span>
-                    <span className="flex gap-2">
-                      <button
-                        type="button"
-                        className="bg-accent px-3 py-1 text-xs text-paper"
-                        onClick={() => void act(inv.id, "approve")}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        className="border border-line px-3 py-1 text-xs text-danger"
-                        onClick={() => void act(inv.id, "deny")}
-                      >
-                        Deny
-                      </button>
-                    </span>
-                  </li>
-                ))}
+                {requests.map((inv) => {
+                  const lines = answerLines(inv);
+                  const open = expandedInvite === inv.id;
+                  return (
+                    <li
+                      key={inv.id}
+                      className="border border-accent/40 bg-accent/5 px-3 py-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          className="text-left text-sm"
+                          onClick={() => setExpandedInvite(open ? null : inv.id)}
+                        >
+                          {inv.email}
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
+                            requested
+                          </span>
+                          {lines.length > 0 && (
+                            <span className="ml-2 text-[10px] text-accent">
+                              {open ? "Hide answers" : "View answers"}
+                            </span>
+                          )}
+                        </button>
+                        <span className="flex gap-2">
+                          <button
+                            type="button"
+                            className="bg-accent px-3 py-1 text-xs text-paper"
+                            onClick={() => void act(inv.id, "approve")}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="border border-line px-3 py-1 text-xs text-danger"
+                            onClick={() => void act(inv.id, "deny")}
+                          >
+                            Deny
+                          </button>
+                        </span>
+                      </div>
+                      {open && (
+                        <div className="mt-2 space-y-2 border-t border-accent/20 pt-2 text-sm">
+                          {lines.length === 0 ? (
+                            <p className="text-muted">No form answers (email only).</p>
+                          ) : (
+                            lines.map((line) => (
+                              <div key={line.label}>
+                                <p className="text-[10px] uppercase tracking-wide text-muted">
+                                  {line.label}
+                                </p>
+                                <p className="whitespace-pre-wrap text-ink">{line.value}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           )}
@@ -237,44 +403,110 @@ export function BetaPanel({ projectId, chapters }: Props) {
               <p className="mt-2 text-sm text-muted">No active readers yet.</p>
             ) : (
               <ul className="font-ui mt-3 space-y-2">
-                {readers.map((inv) => (
-                  <li
-                    key={inv.id}
-                    className="flex flex-wrap items-center justify-between gap-2 border border-line px-3 py-2"
-                  >
-                    <span className="text-sm">
-                      {inv.email}{" "}
-                      <span className="text-[10px] uppercase tracking-wide text-muted">
-                        {inv.status === "accepted" ? "reading" : "invited"}
-                      </span>
-                    </span>
-                    <span className="flex gap-2">
-                      {inv.link && (
+                {readers.map((inv) => {
+                  const isDnf = inv.status === "dnf";
+                  const open = expandedInvite === inv.id;
+                  const lines = answerLines(inv);
+                  return (
+                    <li
+                      key={inv.id}
+                      className={`border px-3 py-2 ${
+                        isDnf
+                          ? "border-danger/50 bg-danger/10 text-danger"
+                          : "border-line"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
                         <button
                           type="button"
-                          className="text-xs text-accent hover:underline"
-                          onClick={() => {
-                            void navigator.clipboard.writeText(inv.link!);
-                            setNote("Reading link copied.");
-                          }}
+                          className={`min-w-0 flex-1 text-left text-sm ${isDnf ? "text-danger" : ""}`}
+                          onClick={() => setExpandedInvite(open ? null : inv.id)}
                         >
-                          Copy link
+                          <span className="font-medium">{inv.email}</span>{" "}
+                          <span
+                            className={`text-[10px] uppercase tracking-wide ${
+                              isDnf ? "text-danger" : "text-muted"
+                            }`}
+                          >
+                            {isDnf ? "DNF" : inv.status === "accepted" ? "reading" : "invited"}
+                          </span>
+                          {inv.currentChapter && (
+                            <span className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}>
+                              Now: {inv.currentChapter.title} · {inv.currentChapter.percent}%
+                            </span>
+                          )}
                         </button>
+                        <span className="flex gap-2">
+                          {inv.link && !isDnf && (
+                            <button
+                              type="button"
+                              className="text-xs text-accent hover:underline"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(inv.link!);
+                                setNote("Reading link copied.");
+                              }}
+                            >
+                              Copy link
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className={`text-xs hover:underline ${isDnf ? "text-danger" : "text-danger"}`}
+                            onClick={() => {
+                              if (confirm(`Remove ${inv.email}? Their link will stop working.`)) {
+                                void act(inv.id, "remove");
+                              }
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </span>
+                      </div>
+                      {open && (
+                        <div className={`mt-3 space-y-3 border-t pt-3 text-sm ${isDnf ? "border-danger/30" : "border-line"}`}>
+                          {isDnf && inv.dnfReason && (
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide">DNF reason</p>
+                              <p className="mt-1 whitespace-pre-wrap">{inv.dnfReason}</p>
+                            </div>
+                          )}
+                          {lines.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[10px] uppercase tracking-wide opacity-80">
+                                Application
+                              </p>
+                              {lines.map((line) => (
+                                <div key={line.label}>
+                                  <p className="text-[10px] uppercase tracking-wide opacity-70">
+                                    {line.label}
+                                  </p>
+                                  <p className="whitespace-pre-wrap">{line.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide opacity-80">
+                              Chapters read
+                            </p>
+                            {(inv.chapterProgress || []).length === 0 ? (
+                              <p className="mt-1 text-xs opacity-70">No reading progress yet.</p>
+                            ) : (
+                              <ul className="mt-1 space-y-1">
+                                {(inv.chapterProgress || []).map((ch) => (
+                                  <li key={ch.chapterId} className="flex justify-between gap-2 text-xs">
+                                    <span className="truncate">{ch.title}</span>
+                                    <span>{ch.percent}%</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
                       )}
-                      <button
-                        type="button"
-                        className="text-xs text-danger hover:underline"
-                        onClick={() => {
-                          if (confirm(`Remove ${inv.email}? Their link will stop working.`)) {
-                            void act(inv.id, "remove");
-                          }
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </span>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
             {closed.length > 0 && (

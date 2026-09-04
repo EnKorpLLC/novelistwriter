@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { appUrl } from "@/lib/stripe";
+import { normalizeBetaFormFields } from "@/lib/beta-form";
 
 async function requireProject(projectId: string) {
   const supabase = await createClient();
@@ -10,12 +11,12 @@ async function requireProject(projectId: string) {
   if (!user) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   const { data: project } = await supabase
     .from("projects")
-    .select("id")
+    .select("id, beta_application_form")
     .eq("id", projectId)
     .eq("user_id", user.id)
     .maybeSingle();
   if (!project) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
-  return { supabase, user };
+  return { supabase, user, project };
 }
 
 export async function GET(
@@ -25,22 +26,33 @@ export async function GET(
   const { id: projectId } = await params;
   const auth = await requireProject(projectId);
   if ("error" in auth && auth.error) return auth.error;
-  const { supabase } = auth;
+  const { supabase, project } = auth;
 
-  const [{ data: invites }, { data: comments }, { data: chapters }] = await Promise.all([
-    supabase
-      .from("beta_invites")
-      .select("id, email, token, status, created_at")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("beta_comments")
-      .select("id, body, excerpt, chapter_id, invite_id, created_at")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: false })
-      .limit(2000),
-    supabase.from("chapters").select("id, title, sort_order").eq("project_id", projectId).order("sort_order"),
-  ]);
+  const [{ data: invites }, { data: comments }, { data: chapters }, { data: progress }] =
+    await Promise.all([
+      supabase
+        .from("beta_invites")
+        .select(
+          "id, email, token, status, created_at, application_answers, dnf_reason, dnf_at, current_chapter_id"
+        )
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("beta_comments")
+        .select("id, body, excerpt, chapter_id, invite_id, created_at")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(2000),
+      supabase
+        .from("chapters")
+        .select("id, title, sort_order")
+        .eq("project_id", projectId)
+        .order("sort_order"),
+      supabase
+        .from("beta_reading_progress")
+        .select("invite_id, chapter_id, percent, updated_at")
+        .eq("project_id", projectId),
+    ]);
 
   const inviteIds = [
     ...new Set((comments || []).map((c) => c.invite_id).filter(Boolean)),
@@ -53,13 +65,62 @@ export async function GET(
   const chapterOrder = new Map((chapters || []).map((c) => [c.id, c.sort_order]));
   const inviteEmail = new Map((commentInvites || []).map((i) => [i.id, i.email]));
 
+  const progressByInvite = new Map<
+    string,
+    { chapterId: string; title: string; percent: number; sortOrder: number }[]
+  >();
+  for (const row of progress || []) {
+    const list = progressByInvite.get(row.invite_id) || [];
+    list.push({
+      chapterId: row.chapter_id,
+      title: chapterTitle.get(row.chapter_id) || "Chapter",
+      percent: row.percent,
+      sortOrder: chapterOrder.get(row.chapter_id) ?? 9999,
+    });
+    progressByInvite.set(row.invite_id, list);
+  }
+  for (const list of progressByInvite.values()) {
+    list.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  const formFields = normalizeBetaFormFields(project.beta_application_form);
+
   return NextResponse.json({
     applyLink: appUrl(`/beta/apply/${projectId}`),
+    applicationForm: formFields,
     chapters: chapters || [],
-    invites: (invites || []).map((i) => ({
-      ...i,
-      link: i.status === "requested" || i.status === "denied" ? null : appUrl(`/beta/${i.token}`),
-    })),
+    invites: (invites || []).map((i) => {
+      const chapterProgress = progressByInvite.get(i.id) || [];
+      const currentId = i.current_chapter_id as string | null;
+      const current =
+        (currentId && chapterProgress.find((p) => p.chapterId === currentId)) ||
+        [...chapterProgress].sort((a, b) => b.percent - a.percent)[0] ||
+        null;
+      return {
+        ...i,
+        link:
+          i.status === "requested" || i.status === "denied" || i.status === "revoked"
+            ? null
+            : appUrl(`/beta/${i.token}`),
+        applicationAnswers: i.application_answers || {},
+        dnfReason: i.dnf_reason,
+        dnfAt: i.dnf_at,
+        chapterProgress,
+        currentChapter: current
+          ? {
+              id: current.chapterId,
+              title: current.title,
+              percent: current.percent,
+            }
+          : currentId
+            ? {
+                id: currentId,
+                title: chapterTitle.get(currentId) || "Chapter",
+                percent: 0,
+              }
+            : null,
+      };
+    }),
     comments: (comments || []).map((c) => ({
       id: c.id,
       body: c.body,
@@ -82,8 +143,34 @@ export async function POST(
   if ("error" in auth && auth.error) return auth.error;
   const { supabase, user } = auth;
 
-  const { email } = await req.json();
-  const trimmed = String(email || "")
+  const body = await req.json();
+
+  if (body?.action === "saveForm") {
+    const fields = normalizeBetaFormFields(body.fields);
+    const { error } = await supabase
+      .from("projects")
+      .update({
+        beta_application_form: fields,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", projectId)
+      .eq("user_id", user.id);
+    if (error) {
+      if (error.message.includes("beta_application_form")) {
+        return NextResponse.json(
+          {
+            error:
+              "Database needs an update. Run supabase/migration_beta_form.sql in the Supabase SQL editor.",
+          },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, applicationForm: fields });
+  }
+
+  const trimmed = String(body.email || "")
     .trim()
     .toLowerCase();
   if (!trimmed || !trimmed.includes("@")) {
@@ -98,10 +185,15 @@ export async function POST(
     .maybeSingle();
 
   if (existing) {
-    if (existing.status === "revoked" || existing.status === "denied") {
+    if (existing.status === "revoked" || existing.status === "denied" || existing.status === "dnf") {
       const { data, error } = await supabase
         .from("beta_invites")
-        .update({ status: "pending", email: trimmed })
+        .update({
+          status: "pending",
+          email: trimmed,
+          dnf_reason: null,
+          dnf_at: null,
+        })
         .eq("id", existing.id)
         .select("*")
         .single();

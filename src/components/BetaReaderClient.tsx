@@ -87,6 +87,8 @@ export function BetaReaderClient({
   const composingRef = useRef(false);
   const pointingRef = useRef(false);
   const delayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSentPercent = useRef(0);
 
   const resolveId = useCallback(
     (preferred?: string | null) => {
@@ -106,12 +108,80 @@ export function BetaReaderClient({
   const [popMsg, setPopMsg] = useState("");
   const [sending, setSending] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [dnf, setDnf] = useState(false);
+  const [dnfOpen, setDnfOpen] = useState(false);
+  const [dnfReason, setDnfReason] = useState("");
+  const [dnfBusy, setDnfBusy] = useState(false);
+  const [dnfMsg, setDnfMsg] = useState("");
 
   composingRef.current = pop?.composing ?? false;
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/beta/progress?token=${encodeURIComponent(token)}&projectId=${encodeURIComponent(projectId)}`
+        );
+        const data = await res.json();
+        if (cancelled || !res.ok) return;
+        if (data.status === "dnf") setDnf(true);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, projectId]);
+
+  const reportProgress = useCallback(
+    (chapterId: string, percent: number) => {
+      if (!chapterId || dnf) return;
+      const pct = Math.max(0, Math.min(100, Math.round(percent)));
+      if (pct < lastSentPercent.current && pct < 100) return;
+      if (Math.abs(pct - lastSentPercent.current) < 3 && pct < 100) return;
+      lastSentPercent.current = pct;
+      void fetch("/api/beta/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, projectId, chapterId, percent: pct }),
+      });
+    },
+    [token, projectId, dnf]
+  );
+
+  useEffect(() => {
+    lastSentPercent.current = 0;
+    if (!active || dnf) return;
+    reportProgress(active, 1);
+
+    function measure() {
+      const el = articleRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      const total = Math.max(1, rect.height);
+      // How much of the article has scrolled into / past the viewport
+      const seen = Math.min(total, Math.max(0, vh - rect.top));
+      const pct = Math.round((seen / total) * 100);
+      if (progressTimer.current) clearTimeout(progressTimer.current);
+      progressTimer.current = setTimeout(() => reportProgress(active, pct), 400);
+    }
+
+    measure();
+    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+      if (progressTimer.current) clearTimeout(progressTimer.current);
+    };
+  }, [active, dnf, reportProgress]);
 
   useEffect(() => {
     if (initialChapterId && chapters.some((c) => c.id === initialChapterId)) return;
@@ -312,6 +382,28 @@ export function BetaReaderClient({
     }
   }
 
+  async function submitDnf() {
+    setDnfBusy(true);
+    setDnfMsg("");
+    try {
+      const res = await fetch("/api/beta/dnf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, projectId, reason: dnfReason }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDnfMsg(data.error || "Could not save DNF.");
+        return;
+      }
+      setDnf(true);
+      setDnfOpen(false);
+      setDnfReason("");
+    } finally {
+      setDnfBusy(false);
+    }
+  }
+
   const popEl =
     pop && mounted
       ? createPortal(
@@ -374,6 +466,13 @@ export function BetaReaderClient({
 
   return (
     <div className="mt-8">
+      {dnf && (
+        <div className="font-ui mb-6 border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">
+          You’ve marked this manuscript DNF. The author can see your reason. Reading is still
+          available if you want to continue privately.
+        </div>
+      )}
+
       <label className="font-ui block text-[10px] uppercase tracking-wide text-muted">
         Chapter
         <select
@@ -443,6 +542,74 @@ export function BetaReaderClient({
         </button>
         {generalMsg && <p className="mt-2 text-sm text-muted">{generalMsg}</p>}
       </div>
+
+      <div className="font-ui mt-10 border-t border-line pt-6">
+        <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={dnf}
+            disabled={dnf}
+            onChange={(e) => {
+              if (e.target.checked) setDnfOpen(true);
+            }}
+          />
+          <span>
+            <span className="font-medium text-danger">DNF</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Mark if you’re stopping this beta read. The author will see your reason in red.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      {dnfOpen &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[120] flex items-end justify-center bg-ink/40 p-4 sm:items-center">
+            <div
+              role="dialog"
+              aria-label="DNF reason"
+              className="font-ui w-full max-w-md border border-line bg-paper p-4 shadow-lg"
+            >
+              <h3 className="font-display text-xl text-danger">Mark as DNF?</h3>
+              <p className="mt-2 text-sm text-muted">
+                Tell the author why you’re stopping. This can’t be undone from here.
+              </p>
+              <textarea
+                className="mt-3 w-full border border-line p-2 text-sm"
+                rows={4}
+                value={dnfReason}
+                onChange={(e) => setDnfReason(e.target.value)}
+                placeholder="Why are you marking this DNF?"
+                autoFocus
+              />
+              {dnfMsg && <p className="mt-2 text-xs text-danger">{dnfMsg}</p>}
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="border border-line px-3 py-2 text-sm"
+                  onClick={() => {
+                    setDnfOpen(false);
+                    setDnfReason("");
+                    setDnfMsg("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={dnfBusy || !dnfReason.trim()}
+                  className="bg-danger px-3 py-2 text-sm text-paper disabled:opacity-40"
+                  onClick={() => void submitDnf()}
+                >
+                  {dnfBusy ? "Saving…" : "Confirm DNF"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

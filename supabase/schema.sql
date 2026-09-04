@@ -68,6 +68,7 @@ create table if not exists public.projects (
   metadata jsonb not null default '{}'::jsonb,
   kdp_settings jsonb not null default '{"trim":"6x9","font":"Garamond","margins":"standard"}'::jsonb,
   cover_path text,
+  beta_application_form jsonb not null default '[]'::jsonb,
   is_unlocked boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -216,7 +217,11 @@ create table if not exists public.beta_invites (
   user_id uuid not null references auth.users(id) on delete cascade,
   email text not null,
   token text not null unique default encode(gen_random_bytes(24), 'hex'),
-  status text not null default 'pending' check (status in ('pending', 'requested', 'accepted', 'denied', 'revoked')),
+  status text not null default 'pending' check (status in ('pending', 'requested', 'accepted', 'denied', 'revoked', 'dnf')),
+  application_answers jsonb not null default '{}'::jsonb,
+  dnf_reason text,
+  dnf_at timestamptz,
+  current_chapter_id uuid references public.chapters(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -228,6 +233,16 @@ create table if not exists public.beta_comments (
   body text not null,
   excerpt text,
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.beta_reading_progress (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid not null references public.beta_invites(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  chapter_id uuid not null references public.chapters(id) on delete cascade,
+  percent integer not null default 0 check (percent >= 0 and percent <= 100),
+  updated_at timestamptz not null default now(),
+  unique (invite_id, chapter_id)
 );
 
 create index if not exists idx_projects_user on public.projects(user_id);
@@ -283,6 +298,7 @@ alter table public.arc_tracks enable row level security;
 alter table public.writing_days enable row level security;
 alter table public.beta_invites enable row level security;
 alter table public.beta_comments enable row level security;
+alter table public.beta_reading_progress enable row level security;
 
 create policy "profiles_own" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
 create policy "credits_select_own" on public.credit_balances for select using (auth.uid() = user_id);
@@ -305,6 +321,11 @@ create policy "beta_comments_own" on public.beta_comments for select using (
   exists (select 1 from public.projects p where p.id = project_id and p.user_id = auth.uid())
 );
 create policy "beta_comments_insert" on public.beta_comments for insert with check (true);
+create policy "beta_progress_own" on public.beta_reading_progress for all using (
+  exists (select 1 from public.projects p where p.id = project_id and p.user_id = auth.uid())
+) with check (
+  exists (select 1 from public.projects p where p.id = project_id and p.user_id = auth.uid())
+);
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
 -- Optional private bucket `manuscripts` for raw uploads if needed later
