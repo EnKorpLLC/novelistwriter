@@ -32,6 +32,7 @@ type Comment = {
   chapterTitle: string | null;
   chapterOrder: number;
   readerEmail: string | null;
+  completed: boolean;
   createdAt: string;
 };
 
@@ -58,6 +59,8 @@ export function BetaPanel({ projectId, chapters }: Props) {
   const [activeChapter, setActiveChapter] = useState<string | null>(null);
   const [expandedInvite, setExpandedInvite] = useState<string | null>(null);
   const [savingForm, setSavingForm] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(true);
+  const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -66,7 +69,12 @@ export function BetaPanel({ projectId, chapters }: Props) {
       const data = await res.json();
       if (res.ok) {
         setInvites(data.invites || []);
-        setComments(data.comments || []);
+        setComments(
+          (data.comments || []).map((c: Comment) => ({
+            ...c,
+            completed: Boolean(c.completed),
+          }))
+        );
         setApplyLink(data.applyLink || "");
         const form = normalizeBetaApplicationForm(data.applicationForm);
         setFormFields(form.fields);
@@ -75,6 +83,8 @@ export function BetaPanel({ projectId, chapters }: Props) {
         setDraftWarnings(form.contentWarnings);
         setIncludeIntro(Boolean(form.intro));
         setIncludeWarnings(Boolean(form.contentWarnings));
+      } else if (data.error) {
+        setNote(data.error);
       }
     } finally {
       setLoading(false);
@@ -95,11 +105,17 @@ export function BetaPanel({ projectId, chapters }: Props) {
   const counts = useMemo(() => {
     const map = new Map<string, number>();
     for (const c of comments) {
+      if (c.completed) continue;
       const key = c.chapterId || GENERAL;
       map.set(key, (map.get(key) || 0) + 1);
     }
     return map;
   }, [comments]);
+
+  const openCount = useMemo(
+    () => comments.filter((c) => !c.completed).length,
+    [comments]
+  );
 
   const chapterNav = useMemo(() => {
     const rows: { id: string; title: string; count: number }[] = chapters.map((ch) => ({
@@ -122,7 +138,46 @@ export function BetaPanel({ projectId, chapters }: Props) {
 
   const chapterComments = comments
     .filter((c) => (c.chapterId || GENERAL) === activeChapter)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .filter((c) => showCompleted || !c.completed)
+    .sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+  async function commentAct(
+    commentId: string,
+    action: "complete" | "uncomplete" | "delete"
+  ) {
+    if (action === "delete") {
+      const ok = window.confirm("Delete this comment permanently?");
+      if (!ok) return;
+    }
+    setBusyCommentId(commentId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/beta`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Update failed");
+        return;
+      }
+      if (action === "delete") {
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+        setNote("Comment deleted.");
+      } else {
+        const completed = action === "complete";
+        setComments((prev) =>
+          prev.map((c) => (c.id === commentId ? { ...c, completed } : c))
+        );
+        setNote(completed ? "Marked complete." : "Marked open again.");
+      }
+    } finally {
+      setBusyCommentId(null);
+    }
+  }
 
   async function invite() {
     const res = await fetch(`/api/projects/${projectId}/beta`, {
@@ -668,8 +723,17 @@ export function BetaPanel({ projectId, chapters }: Props) {
           <section>
             <h3 className="font-display text-xl">Comments</h3>
             <p className="mt-1 text-sm text-muted">
-              {comments.length} total. Pick a chapter — you only see that chapter’s notes.
+              {openCount} open · {comments.length} total. Pick a chapter — you only see that
+              chapter’s notes.
             </p>
+            <label className="font-ui mt-2 flex items-center gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={showCompleted}
+                onChange={(e) => setShowCompleted(e.target.checked)}
+              />
+              Show completed
+            </label>
             <div className="mt-4 flex min-h-[20rem] flex-col overflow-hidden border border-line md:flex-row">
               <nav className="max-h-56 shrink-0 overflow-y-auto border-b border-line md:max-h-none md:w-52 md:border-b-0 md:border-r">
                 {chapterNav.length === 0 ? (
@@ -700,24 +764,64 @@ export function BetaPanel({ projectId, chapters }: Props) {
                   <p className="text-sm text-muted">No comments on this chapter.</p>
                 ) : (
                   <ul className="space-y-3">
-                    {chapterComments.map((c) => (
-                      <li key={c.id} className="border border-line bg-paper-deep/30 px-3 py-3">
-                        <div className="font-ui flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-muted">
-                          <span>{c.readerEmail || "Reader"}</span>
-                          <time dateTime={c.createdAt}>
-                            {new Date(c.createdAt).toLocaleString()}
-                          </time>
-                        </div>
-                        {c.excerpt && (
-                          <blockquote className="mt-2 border-l-2 border-accent/50 pl-3 text-sm italic text-muted">
-                            “{c.excerpt}”
-                          </blockquote>
-                        )}
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                          {c.body}
-                        </p>
-                      </li>
-                    ))}
+                    {chapterComments.map((c) => {
+                      const busy = busyCommentId === c.id;
+                      return (
+                        <li
+                          key={c.id}
+                          className={`border border-line px-3 py-3 ${
+                            c.completed
+                              ? "bg-paper-deep/15 opacity-70"
+                              : "bg-paper-deep/30"
+                          }`}
+                        >
+                          <div className="font-ui flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-muted">
+                            <span>
+                              {c.readerEmail || "Reader"}
+                              {c.completed && (
+                                <span className="ml-2 uppercase tracking-wide text-accent">
+                                  completed
+                                </span>
+                              )}
+                            </span>
+                            <time dateTime={c.createdAt}>
+                              {new Date(c.createdAt).toLocaleString()}
+                            </time>
+                          </div>
+                          {c.excerpt && (
+                            <blockquote className="mt-2 border-l-2 border-accent/50 pl-3 text-sm italic text-muted">
+                              “{c.excerpt}”
+                            </blockquote>
+                          )}
+                          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                            {c.body}
+                          </p>
+                          <div className="font-ui mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="bg-accent px-3 py-1 text-xs text-paper disabled:opacity-50"
+                              onClick={() =>
+                                void commentAct(
+                                  c.id,
+                                  c.completed ? "uncomplete" : "complete"
+                                )
+                              }
+                            >
+                              {c.completed ? "Reopen" : "Complete"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="border border-line px-3 py-1 text-xs text-danger disabled:opacity-50"
+                              onClick={() => void commentAct(c.id, "delete")}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>

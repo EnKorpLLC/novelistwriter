@@ -232,6 +232,7 @@ create table if not exists public.beta_comments (
   invite_id uuid references public.beta_invites(id) on delete set null,
   body text not null,
   excerpt text,
+  completed boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -321,6 +322,14 @@ create policy "beta_comments_own" on public.beta_comments for select using (
   exists (select 1 from public.projects p where p.id = project_id and p.user_id = auth.uid())
 );
 create policy "beta_comments_insert" on public.beta_comments for insert with check (true);
+create policy "beta_comments_update" on public.beta_comments for update using (
+  exists (select 1 from public.projects p where p.id = project_id and p.user_id = auth.uid())
+) with check (
+  exists (select 1 from public.projects p where p.id = project_id and p.user_id = auth.uid())
+);
+create policy "beta_comments_delete" on public.beta_comments for delete using (
+  exists (select 1 from public.projects p where p.id = project_id and p.user_id = auth.uid())
+);
 create policy "beta_progress_own" on public.beta_reading_progress for all using (
   exists (select 1 from public.projects p where p.id = project_id and p.user_id = auth.uid())
 ) with check (

@@ -28,7 +28,12 @@ export async function GET(
   if ("error" in auth && auth.error) return auth.error;
   const { supabase, project } = auth;
 
-  const [{ data: invites }, { data: comments }, { data: chapters }, { data: progress }] =
+  const [
+    { data: invites },
+    { data: comments, error: commentsError },
+    { data: chapters },
+    { data: progress },
+  ] =
     await Promise.all([
       supabase
         .from("beta_invites")
@@ -39,7 +44,7 @@ export async function GET(
         .order("created_at", { ascending: false }),
       supabase
         .from("beta_comments")
-        .select("id, body, excerpt, chapter_id, invite_id, created_at")
+        .select("id, body, excerpt, chapter_id, invite_id, completed, created_at")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false })
         .limit(2000),
@@ -53,6 +58,16 @@ export async function GET(
         .select("invite_id, chapter_id, percent, updated_at")
         .eq("project_id", projectId),
     ]);
+
+  if (commentsError?.message?.includes("completed")) {
+    return NextResponse.json(
+      {
+        error:
+          "Database needs an update. Run supabase/migration_beta_comments.sql in the Supabase SQL editor.",
+      },
+      { status: 500 }
+    );
+  }
 
   const inviteIds = [
     ...new Set((comments || []).map((c) => c.invite_id).filter(Boolean)),
@@ -129,6 +144,7 @@ export async function GET(
       chapterTitle: c.chapter_id ? chapterTitle.get(c.chapter_id) || "Chapter" : null,
       chapterOrder: c.chapter_id != null ? (chapterOrder.get(c.chapter_id) ?? 9999) : -1,
       readerEmail: c.invite_id ? inviteEmail.get(c.invite_id) || null : null,
+      completed: Boolean(c.completed),
       createdAt: c.created_at,
     })),
   });
@@ -239,12 +255,67 @@ export async function PATCH(
   if ("error" in auth && auth.error) return auth.error;
   const { supabase } = auth;
 
-  const { inviteId, action } = (await req.json()) as {
+  const body = (await req.json()) as {
     inviteId?: string;
-    action?: "approve" | "deny" | "remove";
+    commentId?: string;
+    action?: "approve" | "deny" | "remove" | "complete" | "uncomplete" | "delete";
   };
+
+  if (body.commentId && body.action) {
+    if (body.action === "delete") {
+      const { error } = await supabase
+        .from("beta_comments")
+        .delete()
+        .eq("id", body.commentId)
+        .eq("project_id", projectId);
+      if (error) {
+        if (error.message.includes("policy") || error.message.includes("permission")) {
+          return NextResponse.json(
+            {
+              error:
+                "Database needs an update. Run supabase/migration_beta_comments.sql in the Supabase SQL editor.",
+            },
+            { status: 500 }
+          );
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, deleted: body.commentId });
+    }
+
+    if (body.action === "complete" || body.action === "uncomplete") {
+      const { data, error } = await supabase
+        .from("beta_comments")
+        .update({ completed: body.action === "complete" })
+        .eq("id", body.commentId)
+        .eq("project_id", projectId)
+        .select("id, completed")
+        .maybeSingle();
+      if (error) {
+        if (error.message.includes("completed") || error.message.includes("policy")) {
+          return NextResponse.json(
+            {
+              error:
+                "Database needs an update. Run supabase/migration_beta_comments.sql in the Supabase SQL editor.",
+            },
+            { status: 500 }
+          );
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ ok: true, comment: data });
+    }
+
+    return NextResponse.json({ error: "Invalid comment action" }, { status: 400 });
+  }
+
+  const { inviteId, action } = body;
   if (!inviteId || !action) {
     return NextResponse.json({ error: "inviteId and action required" }, { status: 400 });
+  }
+  if (action !== "approve" && action !== "deny" && action !== "remove") {
+    return NextResponse.json({ error: "Invalid invite action" }, { status: 400 });
   }
 
   const status =
