@@ -47,29 +47,15 @@ export default async function BetaPage({
     notFound();
   }
 
-  if (
-    !invite ||
-    (invite.status !== "pending" && invite.status !== "accepted" && invite.status !== "dnf")
-  ) {
-    if (invite?.status === "requested") {
-      return (
-        <div className="mx-auto max-w-lg px-6 py-16">
-          <p className="font-ui text-xs uppercase tracking-wide text-muted">Beta read</p>
-          <h1 className="font-display mt-2 text-3xl">Waiting for approval</h1>
-          <p className="mt-3 text-sm text-muted">
-            Your request is in the author’s Beta tab. You’ll get a reading link if they approve it.
-          </p>
-        </div>
-      );
-    }
-    notFound();
-  }
+  if (!invite) notFound();
 
   const project = projectFromInvite(invite);
   const form = normalizeBetaApplicationForm(project?.beta_application_form);
   const answers = sanitizeApplicationAnswers(form.fields, invite.application_answers);
   const needsApplication =
-    form.fields.length > 0 && missingRequiredAnswers(form.fields, answers).length > 0;
+    (invite.status === "pending" || invite.status === "accepted" || invite.status === "dnf") &&
+    form.fields.length > 0 &&
+    missingRequiredAnswers(form.fields, answers).length > 0;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">

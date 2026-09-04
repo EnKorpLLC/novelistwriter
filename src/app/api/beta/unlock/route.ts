@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import {
+  accessMessageForStatus,
+  BETA_PERIOD_ENDED_REASON,
+  sanitizeDisplayName,
+} from "@/lib/beta-access";
+import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
+import {
   missingRequiredAnswers,
   normalizeBetaApplicationForm,
   sanitizeApplicationAnswers,
@@ -23,6 +29,7 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     token?: string;
     email?: string;
+    displayName?: string;
     answers?: Record<string, string>;
   };
   const token = String(body.token || "").trim();
@@ -34,14 +41,11 @@ export async function POST(req: Request) {
   const admin = createServiceClient();
   const { data: invite } = await admin
     .from("beta_invites")
-    .select("id, email, status, project_id, application_answers")
+    .select("id, email, status, status_reason, display_name, project_id, application_answers, user_id")
     .eq("token", token)
     .maybeSingle();
 
-  if (
-    !invite ||
-    (invite.status !== "pending" && invite.status !== "accepted" && invite.status !== "dnf")
-  ) {
+  if (!invite) {
     return NextResponse.json({ error: "Invalid or expired link" }, { status: 403 });
   }
 
@@ -54,14 +58,45 @@ export async function POST(req: Request) {
 
   const { data: project } = await admin
     .from("projects")
-    .select("id, beta_application_form")
+    .select("id, user_id, beta_application_form, beta_expires_at")
     .eq("id", invite.project_id)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const { expired } = await enforceBetaExpiry(admin, project);
+  if (expired) {
+    const blocked = accessMessageForStatus("revoked", BETA_PERIOD_ENDED_REASON);
+    return NextResponse.json(blocked, { status: 403 });
+  }
+
+  const { data: freshInvite } = await admin
+    .from("beta_invites")
+    .select("id, email, status, status_reason, display_name, project_id, application_answers, user_id")
+    .eq("id", invite.id)
+    .maybeSingle();
+  const current = freshInvite || invite;
+
+  if (
+    current.status === "requested" ||
+    current.status === "denied" ||
+    current.status === "revoked"
+  ) {
+    const blocked = accessMessageForStatus(current.status, current.status_reason);
+    return NextResponse.json(blocked, { status: 403 });
+  }
+
+  if (
+    current.status !== "pending" &&
+    current.status !== "accepted" &&
+    current.status !== "dnf"
+  ) {
+    return NextResponse.json({ error: "Invalid or expired link" }, { status: 403 });
+  }
+
   const form = normalizeBetaApplicationForm(project.beta_application_form);
-  let answers = invite.application_answers;
+  let answers = current.application_answers;
   const stillNeedsForm = needsApplicationAnswers(form.fields, answers);
+  const displayName = sanitizeDisplayName(body.displayName);
 
   if (stillNeedsForm) {
     const submitted = sanitizeApplicationAnswers(form.fields, body.answers);
@@ -76,29 +111,51 @@ export async function POST(req: Request) {
       );
     }
     answers = submitted;
+    const updatePayload: Record<string, unknown> = {
+      application_answers: answers,
+      status: current.status === "pending" ? "accepted" : current.status,
+      last_read_at: new Date().toISOString(),
+    };
+    if (displayName) updatePayload.display_name = displayName;
     const { error } = await admin
       .from("beta_invites")
-      .update({
-        application_answers: answers,
-        status: invite.status === "pending" ? "accepted" : invite.status,
-      })
-      .eq("id", invite.id);
+      .update(updatePayload)
+      .eq("id", current.id);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-  } else if (invite.status === "pending") {
-    await admin.from("beta_invites").update({ status: "accepted" }).eq("id", invite.id);
+  } else if (current.status === "pending") {
+    await admin
+      .from("beta_invites")
+      .update({
+        status: "accepted",
+        last_read_at: new Date().toISOString(),
+        ...(displayName ? { display_name: displayName } : {}),
+      })
+      .eq("id", current.id);
+  } else {
+    await admin
+      .from("beta_invites")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("id", current.id);
   }
+
+  await upsertBetaContact(admin, {
+    projectId: current.project_id,
+    userId: project.user_id || current.user_id,
+    email,
+    displayName: displayName || current.display_name,
+  });
 
   const { data: chapters } = await admin
     .from("chapters")
     .select("id, title, content_html, sort_order")
-    .eq("project_id", invite.project_id)
+    .eq("project_id", current.project_id)
     .order("sort_order");
 
   return NextResponse.json({
     ok: true,
-    status: invite.status === "dnf" ? "dnf" : "accepted",
+    status: current.status === "dnf" ? "dnf" : "accepted",
     chapters: chapters || [],
     needsApplication: false,
   });

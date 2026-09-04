@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { Chapter } from "@/lib/types";
 import type { BetaApplicationForm, BetaFormField, BetaFormFollowUp } from "@/lib/beta-form";
 import { applicationAnswerLines, newFormFieldId, normalizeBetaApplicationForm } from "@/lib/beta-form";
+import {
+  normalizeBetaAutoApprove,
+  type BetaAutoApproveSettings,
+  BETA_PERIOD_ENDED_REASON,
+} from "@/lib/beta-access";
 
 type ChapterProgress = {
   chapterId: string;
@@ -22,6 +27,17 @@ type Invite = {
   dnfAt?: string | null;
   chapterProgress?: ChapterProgress[];
   currentChapter?: { id: string; title: string; percent: number } | null;
+  displayName?: string | null;
+  statusReason?: string | null;
+  lastReadAt?: string | null;
+};
+
+type Contact = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type Comment = {
@@ -32,6 +48,7 @@ type Comment = {
   chapterTitle: string | null;
   chapterOrder: number;
   readerEmail: string | null;
+  readerName?: string | null;
   completed: boolean;
   createdAt: string;
 };
@@ -43,9 +60,32 @@ type Props = {
 
 const GENERAL = "__general__";
 
+function toDateInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return iso.length >= 10 ? iso.slice(0, 10) : "";
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function inviteLabel(inv: Invite): string {
+  if (inv.displayName?.trim()) return `${inv.displayName.trim()} — ${inv.email}`;
+  return inv.email;
+}
+
+function csvEscape(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 export function BetaPanel({ projectId, chapters }: Props) {
   const [email, setEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [formFields, setFormFields] = useState<BetaFormField[]>([]);
   const [draftIntro, setDraftIntro] = useState("");
@@ -53,6 +93,19 @@ export function BetaPanel({ projectId, chapters }: Props) {
   const [includeIntro, setIncludeIntro] = useState(false);
   const [includeWarnings, setIncludeWarnings] = useState(false);
   const [draftFields, setDraftFields] = useState<BetaFormField[]>([]);
+  const [autoApprove, setAutoApprove] = useState<BetaAutoApproveSettings>({
+    mode: "off",
+    rules: [],
+  });
+  const [expiresAt, setExpiresAt] = useState("");
+  const [periodEnded, setPeriodEnded] = useState(false);
+  const [savingAccess, setSavingAccess] = useState(false);
+  const [reasonPrompt, setReasonPrompt] = useState<null | {
+    inviteId: string;
+    action: "deny" | "remove";
+    email: string;
+  }>(null);
+  const [reasonText, setReasonText] = useState("");
   const [applyLink, setApplyLink] = useState("");
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState("");
@@ -71,6 +124,10 @@ export function BetaPanel({ projectId, chapters }: Props) {
       const data = await res.json();
       if (res.ok) {
         setInvites(data.invites || []);
+        setContacts(data.contacts || []);
+        setAutoApprove(normalizeBetaAutoApprove(data.autoApprove));
+        setExpiresAt(toDateInput(data.expiresAt));
+        setPeriodEnded(Boolean(data.periodEnded));
         setComments(
           (data.comments || []).map((c: Comment) => ({
             ...c,
@@ -103,6 +160,11 @@ export function BetaPanel({ projectId, chapters }: Props) {
     (i) => i.status === "pending" || i.status === "accepted" || i.status === "dnf"
   );
   const closed = invites.filter((i) => i.status === "denied" || i.status === "revoked");
+
+  const yesNoFields = useMemo(() => {
+    const source = draftFields.length ? draftFields : formFields;
+    return source.filter((f) => f.type === "yesno");
+  }, [draftFields, formFields]);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -185,7 +247,10 @@ export function BetaPanel({ projectId, chapters }: Props) {
     const res = await fetch(`/api/projects/${projectId}/beta`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({
+        email,
+        ...(inviteName.trim() ? { displayName: inviteName.trim() } : {}),
+      }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -193,6 +258,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
       return;
     }
     setEmail("");
+    setInviteName("");
     if (data.link) {
       try {
         await navigator.clipboard.writeText(data.link);
@@ -204,17 +270,35 @@ export function BetaPanel({ projectId, chapters }: Props) {
     void load();
   }
 
-  async function act(inviteId: string, action: "approve" | "deny" | "remove") {
+  async function act(
+    inviteId: string,
+    action: "approve" | "deny" | "remove",
+    reason?: string
+  ) {
+    if (action === "deny" || action === "remove") {
+      if (!reason?.trim()) {
+        const inv = invites.find((i) => i.id === inviteId);
+        setReasonPrompt({
+          inviteId,
+          action,
+          email: inv?.email || "",
+        });
+        setReasonText("");
+        return;
+      }
+    }
     const res = await fetch(`/api/projects/${projectId}/beta`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ inviteId, action }),
+      body: JSON.stringify({ inviteId, action, reason }),
     });
     const data = await res.json();
     if (!res.ok) {
       setNote(data.error || "Update failed");
       return;
     }
+    setReasonPrompt(null);
+    setReasonText("");
     if (action === "approve" && data.link) {
       try {
         await navigator.clipboard.writeText(data.link);
@@ -228,6 +312,85 @@ export function BetaPanel({ projectId, chapters }: Props) {
       setNote("Reader removed. Their link no longer works.");
     }
     void load();
+  }
+
+  async function saveAccessSettings() {
+    setSavingAccess(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/beta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "saveAccessSettings",
+          autoApprove,
+          expiresAt: expiresAt || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not save access settings");
+        return;
+      }
+      setAutoApprove(normalizeBetaAutoApprove(data.autoApprove));
+      setExpiresAt(toDateInput(data.expiresAt));
+      setNote("Access settings saved.");
+      void load();
+    } finally {
+      setSavingAccess(false);
+    }
+  }
+
+  async function deleteContact(contactId: string) {
+    const contact = contacts.find((c) => c.id === contactId);
+    const label = contact
+      ? contact.displayName
+        ? `${contact.displayName} (${contact.email})`
+        : contact.email
+      : "this contact";
+    if (!window.confirm(`Delete ${label} from contacts?`)) return;
+    const res = await fetch(`/api/projects/${projectId}/beta`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "deleteContact", contactId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setNote(data.error || "Could not delete contact");
+      return;
+    }
+    setContacts((prev) => prev.filter((c) => c.id !== contactId));
+    setNote("Contact deleted.");
+  }
+
+  function exportEmailsCsv() {
+    let rows: { name: string; email: string }[];
+    if (contacts.length > 0) {
+      rows = contacts.map((c) => ({
+        name: c.displayName || "",
+        email: c.email,
+      }));
+    } else {
+      const seen = new Set<string>();
+      rows = [];
+      for (const inv of invites) {
+        const key = inv.email.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push({ name: inv.displayName || "", email: inv.email });
+      }
+    }
+    const lines = [
+      "Name,Email",
+      ...rows.map((r) => `${csvEscape(r.name)},${csvEscape(r.email)}`),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "beta-readers.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    setNote("CSV downloaded.");
   }
 
   async function saveForm() {
@@ -523,6 +686,12 @@ export function BetaPanel({ projectId, chapters }: Props) {
               <p className="text-[10px] uppercase tracking-wide text-muted">Invite by email</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <input
+                  className="min-w-[8rem] flex-1 border border-line px-3 py-2 text-sm"
+                  placeholder="Name (optional)"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                />
+                <input
                   className="min-w-[10rem] flex-1 border border-line px-3 py-2 text-sm"
                   placeholder="reader@email.com"
                   value={email}
@@ -553,6 +722,193 @@ export function BetaPanel({ projectId, chapters }: Props) {
             {note && <p className="text-sm text-accent md:col-span-2">{note}</p>}
           </section>
 
+          <section className="font-ui border border-line p-4">
+            <h3 className="font-display text-lg text-ink">Access settings</h3>
+            <p className="mt-1 text-xs text-muted">
+              Auto-approve applicants and set when the beta period ends.
+            </p>
+            {periodEnded && (
+              <p className="mt-2 text-sm text-danger">
+                Beta period ended — readers were removed. {BETA_PERIOD_ENDED_REASON}
+              </p>
+            )}
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="text-[10px] uppercase tracking-wide text-muted">
+                  Auto-approve
+                </label>
+                <select
+                  className="mt-1 w-full border border-line px-2 py-1.5 text-sm"
+                  value={autoApprove.mode}
+                  onChange={(e) => {
+                    const mode = e.target.value as BetaAutoApproveSettings["mode"];
+                    setAutoApprove((prev) => ({ ...prev, mode }));
+                  }}
+                >
+                  <option value="off">Off</option>
+                  <option value="all">Approve all</option>
+                  <option value="rules">Approve by yes/no rules</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wide text-muted">
+                  Expiration date
+                </label>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  <input
+                    type="date"
+                    className="border border-line px-2 py-1.5 text-sm"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                  />
+                  {expiresAt && (
+                    <button
+                      type="button"
+                      className="border border-line px-2 py-1.5 text-xs text-muted"
+                      onClick={() => setExpiresAt("")}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            {autoApprove.mode === "rules" && (
+              <div className="mt-3 space-y-2 border border-line p-3">
+                <p className="text-xs text-muted">
+                  Approve when all rules match (yes/no form questions).
+                </p>
+                {yesNoFields.length === 0 ? (
+                  <p className="text-xs text-muted">
+                    Add yes/no questions to the application form to create rules.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {autoApprove.rules.map((rule, idx) => (
+                      <li key={`${rule.fieldId}-${idx}`} className="flex flex-wrap items-center gap-2">
+                        <select
+                          className="min-w-[10rem] flex-1 border border-line px-2 py-1.5 text-sm"
+                          value={rule.fieldId}
+                          onChange={(e) => {
+                            const fieldId = e.target.value;
+                            setAutoApprove((prev) => ({
+                              ...prev,
+                              rules: prev.rules.map((r, i) =>
+                                i === idx ? { ...r, fieldId } : r
+                              ),
+                            }));
+                          }}
+                        >
+                          {yesNoFields.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {f.label || "Untitled question"}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="border border-line px-2 py-1.5 text-sm"
+                          value={rule.answer}
+                          onChange={(e) => {
+                            const answer = e.target.value === "no" ? "no" : "yes";
+                            setAutoApprove((prev) => ({
+                              ...prev,
+                              rules: prev.rules.map((r, i) =>
+                                i === idx ? { ...r, answer } : r
+                              ),
+                            }));
+                          }}
+                        >
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="text-xs text-danger"
+                          onClick={() =>
+                            setAutoApprove((prev) => ({
+                              ...prev,
+                              rules: prev.rules.filter((_, i) => i !== idx),
+                            }))
+                          }
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {yesNoFields.length > 0 && (
+                  <button
+                    type="button"
+                    className="border border-line px-3 py-1.5 text-xs"
+                    onClick={() =>
+                      setAutoApprove((prev) => ({
+                        ...prev,
+                        rules: [
+                          ...prev.rules,
+                          { fieldId: yesNoFields[0].id, answer: "yes" },
+                        ],
+                      }))
+                    }
+                  >
+                    + Rule
+                  </button>
+                )}
+              </div>
+            )}
+            <button
+              type="button"
+              disabled={savingAccess}
+              className="mt-3 bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-50"
+              onClick={() => void saveAccessSettings()}
+            >
+              {savingAccess ? "Saving…" : "Save access settings"}
+            </button>
+          </section>
+
+          {reasonPrompt && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+              <div className="font-ui w-full max-w-md border border-line bg-paper p-4 shadow-sm">
+                <h3 className="font-display text-lg text-ink">
+                  {reasonPrompt.action === "deny" ? "Deny request" : "Remove reader"}
+                </h3>
+                <p className="mt-1 text-sm text-muted">
+                  Reason for {reasonPrompt.email} (required). They may see this message.
+                </p>
+                <textarea
+                  className="mt-3 w-full border border-line px-2 py-1.5 text-sm"
+                  rows={3}
+                  value={reasonText}
+                  onChange={(e) => setReasonText(e.target.value)}
+                  placeholder="Explain why…"
+                  autoFocus
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-50"
+                    disabled={!reasonText.trim()}
+                    onClick={() =>
+                      void act(reasonPrompt.inviteId, reasonPrompt.action, reasonText)
+                    }
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    className="border border-line px-3 py-1.5 text-xs"
+                    onClick={() => {
+                      setReasonPrompt(null);
+                      setReasonText("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {requests.length > 0 && (
             <section>
               <h3 className="font-display text-xl">Requests</h3>
@@ -572,7 +928,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
                           className="text-left text-sm"
                           onClick={() => setExpandedInvite(open ? null : inv.id)}
                         >
-                          {inv.email}
+                          {inviteLabel(inv)}
                           <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
                             requested
                           </span>
@@ -623,7 +979,16 @@ export function BetaPanel({ projectId, chapters }: Props) {
           )}
 
           <section>
-            <h3 className="font-display text-xl">Readers</h3>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="font-display text-xl">Readers</h3>
+              <button
+                type="button"
+                className="font-ui border border-line px-3 py-1.5 text-xs text-accent hover:border-accent"
+                onClick={exportEmailsCsv}
+              >
+                Export emails (CSV)
+              </button>
+            </div>
             {loading && readers.length === 0 ? (
               <p className="mt-2 text-sm text-muted">Loading…</p>
             ) : readers.length === 0 ? (
@@ -646,7 +1011,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className={`min-w-0 flex-1 text-sm ${isDnf ? "text-danger" : ""}`}>
-                          <span className="font-medium">{inv.email}</span>{" "}
+                          <span className="font-medium">{inviteLabel(inv)}</span>{" "}
                           <span
                             className={`text-[10px] uppercase tracking-wide ${
                               isDnf ? "text-danger" : "text-muted"
@@ -661,6 +1026,14 @@ export function BetaPanel({ projectId, chapters }: Props) {
                               Now: {inv.currentChapter.title} · {inv.currentChapter.percent}%
                             </span>
                           )}
+                          <span
+                            className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}
+                          >
+                            Last read:{" "}
+                            {inv.lastReadAt
+                              ? new Date(inv.lastReadAt).toLocaleString()
+                              : "Never"}
+                          </span>
                         </div>
                         <span className="flex flex-wrap gap-2">
                           {inv.link && !isDnf && (
@@ -678,11 +1051,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
                           <button
                             type="button"
                             className="text-xs text-danger hover:underline"
-                            onClick={() => {
-                              if (confirm(`Remove ${inv.email}? Their link will stop working.`)) {
-                                void act(inv.id, "remove");
-                              }
-                            }}
+                            onClick={() => void act(inv.id, "remove")}
                           >
                             Remove
                           </button>
@@ -773,6 +1142,43 @@ export function BetaPanel({ projectId, chapters }: Props) {
           </section>
 
           <section>
+            <h3 className="font-display text-xl">Contacts</h3>
+            <p className="mt-1 text-sm text-muted">
+              Kept after the beta period ends. Export uses this list when available.
+            </p>
+            {contacts.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">No contacts yet.</p>
+            ) : (
+              <ul className="font-ui mt-3 space-y-2">
+                {contacts.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-2 border border-line px-3 py-2"
+                  >
+                    <span className="text-sm">
+                      {c.displayName ? (
+                        <>
+                          <span className="font-medium">{c.displayName}</span>
+                          <span className="text-muted"> — {c.email}</span>
+                        </>
+                      ) : (
+                        c.email
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs text-danger hover:underline"
+                      onClick={() => void deleteContact(c.id)}
+                    >
+                      Delete
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
             <h3 className="font-display text-xl">Comments</h3>
             <p className="mt-1 text-sm text-muted">
               {openCount} open · {comments.length} total. Pick a chapter — you only see that
@@ -818,6 +1224,10 @@ export function BetaPanel({ projectId, chapters }: Props) {
                   <ul className="space-y-3">
                     {chapterComments.map((c) => {
                       const busy = busyCommentId === c.id;
+                      const readerLabel =
+                        c.readerName && c.readerEmail
+                          ? `${c.readerName} (${c.readerEmail})`
+                          : c.readerName || c.readerEmail || "Reader";
                       return (
                         <li
                           key={c.id}
@@ -829,7 +1239,7 @@ export function BetaPanel({ projectId, chapters }: Props) {
                         >
                           <div className="font-ui flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-muted">
                             <span>
-                              {c.readerEmail || "Reader"}
+                              {readerLabel}
                               {c.completed && (
                                 <span className="ml-2 uppercase tracking-wide text-accent">
                                   completed

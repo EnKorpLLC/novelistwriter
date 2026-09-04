@@ -103,6 +103,7 @@ export function BetaReaderClient({
   const [unlockChecking, setUnlockChecking] = useState(true);
   const [gateNeedsApplication, setGateNeedsApplication] = useState(needsApplicationProp);
   const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [unlockMsg, setUnlockMsg] = useState("");
@@ -184,6 +185,15 @@ export function BetaReaderClient({
             /* ignore */
           }
           if (data.needsApplication) setGateNeedsApplication(true);
+          if (
+            data.code === "pending_review" ||
+            data.code === "denied" ||
+            data.code === "removed"
+          ) {
+            setUnlockMsg(
+              data.reason ? `${data.message} ${data.reason}` : data.message || "Access denied."
+            );
+          }
         }
       } catch {
         if (!cancelled) {
@@ -414,13 +424,25 @@ export function BetaReaderClient({
         body: JSON.stringify({
           token,
           email,
-          ...(gateNeedsApplication ? { answers } : {}),
+          ...(gateNeedsApplication
+            ? { answers, displayName }
+            : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         if (data.needsApplication) setGateNeedsApplication(true);
-        setUnlockMsg(data.error || "Could not unlock manuscript.");
+        if (
+          data.code === "pending_review" ||
+          data.code === "denied" ||
+          data.code === "removed"
+        ) {
+          setUnlockMsg(
+            data.reason ? `${data.message} ${data.reason}` : data.message || "Access denied."
+          );
+        } else {
+          setUnlockMsg(data.error || data.message || "Could not unlock manuscript.");
+        }
         return;
       }
       try {
@@ -542,6 +564,8 @@ export function BetaReaderClient({
         {gateNeedsApplication ? (
           <BetaFormFields
             form={form}
+            displayName={displayName}
+            onDisplayNameChange={setDisplayName}
             email={email}
             onEmailChange={setEmail}
             answers={answers}

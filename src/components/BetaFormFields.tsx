@@ -7,16 +7,22 @@ export function BetaFormFields({
   form,
   email,
   onEmailChange,
+  displayName,
+  onDisplayNameChange,
   answers,
   onAnswersChange,
   showEmail = true,
+  showName = true,
 }: {
   form: BetaApplicationForm;
   email?: string;
   onEmailChange?: (value: string) => void;
+  displayName?: string;
+  onDisplayNameChange?: (value: string) => void;
   answers: Record<string, string>;
   onAnswersChange: (next: Record<string, string>) => void;
   showEmail?: boolean;
+  showName?: boolean;
 }) {
   function setAnswer(id: string, value: string) {
     onAnswersChange({ ...answers, [id]: value });
@@ -32,11 +38,28 @@ export function BetaFormFields({
 
       {form.contentWarnings ? (
         <div className="border border-warn/40 bg-warn/10 px-3 py-3">
-          <p className="text-[10px] uppercase tracking-wide text-warn">Content / trigger warnings</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted">Content / trigger warnings</p>
           <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink">
             {form.contentWarnings}
           </p>
         </div>
+      ) : null}
+
+      {showName && onDisplayNameChange != null && displayName != null ? (
+        <label className="block text-sm">
+          <span className="text-[10px] uppercase tracking-wide text-muted">
+            What should we call you?
+          </span>
+          <input
+            type="text"
+            required
+            value={displayName}
+            onChange={(e) => onDisplayNameChange(e.target.value)}
+            placeholder="Your name"
+            maxLength={80}
+            className="mt-1 w-full border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+          />
+        </label>
       ) : null}
 
       {showEmail && onEmailChange != null && email != null ? (

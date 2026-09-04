@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { BETA_PERIOD_ENDED_REASON } from "@/lib/beta-access";
+import { enforceBetaExpiry } from "@/lib/beta-server";
 
 async function loadInvite(token: string, projectId: string) {
   const admin = createServiceClient();
@@ -52,7 +54,28 @@ export async function POST(req: Request) {
   }
   const percent = Math.max(0, Math.min(100, Math.round(Number(body.percent) || 0)));
 
-  const { admin, invite } = await loadInvite(body.token, body.projectId);
+  const admin = createServiceClient();
+  const { data: project } = await admin
+    .from("projects")
+    .select("id, beta_expires_at")
+    .eq("id", body.projectId)
+    .maybeSingle();
+  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const { expired } = await enforceBetaExpiry(admin, project);
+  if (expired) {
+    return NextResponse.json(
+      {
+        error: BETA_PERIOD_ENDED_REASON,
+        code: "removed",
+        message: BETA_PERIOD_ENDED_REASON,
+        reason: BETA_PERIOD_ENDED_REASON,
+      },
+      { status: 403 }
+    );
+  }
+
+  const { invite } = await loadInvite(body.token, body.projectId);
   if (!invite) return NextResponse.json({ error: "Invalid invite" }, { status: 403 });
   if (invite.status === "dnf") {
     return NextResponse.json({ ok: true, skipped: true });
@@ -79,14 +102,15 @@ export async function POST(req: Request) {
     );
   }
 
+  const inviteUpdate: Record<string, unknown> = {
+    current_chapter_id: body.chapterId,
+    last_read_at: new Date().toISOString(),
+  };
   if (invite.status === "pending") {
-    await admin.from("beta_invites").update({ status: "accepted" }).eq("id", invite.id);
+    inviteUpdate.status = "accepted";
   }
 
-  await admin
-    .from("beta_invites")
-    .update({ current_chapter_id: body.chapterId })
-    .eq("id", invite.id);
+  await admin.from("beta_invites").update(inviteUpdate).eq("id", invite.id);
 
   return NextResponse.json({ ok: true, percent });
 }
