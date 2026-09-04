@@ -117,6 +117,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [showCompleted, setShowCompleted] = useState(true);
   const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
   const [formEditorOpen, setFormEditorOpen] = useState(false);
+  const [accessSettingsOpen, setAccessSettingsOpen] = useState(false);
   const [answersOpenId, setAnswersOpenId] = useState<string | null>(null);
 
   async function load() {
@@ -725,147 +726,180 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
           </section>
 
           <section className="font-ui border border-line p-4">
-            <h3 className="font-display text-lg text-ink">Access settings</h3>
-            <p className="mt-1 text-xs text-muted">
-              Auto-approve applicants and set when the beta period ends.
-            </p>
-            {periodEnded && (
-              <p className="mt-2 text-sm text-danger">
-                Beta period ended — readers were removed. {BETA_PERIOD_ENDED_REASON}
-              </p>
-            )}
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="text-[10px] uppercase tracking-wide text-muted">
-                  Auto-approve
-                </label>
-                <select
-                  className="mt-1 w-full border border-line px-2 py-1.5 text-sm"
-                  value={autoApprove.mode}
-                  onChange={(e) => {
-                    const mode = e.target.value as BetaAutoApproveSettings["mode"];
-                    setAutoApprove((prev) => ({ ...prev, mode }));
-                  }}
-                >
-                  <option value="off">Off</option>
-                  <option value="all">Approve all</option>
-                  <option value="rules">Approve by yes/no rules</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-wide text-muted">
-                  Expiration date
-                </label>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  <input
-                    type="date"
-                    className="border border-line px-2 py-1.5 text-sm"
-                    value={expiresAt}
-                    onChange={(e) => setExpiresAt(e.target.value)}
-                  />
-                  {expiresAt && (
-                    <button
-                      type="button"
-                      className="border border-line px-2 py-1.5 text-xs text-muted"
-                      onClick={() => setExpiresAt("")}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-            {autoApprove.mode === "rules" && (
-              <div className="mt-3 space-y-2 border border-line p-3">
-                <p className="text-xs text-muted">
-                  Approve when all rules match (yes/no form questions).
-                </p>
-                {yesNoFields.length === 0 ? (
-                  <p className="text-xs text-muted">
-                    Add yes/no questions to the application form to create rules.
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {autoApprove.rules.map((rule, idx) => (
-                      <li key={`${rule.fieldId}-${idx}`} className="flex flex-wrap items-center gap-2">
-                        <select
-                          className="min-w-[10rem] flex-1 border border-line px-2 py-1.5 text-sm"
-                          value={rule.fieldId}
-                          onChange={(e) => {
-                            const fieldId = e.target.value;
-                            setAutoApprove((prev) => ({
-                              ...prev,
-                              rules: prev.rules.map((r, i) =>
-                                i === idx ? { ...r, fieldId } : r
-                              ),
-                            }));
-                          }}
-                        >
-                          {yesNoFields.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.label || "Untitled question"}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          className="border border-line px-2 py-1.5 text-sm"
-                          value={rule.answer}
-                          onChange={(e) => {
-                            const answer = e.target.value === "no" ? "no" : "yes";
-                            setAutoApprove((prev) => ({
-                              ...prev,
-                              rules: prev.rules.map((r, i) =>
-                                i === idx ? { ...r, answer } : r
-                              ),
-                            }));
-                          }}
-                        >
-                          <option value="yes">Yes</option>
-                          <option value="no">No</option>
-                        </select>
-                        <button
-                          type="button"
-                          className="text-xs text-danger"
-                          onClick={() =>
-                            setAutoApprove((prev) => ({
-                              ...prev,
-                              rules: prev.rules.filter((_, i) => i !== idx),
-                            }))
-                          }
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {yesNoFields.length > 0 && (
-                  <button
-                    type="button"
-                    className="border border-line px-3 py-1.5 text-xs"
-                    onClick={() =>
-                      setAutoApprove((prev) => ({
-                        ...prev,
-                        rules: [
-                          ...prev.rules,
-                          { fieldId: yesNoFields[0].id, answer: "yes" },
-                        ],
-                      }))
-                    }
-                  >
-                    + Rule
-                  </button>
-                )}
-              </div>
-            )}
             <button
               type="button"
-              disabled={savingAccess}
-              className="mt-3 bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-50"
-              onClick={() => void saveAccessSettings()}
+              className="flex w-full items-baseline justify-between gap-3 text-left"
+              onClick={() => setAccessSettingsOpen((o) => !o)}
+              aria-expanded={accessSettingsOpen}
             >
-              {savingAccess ? "Saving…" : "Save access settings"}
+              <span>
+                <span className="font-display block text-lg text-ink">Access settings</span>
+                <span className="mt-1 block text-xs text-muted">
+                  {autoApprove.mode === "off"
+                    ? "Auto-approve off"
+                    : autoApprove.mode === "all"
+                      ? "Auto-approve all"
+                      : `Auto-approve by rules (${autoApprove.rules.length})`}
+                  {expiresAt ? ` · Ends ${expiresAt}` : ""}
+                </span>
+                {periodEnded && (
+                  <span className="mt-1 block text-xs text-danger">
+                    Beta period ended — readers were removed.
+                  </span>
+                )}
+              </span>
+              <span className="shrink-0 text-xs text-accent">
+                {accessSettingsOpen ? "Collapse" : "Edit"}
+              </span>
             </button>
+
+            {accessSettingsOpen && (
+              <div className="mt-4">
+                <p className="text-xs text-muted">
+                  Auto-approve applicants and set when the beta period ends.
+                </p>
+                {periodEnded && (
+                  <p className="mt-2 text-sm text-danger">
+                    Beta period ended — readers were removed. {BETA_PERIOD_ENDED_REASON}
+                  </p>
+                )}
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wide text-muted">
+                      Auto-approve
+                    </label>
+                    <select
+                      className="mt-1 w-full border border-line px-2 py-1.5 text-sm"
+                      value={autoApprove.mode}
+                      onChange={(e) => {
+                        const mode = e.target.value as BetaAutoApproveSettings["mode"];
+                        setAutoApprove((prev) => ({ ...prev, mode }));
+                      }}
+                    >
+                      <option value="off">Off</option>
+                      <option value="all">Approve all</option>
+                      <option value="rules">Approve by yes/no rules</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wide text-muted">
+                      Expiration date
+                    </label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      <input
+                        type="date"
+                        className="border border-line px-2 py-1.5 text-sm"
+                        value={expiresAt}
+                        onChange={(e) => setExpiresAt(e.target.value)}
+                      />
+                      {expiresAt && (
+                        <button
+                          type="button"
+                          className="border border-line px-2 py-1.5 text-xs text-muted"
+                          onClick={() => setExpiresAt("")}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {autoApprove.mode === "rules" && (
+                  <div className="mt-3 space-y-2 border border-line p-3">
+                    <p className="text-xs text-muted">
+                      Approve when all rules match (yes/no form questions).
+                    </p>
+                    {yesNoFields.length === 0 ? (
+                      <p className="text-xs text-muted">
+                        Add yes/no questions to the application form to create rules.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {autoApprove.rules.map((rule, idx) => (
+                          <li
+                            key={`${rule.fieldId}-${idx}`}
+                            className="flex flex-wrap items-center gap-2"
+                          >
+                            <select
+                              className="min-w-[10rem] flex-1 border border-line px-2 py-1.5 text-sm"
+                              value={rule.fieldId}
+                              onChange={(e) => {
+                                const fieldId = e.target.value;
+                                setAutoApprove((prev) => ({
+                                  ...prev,
+                                  rules: prev.rules.map((r, i) =>
+                                    i === idx ? { ...r, fieldId } : r
+                                  ),
+                                }));
+                              }}
+                            >
+                              {yesNoFields.map((f) => (
+                                <option key={f.id} value={f.id}>
+                                  {f.label || "Untitled question"}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              className="border border-line px-2 py-1.5 text-sm"
+                              value={rule.answer}
+                              onChange={(e) => {
+                                const answer = e.target.value === "no" ? "no" : "yes";
+                                setAutoApprove((prev) => ({
+                                  ...prev,
+                                  rules: prev.rules.map((r, i) =>
+                                    i === idx ? { ...r, answer } : r
+                                  ),
+                                }));
+                              }}
+                            >
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                            <button
+                              type="button"
+                              className="text-xs text-danger"
+                              onClick={() =>
+                                setAutoApprove((prev) => ({
+                                  ...prev,
+                                  rules: prev.rules.filter((_, i) => i !== idx),
+                                }))
+                              }
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {yesNoFields.length > 0 && (
+                      <button
+                        type="button"
+                        className="border border-line px-3 py-1.5 text-xs"
+                        onClick={() =>
+                          setAutoApprove((prev) => ({
+                            ...prev,
+                            rules: [
+                              ...prev.rules,
+                              { fieldId: yesNoFields[0].id, answer: "yes" },
+                            ],
+                          }))
+                        }
+                      >
+                        + Rule
+                      </button>
+                    )}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  disabled={savingAccess}
+                  className="mt-3 bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-50"
+                  onClick={() => void saveAccessSettings()}
+                >
+                  {savingAccess ? "Saving…" : "Save access settings"}
+                </button>
+              </div>
+            )}
           </section>
 
           {reasonPrompt && (
