@@ -253,7 +253,8 @@ function BillingInner() {
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
               <li>Everything in Pro</li>
               <li>{SUB_ALLOWANCE.studio} AI credits every month</li>
-              <li>Series tools & beta reader seats</li>
+              <li>Beta reader desk — forms, auto-approve, progress, highlight comments</li>
+              <li>Series tools</li>
               <li>Bring your own API key (BYOK)</li>
               <li>Priority AI jobs</li>
             </ul>
