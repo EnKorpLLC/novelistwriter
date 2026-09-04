@@ -143,6 +143,7 @@ export default function HomePage() {
         </section>
 
         <section id="beta" className="mx-auto max-w-5xl scroll-mt-24 px-6 py-20 md:px-10">
+          <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Studio</p>
           <h2 className="font-display mt-2 text-3xl text-ink">Beta readers, run like a desk</h2>
           <p className="mt-3 max-w-2xl text-muted">
             Studio unlocks a full beta workflow: invite and screen readers, track how far they got,
