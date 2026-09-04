@@ -119,6 +119,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
   const [formEditorOpen, setFormEditorOpen] = useState(false);
   const [accessSettingsOpen, setAccessSettingsOpen] = useState(false);
+  const [readersOpen, setReadersOpen] = useState(false);
+  const [contactsOpen, setContactsOpen] = useState(false);
   const [answersOpenId, setAnswersOpenId] = useState<string | null>(null);
 
   async function load() {
@@ -366,23 +368,10 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
     setNote("Contact deleted.");
   }
 
-  function exportEmailsCsv() {
-    let rows: { name: string; email: string }[];
-    if (contacts.length > 0) {
-      rows = contacts.map((c) => ({
-        name: c.displayName || "",
-        email: c.email,
-      }));
-    } else {
-      const seen = new Set<string>();
-      rows = [];
-      for (const inv of invites) {
-        const key = inv.email.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        rows.push({ name: inv.displayName || "", email: inv.email });
-      }
-    }
+  function downloadCsv(
+    filename: string,
+    rows: { name: string; email: string }[]
+  ) {
     const lines = [
       "Name,Email",
       ...rows.map((r) => `${csvEscape(r.name)},${csvEscape(r.email)}`),
@@ -391,10 +380,42 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "beta-readers.csv";
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    setNote("CSV downloaded.");
+  }
+
+  function exportReadersCsv() {
+    const active = invites.filter(
+      (i) => i.status === "pending" || i.status === "accepted" || i.status === "dnf"
+    );
+    const seen = new Set<string>();
+    const rows: { name: string; email: string }[] = [];
+    for (const inv of active) {
+      const key = inv.email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({ name: inv.displayName || "", email: inv.email });
+    }
+    if (!rows.length) {
+      setNote("No active readers to export.");
+      return;
+    }
+    downloadCsv("beta-readers.csv", rows);
+    setNote(`Exported ${rows.length} reader${rows.length === 1 ? "" : "s"}.`);
+  }
+
+  function exportContactsCsv() {
+    const rows = contacts.map((c) => ({
+      name: c.displayName || "",
+      email: c.email,
+    }));
+    if (!rows.length) {
+      setNote("No contacts to export.");
+      return;
+    }
+    downloadCsv("beta-contacts.csv", rows);
+    setNote(`Exported ${rows.length} contact${rows.length === 1 ? "" : "s"}.`);
   }
 
   async function saveForm() {
