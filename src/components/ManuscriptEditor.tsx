@@ -19,7 +19,7 @@ import {
   clearDraftLocal,
 } from "@/lib/draft-cache";
 import { FontSize } from "@/lib/tiptap-font-size";
-import { SearchHighlight } from "@/lib/tiptap-search-highlight";
+import { SearchHighlight, getSearchState } from "@/lib/tiptap-search-highlight";
 import { EditorToolbar } from "@/components/EditorToolbar";
 import { FindReplaceBar } from "@/components/FindReplaceBar";
 
@@ -201,15 +201,24 @@ export function ManuscriptEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
-  // Look up → highlight matches in the open chapter (Find bar owns highlights when open)
+  // Passage highlight (Look up / beta comment) — scroll to first match
   useEffect(() => {
     if (!editor || findOpen) return;
     const q = (highlightQuery || "").trim();
-    if (q.length >= 2) {
-      editor.commands.setSearchHighlight(q, { caseSensitive: false, currentIndex: 0 });
-    } else {
+    if (q.length < 2) {
       editor.commands.clearSearchHighlight();
+      return;
     }
+    editor.commands.setSearchHighlight(q, { caseSensitive: false, currentIndex: 0 });
+    // Wait past chapter-open scroll suppression so scrollIntoView sticks
+    const t = window.setTimeout(() => {
+      const st = getSearchState(editor);
+      const m = st?.matches[0];
+      if (!m) return;
+      const sel = TextSelection.create(editor.state.doc, m.from, m.to);
+      editor.view.dispatch(editor.state.tr.setSelection(sel).scrollIntoView());
+    }, 450);
+    return () => window.clearTimeout(t);
   }, [editor, highlightQuery, findOpen]);
 
   const openFind = useCallback(

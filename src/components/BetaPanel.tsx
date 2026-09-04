@@ -56,6 +56,8 @@ type Comment = {
 type Props = {
   projectId: string;
   chapters: Chapter[];
+  /** Jump to a chapter in Write and highlight the comment excerpt */
+  onOpenComment?: (chapterId: string, excerpt: string | null) => void;
 };
 
 const GENERAL = "__general__";
@@ -81,7 +83,7 @@ function csvEscape(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-export function BetaPanel({ projectId, chapters }: Props) {
+export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [email, setEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -1259,6 +1261,16 @@ export function BetaPanel({ projectId, chapters }: Props) {
                             {c.body}
                           </p>
                           <div className="font-ui mt-3 flex flex-wrap gap-2">
+                            {c.chapterId && onOpenComment && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                className="border border-line px-3 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
+                                onClick={() => onOpenComment(c.chapterId!, c.excerpt)}
+                              >
+                                {c.excerpt ? "Open in Write" : "Open chapter"}
+                              </button>
+                            )}
                             <button
                               type="button"
                               disabled={busy}

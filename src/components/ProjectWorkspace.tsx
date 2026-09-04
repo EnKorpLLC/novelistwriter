@@ -106,6 +106,7 @@ export function ProjectWorkspace({
     (id: string) => {
       if (!id) return;
       setActiveId(id);
+      setLookupHighlight(null);
       try {
         localStorage.setItem(chapterStorageKey(project.id), id);
       } catch {
@@ -740,7 +741,7 @@ export function ProjectWorkspace({
                         onWordCount={setLiveChapterWords}
                         onLookUp={() => setLookupOpen(true)}
                         focusMode={focusMode}
-                        highlightQuery={lookupOpen ? lookupHighlight : null}
+                        highlightQuery={lookupHighlight}
                       />
                     </div>
                   </>
@@ -806,7 +807,18 @@ export function ProjectWorkspace({
           />
         )}
 
-        {tab === "beta" && <BetaPanel projectId={project.id} chapters={chapters} />}
+        {tab === "beta" && (
+          <BetaPanel
+            projectId={project.id}
+            chapters={chapters}
+            onOpenComment={(chapterId, excerpt) => {
+              selectChapter(chapterId);
+              setLookupHighlight(excerpt && excerpt.trim().length >= 2 ? excerpt.trim() : null);
+              setWritePane("editor");
+              selectTab("write");
+            }}
+          />
+        )}
 
         {tab === "tools" && (
           <ProjectTools

@@ -25,20 +25,36 @@ function findMatches(
   term: string,
   caseSensitive: boolean
 ): SearchMatch[] {
-  if (!term) return [];
+  const needleRaw = term.replace(/\s+/g, " ").trim();
+  if (!needleRaw) return [];
+  const needle = caseSensitive ? needleRaw : needleRaw.toLowerCase();
   const matches: SearchMatch[] = [];
-  const needle = caseSensitive ? term : term.toLowerCase();
+
+  // Flatten text with collapsed whitespace so multi-word excerpts still match.
+  let flat = "";
+  const posMap: number[] = [];
   doc.descendants((node, pos) => {
     if (!node.isText || !node.text) return;
-    const hay = caseSensitive ? node.text : node.text.toLowerCase();
-    let from = 0;
-    while (from < hay.length) {
-      const idx = hay.indexOf(needle, from);
-      if (idx < 0) break;
-      matches.push({ from: pos + idx, to: pos + idx + term.length });
-      from = idx + Math.max(1, term.length);
+    for (let i = 0; i < node.text.length; i++) {
+      const raw = node.text[i]!;
+      const ch = /\s/.test(raw) ? " " : caseSensitive ? raw : raw.toLowerCase();
+      if (ch === " " && flat.endsWith(" ")) continue;
+      flat += ch;
+      posMap.push(pos + i);
     }
   });
+
+  let from = 0;
+  while (from < flat.length) {
+    const idx = flat.indexOf(needle, from);
+    if (idx < 0) break;
+    const start = posMap[idx];
+    const endChar = posMap[idx + needle.length - 1];
+    if (start != null && endChar != null) {
+      matches.push({ from: start, to: endChar + 1 });
+    }
+    from = idx + Math.max(1, needle.length);
+  }
   return matches;
 }
 
