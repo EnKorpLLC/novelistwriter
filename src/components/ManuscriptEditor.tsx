@@ -59,6 +59,23 @@ function selectionAtStart(editor: NonNullable<ReturnType<typeof useEditor>>) {
   view.dispatch(state.tr.setSelection(sel));
 }
 
+/** Scroll the manuscript pane so a document position is near the upper third of the viewport. */
+function scrollEditorToPos(
+  editor: NonNullable<ReturnType<typeof useEditor>>,
+  scrollEl: HTMLElement | null,
+  pos: number
+) {
+  if (!scrollEl) return;
+  try {
+    const coords = editor.view.coordsAtPos(pos);
+    const rect = scrollEl.getBoundingClientRect();
+    const nextTop = coords.top - rect.top + scrollEl.scrollTop - rect.height / 3;
+    scrollEl.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+  } catch {
+    /* ignore invalid pos */
+  }
+}
+
 export function ManuscriptEditor({
   chapterId,
   initialHtml,
@@ -201,7 +218,7 @@ export function ManuscriptEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
-  // Passage highlight (Look up / beta comment) — scroll to first match
+  // Passage highlight (Look up / beta comment) — scroll pane to first match
   useEffect(() => {
     if (!editor || findOpen) return;
     const q = (highlightQuery || "").trim();
@@ -210,15 +227,37 @@ export function ManuscriptEditor({
       return;
     }
     editor.commands.setSearchHighlight(q, { caseSensitive: false, currentIndex: 0 });
-    // Wait past chapter-open scroll suppression so scrollIntoView sticks
-    const t = window.setTimeout(() => {
-      const st = getSearchState(editor);
-      const m = st?.matches[0];
-      if (!m) return;
-      const sel = TextSelection.create(editor.state.doc, m.from, m.to);
-      editor.view.dispatch(editor.state.tr.setSelection(sel).scrollIntoView());
-    }, 450);
-    return () => window.clearTimeout(t);
+
+    let cancelled = false;
+    const attempts = [100, 350, 600, 1000];
+    const timers = attempts.map((delay) =>
+      window.setTimeout(() => {
+        if (cancelled) return;
+        suppressScrollRef.current = false;
+        const st = getSearchState(editor);
+        const m = st?.matches[0];
+        if (!m) return;
+        const sel = TextSelection.create(editor.state.doc, m.from, m.to);
+        editor.view.dispatch(editor.state.tr.setSelection(sel));
+        scrollEditorToPos(editor, scrollRef.current, m.from);
+        // Prefer DOM anchor if decoration is painted
+        const el =
+          scrollRef.current?.querySelector(".search-match-current") ||
+          scrollRef.current?.querySelector(".search-match");
+        if (el && scrollRef.current) {
+          const container = scrollRef.current;
+          const er = el.getBoundingClientRect();
+          const cr = container.getBoundingClientRect();
+          const nextTop = er.top - cr.top + container.scrollTop - cr.height / 3;
+          container.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+        }
+      }, delay)
+    );
+
+    return () => {
+      cancelled = true;
+      for (const t of timers) window.clearTimeout(t);
+    };
   }, [editor, highlightQuery, findOpen]);
 
   const openFind = useCallback(
