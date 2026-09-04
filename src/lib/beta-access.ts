@@ -11,14 +11,17 @@ export type BetaAutoApproveRule = {
 
 export type BetaAutoApproveSettings = {
   mode: BetaAutoApproveMode;
+  /** When mode is "rules": "all" = AND, "any" = OR */
+  match: "all" | "any";
   rules: BetaAutoApproveRule[];
 };
 
 export function normalizeBetaAutoApprove(raw: unknown): BetaAutoApproveSettings {
-  if (!raw || typeof raw !== "object") return { mode: "off", rules: [] };
+  if (!raw || typeof raw !== "object") return { mode: "off", match: "all", rules: [] };
   const o = raw as Record<string, unknown>;
   const mode =
     o.mode === "all" || o.mode === "rules" || o.mode === "off" ? o.mode : "off";
+  const match = o.match === "any" ? "any" : "all";
   const rules: BetaAutoApproveRule[] = [];
   if (Array.isArray(o.rules)) {
     for (const item of o.rules) {
@@ -30,7 +33,7 @@ export function normalizeBetaAutoApprove(raw: unknown): BetaAutoApproveSettings 
       rules.push({ fieldId, answer });
     }
   }
-  return { mode, rules: rules.slice(0, 20) };
+  return { mode, match, rules: rules.slice(0, 20) };
 }
 
 export function shouldAutoApprove(
@@ -41,12 +44,17 @@ export function shouldAutoApprove(
   if (settings.mode === "all") return true;
   if (settings.mode !== "rules" || !settings.rules.length) return false;
   const yesNoIds = new Set(fields.filter((f) => f.type === "yesno").map((f) => f.id));
-  for (const rule of settings.rules) {
+
+  const ruleMatches = (rule: BetaAutoApproveRule) => {
     if (!yesNoIds.has(rule.fieldId)) return false;
     const ans = (answers[rule.fieldId] || "").toLowerCase();
-    if (ans !== rule.answer) return false;
+    return ans === rule.answer;
+  };
+
+  if (settings.match === "any") {
+    return settings.rules.some(ruleMatches);
   }
-  return true;
+  return settings.rules.every(ruleMatches);
 }
 
 export function sanitizeDisplayName(raw: unknown): string {

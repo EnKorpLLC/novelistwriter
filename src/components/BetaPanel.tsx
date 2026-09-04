@@ -97,6 +97,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [draftFields, setDraftFields] = useState<BetaFormField[]>([]);
   const [autoApprove, setAutoApprove] = useState<BetaAutoApproveSettings>({
     mode: "off",
+    match: "all",
     rules: [],
   });
   const [expiresAt, setExpiresAt] = useState("");
@@ -739,7 +740,9 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                     ? "Auto-approve off"
                     : autoApprove.mode === "all"
                       ? "Auto-approve all"
-                      : `Auto-approve by rules (${autoApprove.rules.length})`}
+                      : `Auto-approve by rules (${autoApprove.rules.length}, ${
+                          autoApprove.match === "any" ? "OR" : "AND"
+                        })`}
                   {expiresAt ? ` · Ends ${expiresAt}` : ""}
                 </span>
                 {periodEnded && (
@@ -806,9 +809,27 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                 </div>
                 {autoApprove.mode === "rules" && (
                   <div className="mt-3 space-y-2 border border-line p-3">
-                    <p className="text-xs text-muted">
-                      Approve when all rules match (yes/no form questions).
-                    </p>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wide text-muted">
+                        Match rules with
+                      </label>
+                      <select
+                        className="mt-1 w-full border border-line px-2 py-1.5 text-sm md:max-w-xs"
+                        value={autoApprove.match}
+                        onChange={(e) => {
+                          const match = e.target.value === "any" ? "any" : "all";
+                          setAutoApprove((prev) => ({ ...prev, match }));
+                        }}
+                      >
+                        <option value="all">AND — all rules must match</option>
+                        <option value="any">OR — any one rule can match</option>
+                      </select>
+                      <p className="mt-1 text-xs text-muted">
+                        {autoApprove.match === "any"
+                          ? "Approve if the applicant matches at least one rule below."
+                          : "Approve only if the applicant matches every rule below."}
+                      </p>
+                    </div>
                     {yesNoFields.length === 0 ? (
                       <p className="text-xs text-muted">
                         Add yes/no questions to the application form to create rules.
@@ -820,6 +841,11 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                             key={`${rule.fieldId}-${idx}`}
                             className="flex flex-wrap items-center gap-2"
                           >
+                            {idx > 0 && (
+                              <span className="w-full text-[10px] uppercase tracking-wide text-muted md:w-auto">
+                                {autoApprove.match === "any" ? "or" : "and"}
+                              </span>
+                            )}
                             <select
                               className="min-w-[10rem] flex-1 border border-line px-2 py-1.5 text-sm"
                               value={rule.fieldId}
