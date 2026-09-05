@@ -25,8 +25,8 @@ export default async function BetaApplyPage({
       <h1 className="font-display mt-2 text-3xl">{project.title || "Manuscript"}</h1>
       {!form.intro && (
         <p className="mt-3 text-sm text-muted">
-          Fill out this form to request access. The author will approve or deny your request. If
-          approved, they’ll send you a private reading link.
+          Fill out this form to request access. If you’re already approved, use the email check at
+          the top to open the manuscript.
         </p>
       )}
       <BetaApplyForm projectId={project.id} form={form} />
