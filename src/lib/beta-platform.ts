@@ -104,6 +104,10 @@ export const REACTION_EMOJIS = [
 
 export type ReactionEmoji = (typeof REACTION_EMOJIS)[number]["id"];
 
+export function reactionGlyph(emojiId: string): string {
+  return REACTION_EMOJIS.find((r) => r.id === emojiId)?.glyph || emojiId;
+}
+
 export function genreLabel(genre: string | null | undefined): string {
   const g = String(genre || "").trim();
   return g || "Uncategorized";

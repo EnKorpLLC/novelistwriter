@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DashboardRoleNav } from "@/components/DashboardRoleNav";
-import { rememberSide, type ProfileRoles } from "@/lib/beta-platform";
+import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
 
 type ShelfBook = {
   inviteId: string;
@@ -751,7 +751,9 @@ export default function BetaDashboardClient() {
                         {t.reactions.length > 0 && (
                           <p className="mt-1 text-xs text-muted">
                             Reactions:{" "}
-                            {t.reactions.map((r) => `${r.emoji}×${r.count}`).join(" · ")}
+                            {t.reactions
+                              .map((r) => `${reactionGlyph(r.emoji)}×${r.count}`)
+                              .join(" · ")}
                           </p>
                         )}
                         {t.replies.length > 0 && (
