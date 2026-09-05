@@ -12,7 +12,6 @@ export default function BetaSignupPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [checkEmail, setCheckEmail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nextPath, setNextPath] = useState("/beta/dashboard");
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -31,10 +30,6 @@ export default function BetaSignupPage() {
     void (async () => {
       const current = await getSessionEmail();
       setSessionEmail(current);
-      const intended = (e || "").trim().toLowerCase();
-      if (current && intended && current !== intended) {
-        // Already signed out intent via claim page; refresh session state
-      }
     })();
   }, []);
 
@@ -63,65 +58,43 @@ export default function BetaSignupPage() {
         setSessionEmail(null);
       }
 
-      const supabase = createClient();
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-      const { data, error: err } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { display_name: name, signup_role: "beta_reader" },
-          emailRedirectTo: `${appUrl}${nextPath}`,
-        },
+      const createRes = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          displayName: name,
+          role: "beta_reader",
+        }),
       });
-      if (err) {
-        if (/already registered|already been registered|User already/i.test(err.message)) {
+      const createData = await createRes.json();
+      if (!createRes.ok) {
+        if (createData.code === "already_registered") {
           setError("Account exists — log in with this email to open your dashboard.");
           return;
         }
-        throw err;
+        throw new Error(createData.error || "Signup failed");
       }
 
-      if (data.session) {
-        await fetch("/api/profile/roles", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ enableBetaReader: true, is_author: false }),
-        });
-        rememberSide("beta");
-        await fetch("/api/beta/dashboard").catch(() => null);
-        router.push(nextPath);
-        router.refresh();
-        return;
-      }
-      setCheckEmail(true);
+      const supabase = createClient();
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInErr) throw signInErr;
+
+      await fetch("/api/profile/roles", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enableBetaReader: true, is_author: false }),
+      });
+      rememberSide("beta");
+      await fetch("/api/beta/dashboard").catch(() => null);
+      router.push(nextPath);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
       setLoading(false);
     }
-  }
-
-  if (checkEmail) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center px-6">
-        <Link href="/" className="font-display text-2xl text-ink">
-          Novelist Writer
-        </Link>
-        <div className="font-ui mt-10 w-full max-w-sm border border-accent bg-paper p-6 text-center">
-          <h1 className="font-display text-2xl text-ink">Check your email</h1>
-          <p className="mt-3 text-sm text-muted">
-            We sent a confirmation link to <strong className="text-ink">{email}</strong>.
-            Open it, then log in to open your beta dashboard.
-          </p>
-          <Link
-            href={`/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextPath)}&switch=1`}
-            className="mt-6 inline-block w-full bg-accent py-2.5 text-paper hover:bg-accent-soft"
-          >
-            Go to log in
-          </Link>
-        </div>
-      </div>
-    );
   }
 
   return (
