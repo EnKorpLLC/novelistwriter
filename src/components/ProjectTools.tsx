@@ -5,6 +5,13 @@ import Link from "next/link";
 import type { Chapter, Project } from "@/lib/types";
 import { KDP_CHECKLIST } from "@/lib/kdp-checklist";
 import { coverPublicUrl } from "@/lib/cover";
+import {
+  BOOK_KEYWORDS,
+  MAX_BOOK_KEYWORDS,
+  bisacFromKeywordIds,
+  keywordLabels,
+  normalizeKeywordIds,
+} from "@/lib/book-keywords";
 import { saveAs } from "file-saver";
 
 function htmlToEditable(html: string): string {
@@ -56,12 +63,13 @@ export function ProjectTools({
   const [trim, setTrim] = useState(project.kdp_settings?.trim || "6x9");
   const [font, setFont] = useState(project.kdp_settings?.font || "Garamond");
   const [margins, setMargins] = useState(project.kdp_settings?.margins || "standard");
-  const [categories, setCategories] = useState(
-    String((project.metadata as { categories?: string })?.categories || "")
+  const [keywordIds, setKeywordIds] = useState<string[]>(() =>
+    normalizeKeywordIds(
+      (project.metadata as { keywordIds?: unknown; keywords?: unknown })?.keywordIds ??
+        (project.metadata as { keywords?: unknown })?.keywords
+    )
   );
-  const [keywords, setKeywords] = useState(
-    String((project.metadata as { keywords?: string })?.keywords || "")
-  );
+  const categories = bisacFromKeywordIds(keywordIds);
   const [validation, setValidation] = useState<string[]>([]);
   const [versions, setVersions] = useState<
     { id: string; label: string; created_at: string; word_count: number }[]
@@ -76,15 +84,34 @@ export function ProjectTools({
   const coverUrl = coverPath ? coverPublicUrl(coverPath, coverVersion) : null;
 
   async function saveMeta() {
+    const ids = normalizeKeywordIds(keywordIds);
+    const labels = keywordLabels(ids);
+    const bisac = bisacFromKeywordIds(ids);
+    const prevMeta =
+      project.metadata && typeof project.metadata === "object" ? { ...project.metadata } : {};
     await fetch(`/api/projects/${project.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
         blurb,
+        genre: labels[0] || "",
         kdp_settings: { trim, font, margins },
-        metadata: { categories, keywords },
+        metadata: {
+          ...prevMeta,
+          categories: bisac,
+          keywords: labels.join(", "),
+          keywordIds: ids,
+        },
       }),
+    });
+  }
+
+  function toggleKeyword(id: string) {
+    setKeywordIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= MAX_BOOK_KEYWORDS) return prev;
+      return [...prev, id];
     });
   }
 
@@ -329,18 +356,47 @@ export function ProjectTools({
               </select>
             </label>
           </div>
-          <input
-            className="border border-line px-3 py-2"
-            value={categories}
-            onChange={(e) => setCategories(e.target.value)}
-            placeholder="BISAC categories"
-          />
-          <input
-            className="border border-line px-3 py-2"
-            value={keywords}
-            onChange={(e) => setKeywords(e.target.value)}
-            placeholder="Keywords (up to 7)"
-          />
+          <div className="space-y-2">
+            <p className="text-xs text-muted">
+              Genre keywords (choose up to {MAX_BOOK_KEYWORDS}). These group your book in the beta
+              reader catalog. BISAC fills in automatically.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {BOOK_KEYWORDS.map((k) => {
+                const on = keywordIds.includes(k.id);
+                const disabled = !on && keywordIds.length >= MAX_BOOK_KEYWORDS;
+                return (
+                  <button
+                    key={k.id}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => toggleKeyword(k.id)}
+                    className={`border px-2.5 py-1 text-xs ${
+                      on
+                        ? "border-accent bg-accent/15 text-ink"
+                        : "border-line text-muted hover:border-accent disabled:opacity-40"
+                    }`}
+                  >
+                    {k.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted">
+              {keywordIds.length}/{MAX_BOOK_KEYWORDS} selected
+              {keywordIds.length > 0 ? ` · ${keywordLabels(keywordIds).join(" · ")}` : ""}
+            </p>
+          </div>
+          <label className="block text-xs text-muted">
+            BISAC categories (auto-filled)
+            <textarea
+              className="mt-1 w-full border border-line bg-paper-deep/40 px-3 py-2 text-sm text-ink"
+              rows={2}
+              readOnly
+              value={categories}
+              placeholder="Select keywords above"
+            />
+          </label>
           <button type="button" onClick={saveMeta} className="bg-accent px-4 py-2 text-paper">
             Save metadata
           </button>

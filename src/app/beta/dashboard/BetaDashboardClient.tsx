@@ -459,9 +459,9 @@ export default function BetaDashboardClient() {
 
               {tab === "catalog" && (
                 <section>
-                  <h2 className="sr-only">Available by genre</h2>
+                  <h2 className="sr-only">Available by keyword</h2>
                   <p className="text-sm text-muted">
-                    All manuscripts marked ready for beta readers.
+                    Manuscripts marked ready, grouped by the author&apos;s genre keywords.
                   </p>
                   {catalog.length === 0 ? (
                     <p className="mt-3 text-sm text-muted">No other ready books right now.</p>
@@ -475,16 +475,32 @@ export default function BetaDashboardClient() {
                           <ul className="mt-3 space-y-2">
                             {g.books.map((b) => (
                               <li
-                                key={b.projectId}
+                                key={`${g.genre}-${b.projectId}`}
                                 className="flex items-center justify-between gap-4 border border-line px-4 py-3 transition hover:border-accent"
                               >
                                 <Link
                                   href={`/beta/book/${b.projectId}`}
-                                  className="min-w-0 flex-1"
+                                  className="flex min-w-0 flex-1 items-center gap-4"
                                 >
-                                  <span className="font-display text-lg">{b.title}</span>
-                                  <span className="mt-0.5 block text-sm text-muted">
-                                    {b.authorName}
+                                  <div className="relative h-16 w-11 shrink-0 overflow-hidden border border-line bg-paper-deep">
+                                    {b.coverUrl ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={b.coverUrl}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-[10px] text-muted">
+                                        —
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className="min-w-0">
+                                    <span className="font-display block text-lg">{b.title}</span>
+                                    <span className="mt-0.5 block text-sm text-muted">
+                                      {b.authorName}
+                                    </span>
                                   </span>
                                 </Link>
                                 <div className="flex shrink-0 items-center gap-3">
@@ -787,6 +803,21 @@ export default function BetaDashboardClient() {
                           <Link
                             href={t.openUrl}
                             className="px-3 py-1.5 text-xs text-accent underline"
+                            onClick={() => {
+                              if (t.excerpt && t.projectId) {
+                                try {
+                                  sessionStorage.setItem(
+                                    `nw_beta_passage_${t.projectId}`,
+                                    JSON.stringify({
+                                      chapterId: t.chapterId,
+                                      excerpt: t.excerpt,
+                                    })
+                                  );
+                                } catch {
+                                  /* ignore */
+                                }
+                              }
+                            }}
                           >
                             Open passage
                           </Link>

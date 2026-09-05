@@ -137,7 +137,17 @@ export async function GET(req: Request) {
       // approximate: if invite still in list we treat as possible; client uses book gate
       { status: "accepted" }
     ),
-    openUrl: `/beta/read/${c.project_id}${c.chapter_id ? `?chapter=${c.chapter_id}` : ""}`,
+    openUrl: (() => {
+      const params = new URLSearchParams();
+      if (c.chapter_id) params.set("chapter", c.chapter_id);
+      const ex = typeof c.excerpt === "string" ? c.excerpt.trim() : "";
+      if (ex) {
+        // Short hint for deep-link; full excerpt also stored client-side on click
+        params.set("excerpt", ex.slice(0, 240));
+      }
+      const q = params.toString();
+      return `/beta/read/${c.project_id}${q ? `?${q}` : ""}`;
+    })(),
     reactions: reactionsByComment.get(c.id) || [],
     replies: (repliesByParent.get(c.id) || []).map((r) => ({
       id: r.id,

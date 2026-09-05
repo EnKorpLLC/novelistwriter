@@ -198,6 +198,18 @@ body {
   outline: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
 }
 
+/* Beta reader passage highlight (Open passage from comments) */
+.manuscript-prose mark.passage-highlight {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 1px;
+  color: inherit;
+}
+
+.manuscript-prose mark.passage-highlight-current {
+  background: color-mix(in srgb, var(--warn) 35%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
+}
+
 /* Critique report print: only the open report */
 @media print {
   body * {

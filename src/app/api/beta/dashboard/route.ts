@@ -10,6 +10,7 @@ import {
 } from "@/lib/beta-platform";
 import { computeReaderStats } from "@/lib/beta-social";
 import { revokeProjectBetaAccess } from "@/lib/beta-server";
+import { catalogLabelsForProject } from "@/lib/book-keywords";
 
 export async function GET() {
   const supabase = await createClient();
@@ -44,7 +45,7 @@ export async function GET() {
         : Promise.resolve({ data: [] as never[] }),
       admin
         .from("projects")
-        .select("id, title, genre, cover_path, updated_at, user_id, beta_ready")
+        .select("id, title, genre, cover_path, updated_at, user_id, beta_ready, metadata")
         .eq("beta_ready", true)
         .order("genre", { ascending: true })
         .order("title", { ascending: true }),
@@ -61,8 +62,21 @@ export async function GET() {
   const projectIds = [...new Set(invites.map((i) => i.project_id))];
 
   const { data: shelfProjects } = projectIds.length
-    ? await admin.from("projects").select("id, title, genre, cover_path, updated_at, user_id").in("id", projectIds)
-    : { data: [] as { id: string; title: string; genre: string | null; cover_path: string | null; updated_at: string; user_id: string }[] };
+    ? await admin
+        .from("projects")
+        .select("id, title, genre, cover_path, updated_at, user_id, metadata")
+        .in("id", projectIds)
+    : {
+        data: [] as {
+          id: string;
+          title: string;
+          genre: string | null;
+          cover_path: string | null;
+          updated_at: string;
+          user_id: string;
+          metadata: Record<string, unknown> | null;
+        }[],
+      };
 
   const projectById = new Map((shelfProjects || []).map((p) => [p.id, p]));
   const authorIds = [
@@ -101,6 +115,7 @@ export async function GET() {
     .filter((i) => isActiveReaderStatus(i.status) || i.finished_at)
     .map((i) => {
       const p = projectById.get(i.project_id);
+      const labels = p ? catalogLabelsForProject(p) : ["Uncategorized"];
       return {
         inviteId: i.id,
         projectId: i.project_id,
@@ -109,7 +124,7 @@ export async function GET() {
         currentChapterId: i.current_chapter_id,
         finishedAt: i.finished_at,
         title: p?.title || "Manuscript",
-        genre: genreLabel(p?.genre),
+        genre: labels[0] || genreLabel(p?.genre),
         authorName: p ? authorName.get(p.user_id) || "Author" : "Author",
         coverUrl: p
           ? coverPublicUrl(projectCoverPath(p), p.updated_at ? Date.parse(p.updated_at) : undefined)
@@ -122,15 +137,23 @@ export async function GET() {
   const catalogRaw = (readyProjects || []).filter(
     (p) => !shelfIds.has(p.id) && studioAuthors.has(p.user_id)
   );
-  const byGenre = new Map<string, typeof catalogRaw>();
+
+  type CatalogBook = (typeof catalogRaw)[number];
+  const byKeyword = new Map<string, CatalogBook[]>();
   for (const p of catalogRaw) {
-    const g = genreLabel(p.genre);
-    const list = byGenre.get(g) || [];
-    list.push(p);
-    byGenre.set(g, list);
+    const labels = catalogLabelsForProject(p);
+    for (const label of labels) {
+      const list = byKeyword.get(label) || [];
+      list.push(p);
+      byKeyword.set(label, list);
+    }
   }
-  const catalog = [...byGenre.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+  const catalog = [...byKeyword.entries()]
+    .sort(([a], [b]) => {
+      if (a === "Uncategorized") return 1;
+      if (b === "Uncategorized") return -1;
+      return a.localeCompare(b);
+    })
     .map(([genre, books]) => ({
       genre,
       books: books
@@ -139,7 +162,7 @@ export async function GET() {
         .map((p) => ({
           projectId: p.id,
           title: p.title,
-          genre: genreLabel(p.genre),
+          genre,
           authorUserId: p.user_id,
           authorName: authorName.get(p.user_id) || "Author",
           coverUrl: coverPublicUrl(

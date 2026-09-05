@@ -7,8 +7,8 @@ export const KDP_CHECKLIST = [
   { id: "copyright", label: "Copyright page in front matter", matter: "front_copyright" },
   { id: "toc", label: "Table of contents enabled", matter: "front_toc" },
   { id: "blurb", label: "Book description drafted (critique available)", meta: "blurb" },
-  { id: "categories", label: "BISAC categories noted in metadata", meta: "categories" },
-  { id: "keywords", label: "Seven backend keywords noted", meta: "keywords" },
+  { id: "categories", label: "BISAC categories filled from genre keywords", meta: "categories" },
+  { id: "keywords", label: "Up to six genre keywords selected", meta: "keywords" },
   { id: "epub", label: "EPUB exported and validated", action: "epub" },
 ] as const;
 

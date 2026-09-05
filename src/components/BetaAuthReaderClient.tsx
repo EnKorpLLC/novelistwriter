@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BetaFormFields } from "@/components/BetaFormFields";
 import type { BetaApplicationForm } from "@/lib/beta-form";
+import { highlightPassageInElement } from "@/lib/passage-highlight";
 
 type Chapter = {
   id: string;
@@ -433,6 +434,67 @@ export function BetaAuthReaderClient({
     chapterIndex >= 0 && chapterIndex < chapters.length - 1 ? chapters[chapterIndex + 1] : null;
   const isLastChapter =
     chapters.length > 0 && chapterIndex === chapters.length - 1;
+
+  // Open passage from dashboard comments — highlight + scroll
+  useEffect(() => {
+    if (!unlocked || !active || !chapter?.content_html) return;
+
+    let excerpt = "";
+    let fromStorage = false;
+    try {
+      const raw = sessionStorage.getItem(`nw_beta_passage_${projectId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { chapterId?: string | null; excerpt?: string };
+        if (parsed.chapterId && parsed.chapterId !== active) {
+          // Wait until the linked chapter is active
+          return;
+        }
+        excerpt = String(parsed.excerpt || "").trim();
+        fromStorage = Boolean(excerpt);
+      }
+    } catch {
+      /* ignore */
+    }
+    if (!excerpt) {
+      excerpt = (searchParams.get("excerpt") || "").trim();
+    }
+    if (excerpt.length < 2) return;
+
+    let cancelled = false;
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      if (fromStorage) {
+        try {
+          sessionStorage.removeItem(`nw_beta_passage_${projectId}`);
+        } catch {
+          /* ignore */
+        }
+      }
+      if (ok && searchParams.get("excerpt")) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("excerpt");
+        const q = params.toString();
+        router.replace(`${pathname}${q ? `?${q}` : ""}`, { scroll: false });
+      }
+    };
+
+    const attempts = [80, 250, 500, 900];
+    const timers = attempts.map((delay, i) =>
+      window.setTimeout(() => {
+        if (cancelled || !articleRef.current) return;
+        const ok = highlightPassageInElement(articleRef.current, excerpt);
+        if (ok || i === attempts.length - 1) finish(ok);
+      }, delay)
+    );
+
+    return () => {
+      cancelled = true;
+      for (const t of timers) window.clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run when chapter content ready
+  }, [unlocked, active, chapter?.content_html, projectId]);
 
   function goToChapter(id: string) {
     selectChapter(id);
