@@ -52,7 +52,7 @@ export default function LoginForm() {
         /* ignore */
       }
 
-      let lastSide: AppSide | null = readRememberedSide();
+      const lastSide: AppSide | null = readRememberedSide();
 
       // Authors whose email is on beta invites land on the beta dashboard
       // (unless a specific next URL was requested).

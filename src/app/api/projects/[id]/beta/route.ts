@@ -6,7 +6,6 @@ import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import {
   normalizeBetaAutoApprove,
   sanitizeDisplayName,
-  BETA_PERIOD_ENDED_REASON,
 } from "@/lib/beta-access";
 import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
 import { computeReaderStats, notifyAuthorFollowersOfReady } from "@/lib/beta-social";

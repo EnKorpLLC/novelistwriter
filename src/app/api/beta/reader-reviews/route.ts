@@ -156,7 +156,7 @@ export async function POST(req: Request) {
     .toLowerCase();
   let readerUserId = body.readerUserId || null;
   let projectId = body.projectId || null;
-  let inviteId = body.inviteId || null;
+  const inviteId = body.inviteId || null;
 
   if (inviteId) {
     const { data: invite } = await admin
