@@ -161,13 +161,26 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   >({});
   const [messageDrafts, setMessageDrafts] = useState<Record<string, string>>({});
   const [socialBusyId, setSocialBusyId] = useState<string | null>(null);
+  const [studioAccess, setStudioAccess] = useState(true);
 
   async function load() {
     setLoading(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/beta`);
       const data = await res.json();
+      if (data.code === "studio_required" || data.studioAccess === false) {
+        setStudioAccess(false);
+        setNote(data.error || "Beta reader tools require Studio.");
+        setInvites([]);
+        setContacts([]);
+        setComments([]);
+        setBetaReady(false);
+        setShareLink("");
+        setApplyLink("");
+        return;
+      }
       if (res.ok) {
+        setStudioAccess(data.studioAccess !== false);
         setInvites(data.invites || []);
         setContacts(data.contacts || []);
         setAutoApprove(normalizeBetaAutoApprove(data.autoApprove));
@@ -902,23 +915,42 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         <div className="mx-auto max-w-5xl space-y-8">
           <div>
             <h2 className="font-display text-2xl">Beta readers</h2>
-            <p className="mt-1 text-sm text-muted">
-              Turn on Ready, then copy your share link. Readers log in (or set a password), apply if
-              needed, and read from their dashboard.
-            </p>
-            {!loading && (
-              <label className="font-ui mt-3 flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={betaReady}
-                  disabled={savingReady}
-                  onChange={(e) => void setReady(e.target.checked)}
-                />
-                Ready for beta readers
-              </label>
+            {!studioAccess ? (
+              <div className="mt-4 border border-line bg-paper p-5 font-ui">
+                <p className="text-sm text-ink">
+                  The beta reader desk is included with <strong>Studio</strong>. Upgrade to invite
+                  readers, mark a book ready for the catalog, and share your book link.
+                </p>
+                <a
+                  href="/billing"
+                  className="mt-4 inline-block bg-accent px-4 py-2 text-sm text-paper"
+                >
+                  Upgrade to Studio
+                </a>
+              </div>
+            ) : (
+              <>
+                <p className="mt-1 text-sm text-muted">
+                  Turn on Ready, then copy your share link. Readers log in (or set a password), apply
+                  if needed, and read from their dashboard.
+                </p>
+                {!loading && (
+                  <label className="font-ui mt-3 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={betaReady}
+                      disabled={savingReady}
+                      onChange={(e) => void setReady(e.target.checked)}
+                    />
+                    Ready for beta readers
+                  </label>
+                )}
+              </>
             )}
           </div>
 
+          {studioAccess && (
+          <>
           <section className="font-ui border border-line p-4">
             <button
               type="button"
@@ -1974,6 +2006,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
               </div>
             </div>
           </section>
+          </>
+          )}
         </div>
       </div>
     </div>

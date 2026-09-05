@@ -70,10 +70,32 @@ export async function GET() {
       ...(readyProjects || []).map((p) => p.user_id),
     ]),
   ];
-  const { data: authors } = authorIds.length
-    ? await admin.from("profiles").select("id, display_name").in("id", authorIds)
-    : { data: [] as { id: string; display_name: string | null }[] };
+  const [{ data: authors }, { data: authorTiers }] = await Promise.all([
+    authorIds.length
+      ? admin.from("profiles").select("id, display_name").in("id", authorIds)
+      : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
+    authorIds.length
+      ? admin.from("credit_balances").select("user_id, subscription_tier").in("user_id", authorIds)
+      : Promise.resolve({ data: [] as { user_id: string; subscription_tier: string | null }[] }),
+  ]);
   const authorName = new Map((authors || []).map((a) => [a.id, a.display_name]));
+  const studioAuthors = new Set(
+    (authorTiers || [])
+      .filter((t) => t.subscription_tier === "studio")
+      .map((t) => t.user_id)
+  );
+
+  // Drop non-Studio listings that slipped into beta_ready (e.g. free-plan authors)
+  const nonStudioReady = (readyProjects || []).filter((p) => !studioAuthors.has(p.user_id));
+  if (nonStudioReady.length) {
+    await admin
+      .from("projects")
+      .update({ beta_ready: false, updated_at: new Date().toISOString() })
+      .in(
+        "id",
+        nonStudioReady.map((p) => p.id)
+      );
+  }
 
   const shelf = invites
     .filter((i) => isActiveReaderStatus(i.status) || i.finished_at)
@@ -97,7 +119,9 @@ export async function GET() {
     .sort((a, b) => String(b.lastReadAt || "").localeCompare(String(a.lastReadAt || "")));
 
   const shelfIds = new Set(shelf.map((s) => s.projectId));
-  const catalogRaw = (readyProjects || []).filter((p) => !shelfIds.has(p.id));
+  const catalogRaw = (readyProjects || []).filter(
+    (p) => !shelfIds.has(p.id) && studioAuthors.has(p.user_id)
+  );
   const byGenre = new Map<string, typeof catalogRaw>();
   for (const p of catalogRaw) {
     const g = genreLabel(p.genre);

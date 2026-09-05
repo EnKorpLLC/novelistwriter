@@ -13,6 +13,7 @@ import {
   normalizeBetaApplicationForm,
   sanitizeApplicationAnswers,
 } from "@/lib/beta-form";
+import { userHasStudio } from "@/lib/credits";
 
 export async function GET(req: Request) {
   const projectId = new URL(req.url).searchParams.get("projectId");
@@ -21,10 +22,14 @@ export async function GET(req: Request) {
   const admin = createServiceClient();
   const { data: project } = await admin
     .from("projects")
-    .select("id, title, beta_application_form, beta_auto_approve")
+    .select("id, title, user_id, beta_ready, beta_application_form, beta_auto_approve")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!(await userHasStudio(project.user_id)) || !project.beta_ready) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const form = normalizeBetaApplicationForm(project.beta_application_form);
   return NextResponse.json({
@@ -68,10 +73,17 @@ export async function POST(req: Request) {
   const admin = createServiceClient();
   const { data: project } = await admin
     .from("projects")
-    .select("id, user_id, title, beta_application_form, beta_auto_approve, beta_expires_at")
+    .select("id, user_id, title, beta_ready, beta_application_form, beta_auto_approve, beta_expires_at")
     .eq("id", body.projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!(await userHasStudio(project.user_id)) || !project.beta_ready) {
+    return NextResponse.json(
+      { error: "This book is not open for beta applications." },
+      { status: 403 }
+    );
+  }
 
   const { expired } = await enforceBetaExpiry(admin, project);
   if (expired) {

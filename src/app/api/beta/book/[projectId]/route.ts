@@ -6,6 +6,7 @@ import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel, linkInvitesForEmail } from "@/lib/beta-platform";
 import { enforceBetaExpiry, findReaderInvite, inviteAllowsReading } from "@/lib/beta-server";
+import { userHasStudio } from "@/lib/credits";
 
 export async function GET(
   _req: Request,
@@ -26,12 +27,28 @@ export async function GET(
     .eq("id", projectId)
     .maybeSingle();
 
-  if (!project || (!project.beta_ready && !user)) {
+  if (!project) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Authors can always view their own book gate; others need beta_ready
-  if (!project.beta_ready && user?.id !== project.user_id) {
+  const authorHasStudio = await userHasStudio(project.user_id);
+  // Public catalog / apply gate is Studio-only; clear stray ready flags
+  if (project.beta_ready && !authorHasStudio) {
+    await admin
+      .from("projects")
+      .update({ beta_ready: false, updated_at: new Date().toISOString() })
+      .eq("id", projectId);
+    project.beta_ready = false;
+  }
+
+  const publiclyListed = Boolean(project.beta_ready && authorHasStudio);
+
+  if (!publiclyListed && !user) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Authors can always view their own book gate; others need a Studio listing or invite
+  if (!publiclyListed && user?.id !== project.user_id) {
     const invite = user
       ? await findReaderInvite(admin, { projectId, userId: user.id, email: user.email })
       : null;
@@ -71,7 +88,7 @@ export async function GET(
     projectId: project.id,
     title: project.title,
     genre: genreLabel(project.genre),
-    betaReady: Boolean(project.beta_ready),
+    betaReady: publiclyListed,
     authorUserId: project.user_id,
     authorName: author?.display_name || "Author",
     coverUrl: coverPublicUrl(

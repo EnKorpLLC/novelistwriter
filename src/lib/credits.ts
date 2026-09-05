@@ -16,6 +16,12 @@ export async function getCreditBalance(userId: string): Promise<CreditBalance | 
   return data as CreditBalance | null;
 }
 
+/** Author beta desk (invites, ready flag, share) is Studio-only. */
+export async function userHasStudio(userId: string): Promise<boolean> {
+  const bal = await getCreditBalance(userId);
+  return bal?.subscription_tier === "studio";
+}
+
 /** Debit credits: monthly allowance first, then purchased balance, then free taste for cheap jobs */
 export async function debitCredits(opts: {
   userId: string;

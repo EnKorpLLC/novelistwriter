@@ -9,6 +9,7 @@ import {
 } from "@/lib/beta-access";
 import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
 import { computeReaderStats, notifyAuthorFollowersOfReady } from "@/lib/beta-social";
+import { userHasStudio } from "@/lib/credits";
 
 async function requireProject(projectId: string) {
   const supabase = await createClient();
@@ -29,6 +30,17 @@ async function requireProject(projectId: string) {
   }
   if (!project) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   return { supabase, user, project };
+}
+
+function studioRequiredResponse() {
+  return NextResponse.json(
+    {
+      error: "Beta reader tools are included with Studio. Upgrade on the Billing page.",
+      code: "studio_required",
+      studioAccess: false,
+    },
+    { status: 403 }
+  );
 }
 
 function migrationHint(message: string) {
@@ -64,7 +76,35 @@ export async function GET(
   const { id: projectId } = await params;
   const auth = await requireProject(projectId);
   if ("error" in auth && auth.error) return auth.error;
-  const { supabase, project } = auth;
+  const { supabase, user, project } = auth;
+
+  const studioAccess = await userHasStudio(user.id);
+  if (!studioAccess) {
+    // Drop from public catalog if a free/pro account had marked ready
+    if (project.beta_ready) {
+      await supabase
+        .from("projects")
+        .update({ beta_ready: false, updated_at: new Date().toISOString() })
+        .eq("id", projectId)
+        .eq("user_id", user.id);
+    }
+    return NextResponse.json({
+      studioAccess: false,
+      betaReady: false,
+      shareLink: null,
+      applyLink: null,
+      applicationForm: { intro: "", contentWarnings: "", fields: [] },
+      autoApprove: { mode: "off", match: "all", rules: [] },
+      expiresAt: null,
+      periodEnded: false,
+      chapters: [],
+      contacts: [],
+      invites: [],
+      comments: [],
+      error: "Beta reader tools are included with Studio. Upgrade on the Billing page.",
+      code: "studio_required",
+    });
+  }
 
   await enforceBetaExpiry(supabase, project);
 
@@ -260,6 +300,7 @@ export async function GET(
   }
 
   return NextResponse.json({
+    studioAccess: true,
     betaReady: Boolean(project.beta_ready),
     shareLink,
     applyLink: appUrl(`/beta/apply/${projectId}`),
@@ -361,6 +402,8 @@ export async function POST(
   const auth = await requireProject(projectId);
   if ("error" in auth && auth.error) return auth.error;
   const { supabase, user, project } = auth;
+
+  if (!(await userHasStudio(user.id))) return studioRequiredResponse();
 
   const body = await req.json();
 
@@ -563,7 +606,9 @@ export async function PATCH(
   const { id: projectId } = await params;
   const auth = await requireProject(projectId);
   if ("error" in auth && auth.error) return auth.error;
-  const { supabase } = auth;
+  const { supabase, user } = auth;
+
+  if (!(await userHasStudio(user.id))) return studioRequiredResponse();
 
   const body = (await req.json()) as {
     inviteId?: string;
