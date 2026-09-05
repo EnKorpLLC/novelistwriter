@@ -47,6 +47,18 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && (path === "/login" || path === "/signup" || path === "/beta/signup")) {
+    const intendedEmail = request.nextUrl.searchParams.get("email")?.trim().toLowerCase();
+    const sessionEmail = user.email?.trim().toLowerCase() || "";
+    const forceSwitch = request.nextUrl.searchParams.get("switch") === "1";
+
+    // Claiming/applying as a different email — show auth UI so they can switch accounts
+    if (
+      forceSwitch ||
+      (intendedEmail && sessionEmail && intendedEmail !== sessionEmail)
+    ) {
+      return supabaseResponse;
+    }
+
     const roles = await fetchProfileRoles(supabase, user.id);
     const next = request.nextUrl.searchParams.get("next");
     const lastSide = request.cookies.get("nw_last_side")?.value as AppSide | undefined;

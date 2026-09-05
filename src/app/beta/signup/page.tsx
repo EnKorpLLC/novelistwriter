@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { rememberSide } from "@/lib/beta-platform";
+import { ensureAccountForEmail, getSessionEmail } from "@/lib/beta-auth-switch";
 
 export default function BetaSignupPage() {
   const [email, setEmail] = useState("");
@@ -14,6 +15,8 @@ export default function BetaSignupPage() {
   const [checkEmail, setCheckEmail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nextPath, setNextPath] = useState("/beta/dashboard");
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -24,13 +27,42 @@ export default function BetaSignupPage() {
     if (e) setEmail(e);
     if (n) setName(n);
     if (next && next.startsWith("/")) setNextPath(next);
+
+    void (async () => {
+      const current = await getSessionEmail();
+      setSessionEmail(current);
+      const intended = (e || "").trim().toLowerCase();
+      if (current && intended && current !== intended) {
+        // Already signed out intent via claim page; refresh session state
+      }
+    })();
   }, []);
+
+  const wrongAccount =
+    Boolean(sessionEmail && email.trim() && sessionEmail !== email.trim().toLowerCase());
+
+  async function switchToIntended() {
+    if (!email.trim()) return;
+    setSwitching(true);
+    try {
+      await ensureAccountForEmail(email);
+      setSessionEmail(null);
+      router.refresh();
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
+      if (wrongAccount) {
+        await ensureAccountForEmail(email);
+        setSessionEmail(null);
+      }
+
       const supabase = createClient();
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
       const { data, error: err } = await supabase.auth.signUp({
@@ -82,7 +114,7 @@ export default function BetaSignupPage() {
             Open it, then log in to open your beta dashboard.
           </p>
           <Link
-            href="/login?next=/beta/dashboard"
+            href={`/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextPath)}&switch=1`}
             className="mt-6 inline-block w-full bg-accent py-2.5 text-paper hover:bg-accent-soft"
           >
             Go to log in
@@ -100,8 +132,24 @@ export default function BetaSignupPage() {
       <form onSubmit={onSubmit} className="font-ui mt-10 w-full max-w-sm space-y-4">
         <h1 className="font-display text-3xl">Beta reader signup</h1>
         <p className="text-sm text-muted">
-          Same login as authors. Browse ready manuscripts and leave feedback.
+          Set a password for this email to open your beta dashboard.
         </p>
+        {wrongAccount && (
+          <div className="border border-accent bg-paper-deep/40 px-3 py-3 text-sm text-ink">
+            <p>
+              You&apos;re signed in as <strong>{sessionEmail}</strong>. This form is for{" "}
+              <strong>{email}</strong>.
+            </p>
+            <button
+              type="button"
+              disabled={switching}
+              className="mt-2 text-accent underline disabled:opacity-60"
+              onClick={() => void switchToIntended()}
+            >
+              {switching ? "Signing out…" : `Sign out of ${sessionEmail} and continue`}
+            </button>
+          </div>
+        )}
         {error && <p className="text-sm text-danger">{error}</p>}
         <label className="block text-sm">
           Display name
@@ -134,21 +182,18 @@ export default function BetaSignupPage() {
         </label>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || wrongAccount}
           className="w-full bg-accent py-2.5 text-paper hover:bg-accent-soft disabled:opacity-60"
         >
           {loading ? "Creating…" : "Create reader account"}
         </button>
         <p className="text-center text-sm text-muted">
           Have an account?{" "}
-          <Link href="/login?next=/beta/dashboard" className="text-accent underline">
+          <Link
+            href={`/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextPath)}&switch=1`}
+            className="text-accent underline"
+          >
             Log in
-          </Link>
-        </p>
-        <p className="text-center text-sm text-muted">
-          Want to write?{" "}
-          <Link href="/signup" className="text-accent underline">
-            Author signup
           </Link>
         </p>
       </form>

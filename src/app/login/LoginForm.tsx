@@ -4,13 +4,21 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { homePathForRoles, rememberSide, readRememberedSide, type AppSide } from "@/lib/beta-platform";
+import {
+  homePathForRoles,
+  rememberSide,
+  readRememberedSide,
+  type AppSide,
+} from "@/lib/beta-platform";
+import { ensureAccountForEmail, getSessionEmail } from "@/lib/beta-auth-switch";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
   const router = useRouter();
   const search = useSearchParams();
   const nextParam = search.get("next");
@@ -18,7 +26,23 @@ export default function LoginForm() {
   useEffect(() => {
     const prefill = search.get("email");
     if (prefill) setEmail(prefill);
+    void getSessionEmail().then(setSessionEmail);
   }, [search]);
+
+  const wrongAccount =
+    Boolean(sessionEmail && email.trim() && sessionEmail !== email.trim().toLowerCase());
+
+  async function switchToIntended() {
+    if (!email.trim()) return;
+    setSwitching(true);
+    try {
+      await ensureAccountForEmail(email);
+      setSessionEmail(null);
+      router.refresh();
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +50,11 @@ export default function LoginForm() {
     setError(null);
     try {
       const supabase = createClient();
+      if (wrongAccount) {
+        await ensureAccountForEmail(email);
+        setSessionEmail(null);
+      }
+
       const { error: err } = await supabase.auth.signInWithPassword({ email, password });
       if (err) throw err;
 
@@ -40,7 +69,6 @@ export default function LoginForm() {
       let roles = { is_author: true, is_beta_reader: false };
       let hasBetaInvites = false;
       try {
-        // Sync: if this email has beta invites, enable beta-reader role automatically
         const rolesRes = await fetch("/api/profile/roles");
         if (rolesRes.ok) {
           const json = await rolesRes.json();
@@ -54,8 +82,6 @@ export default function LoginForm() {
 
       const lastSide: AppSide | null = readRememberedSide();
 
-      // Authors whose email is on beta invites land on the beta dashboard
-      // (unless a specific next URL was requested).
       let dest: string;
       if (nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//")) {
         dest = nextParam;
@@ -88,6 +114,22 @@ export default function LoginForm() {
       <form onSubmit={onSubmit} className="font-ui mt-10 w-full max-w-sm space-y-4">
         <h1 className="font-display text-3xl">Log in</h1>
         <p className="text-sm text-muted">One account for authors and beta readers.</p>
+        {wrongAccount && (
+          <div className="border border-accent bg-paper-deep/40 px-3 py-3 text-sm text-ink">
+            <p>
+              You&apos;re signed in as <strong>{sessionEmail}</strong>. Log in as{" "}
+              <strong>{email}</strong> instead.
+            </p>
+            <button
+              type="button"
+              disabled={switching}
+              className="mt-2 text-accent underline disabled:opacity-60"
+              onClick={() => void switchToIntended()}
+            >
+              {switching ? "Signing out…" : `Sign out of ${sessionEmail} first`}
+            </button>
+          </div>
+        )}
         {error && <p className="text-sm text-danger">{error}</p>}
         <label className="block text-sm">
           Email
@@ -111,7 +153,7 @@ export default function LoginForm() {
         </label>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || wrongAccount}
           className="w-full bg-accent py-2.5 text-paper hover:bg-accent-soft disabled:opacity-60"
         >
           {loading ? "Signing in…" : "Log in"}

@@ -67,9 +67,13 @@ export function BetaApplyForm({
       body: JSON.stringify({ projectId, email: lookupEmail }),
     });
     const data = await res.json();
-    if (data.code === "ok" && data.readUrl) {
-      window.location.href = data.readUrl as string;
-      return null;
+    if (data.code === "ok") {
+      // Prefer account claim / dashboard over legacy manuscript unlock while logged in as someone else
+      const claim = (data.claimUrl || data.readUrl) as string | undefined;
+      if (claim) {
+        window.location.href = claim;
+        return null;
+      }
     }
     return formatAccessMessage(data);
   }
@@ -90,7 +94,22 @@ export function BetaApplyForm({
         return;
       }
       setMsg(data.message || "Application submitted.");
-      if (data.unlockReady) setPhase("unlock");
+      if (data.unlockReady) {
+        // Send them to claim/signup for the email they applied with (not the current session)
+        const access = await fetch("/api/beta/access", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId, email }),
+        });
+        const accessData = await access.json();
+        if (accessData.code === "ok" && (accessData.claimUrl || accessData.readUrl)) {
+          window.location.href = (accessData.claimUrl || accessData.readUrl) as string;
+          return;
+        }
+        const next = encodeURIComponent(`/beta/book/${projectId}`);
+        window.location.href = `/beta/signup?email=${encodeURIComponent(email)}&name=${encodeURIComponent(displayName)}&next=${next}&switch=1`;
+        return;
+      }
     } finally {
       setBusy(false);
     }
