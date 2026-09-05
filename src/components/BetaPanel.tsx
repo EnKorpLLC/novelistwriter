@@ -9,6 +9,7 @@ import {
   type BetaAutoApproveSettings,
   BETA_PERIOD_ENDED_REASON,
 } from "@/lib/beta-access";
+import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/beta-platform";
 
 type ChapterProgress = {
   chapterId: string;
@@ -21,6 +22,7 @@ type Invite = {
   email: string;
   status: string;
   link: string | null;
+  legacyLink?: string | null;
   created_at: string;
   applicationAnswers?: Record<string, string>;
   dnfReason?: string | null;
@@ -30,6 +32,22 @@ type Invite = {
   displayName?: string | null;
   statusReason?: string | null;
   lastReadAt?: string | null;
+  commentCount?: number;
+  furthestSortOrder?: number;
+  furthestPercent?: number;
+  readerStats?: { finished: number; dnf: number; reading: number };
+  reviewCount?: number;
+  avgRating?: number | null;
+  readerUserId?: string | null;
+};
+
+type ReaderReview = {
+  id: string;
+  rating: number | null;
+  body: string;
+  createdAt: string;
+  authorName: string;
+  projectTitle: string | null;
 };
 
 type Contact = {
@@ -40,6 +58,8 @@ type Contact = {
   updatedAt: string;
 };
 
+type CommentReaction = { emoji: string; userId: string };
+
 type Comment = {
   id: string;
   body: string;
@@ -47,11 +67,17 @@ type Comment = {
   chapterId: string | null;
   chapterTitle: string | null;
   chapterOrder: number;
+  inviteId?: string | null;
+  parentId?: string | null;
+  authorUserId?: string | null;
   readerEmail: string | null;
   readerName?: string | null;
   completed: boolean;
   createdAt: string;
+  reactions?: CommentReaction[];
 };
+
+type ReaderSort = "recent" | "comments" | "furthest";
 
 type Props = {
   projectId: string;
@@ -110,6 +136,11 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   }>(null);
   const [reasonText, setReasonText] = useState("");
   const [applyLink, setApplyLink] = useState("");
+  const [shareLink, setShareLink] = useState("");
+  const [betaReady, setBetaReady] = useState(false);
+  const [savingReady, setSavingReady] = useState(false);
+  const [readerSort, setReaderSort] = useState<ReaderSort>("recent");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState("");
   const [activeChapter, setActiveChapter] = useState<string | null>(null);
@@ -122,6 +153,14 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [readersOpen, setReadersOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [answersOpenId, setAnswersOpenId] = useState<string | null>(null);
+  const [reviewsOpenId, setReviewsOpenId] = useState<string | null>(null);
+  const [reviewsByInvite, setReviewsByInvite] = useState<Record<string, ReaderReview[]>>({});
+  const [reviewsLoadingId, setReviewsLoadingId] = useState<string | null>(null);
+  const [reviewDrafts, setReviewDrafts] = useState<
+    Record<string, { rating: string; text: string }>
+  >({});
+  const [messageDrafts, setMessageDrafts] = useState<Record<string, string>>({});
+  const [socialBusyId, setSocialBusyId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -134,10 +173,15 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         setAutoApprove(normalizeBetaAutoApprove(data.autoApprove));
         setExpiresAt(toDateInput(data.expiresAt));
         setPeriodEnded(Boolean(data.periodEnded));
+        setBetaReady(Boolean(data.betaReady));
+        setShareLink(data.shareLink || "");
         setComments(
           (data.comments || []).map((c: Comment) => ({
             ...c,
             completed: Boolean(c.completed),
+            parentId: c.parentId ?? null,
+            authorUserId: c.authorUserId ?? null,
+            reactions: c.reactions || [],
           }))
         );
         setApplyLink(data.applyLink || "");
@@ -162,9 +206,29 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   }, [projectId]);
 
   const requests = invites.filter((i) => i.status === "requested");
-  const readers = invites.filter(
-    (i) => i.status === "pending" || i.status === "accepted" || i.status === "dnf"
-  );
+  const readers = useMemo(() => {
+    const list = invites.filter(
+      (i) => i.status === "pending" || i.status === "accepted" || i.status === "dnf"
+    );
+    const sorted = [...list];
+    if (readerSort === "comments") {
+      sorted.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
+    } else if (readerSort === "furthest") {
+      sorted.sort((a, b) => {
+        const so = (b.furthestSortOrder ?? -1) - (a.furthestSortOrder ?? -1);
+        if (so !== 0) return so;
+        return (b.furthestPercent || 0) - (a.furthestPercent || 0);
+      });
+    } else {
+      sorted.sort((a, b) => {
+        const aLast = a.lastReadAt ? new Date(a.lastReadAt).getTime() : 0;
+        const bLast = b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0;
+        if (aLast !== bLast) return bLast - aLast;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+    }
+    return sorted;
+  }, [invites, readerSort]);
   const closed = invites.filter((i) => i.status === "denied" || i.status === "revoked");
 
   const yesNoFields = useMemo(() => {
@@ -172,19 +236,40 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
     return source.filter((f) => f.type === "yesno");
   }, [draftFields, formFields]);
 
+  const topLevelComments = useMemo(
+    () => comments.filter((c) => !c.parentId),
+    [comments]
+  );
+
+  const repliesByParent = useMemo(() => {
+    const map = new Map<string, Comment[]>();
+    for (const c of comments) {
+      if (!c.parentId) continue;
+      const list = map.get(c.parentId) || [];
+      list.push(c);
+      map.set(c.parentId, list);
+    }
+    for (const list of map.values()) {
+      list.sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+    }
+    return map;
+  }, [comments]);
+
   const counts = useMemo(() => {
     const map = new Map<string, number>();
-    for (const c of comments) {
+    for (const c of topLevelComments) {
       if (c.completed) continue;
       const key = c.chapterId || GENERAL;
       map.set(key, (map.get(key) || 0) + 1);
     }
     return map;
-  }, [comments]);
+  }, [topLevelComments]);
 
   const openCount = useMemo(
-    () => comments.filter((c) => !c.completed).length,
-    [comments]
+    () => topLevelComments.filter((c) => !c.completed).length,
+    [topLevelComments]
   );
 
   const chapterNav = useMemo(() => {
@@ -206,13 +291,80 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
     setActiveChapter(firstWithComments?.id || chapterNav[0]?.id || null);
   }, [chapterNav, activeChapter]);
 
-  const chapterComments = comments
+  const chapterComments = topLevelComments
     .filter((c) => (c.chapterId || GENERAL) === activeChapter)
     .filter((c) => showCompleted || !c.completed)
     .sort((a, b) => {
       if (a.completed !== b.completed) return a.completed ? 1 : -1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
+
+  async function setReady(next: boolean) {
+    setSavingReady(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/beta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setReady", betaReady: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not update ready status");
+        return;
+      }
+      setBetaReady(Boolean(data.betaReady));
+      setNote(data.betaReady ? "Marked ready for beta readers." : "No longer listed as ready.");
+    } finally {
+      setSavingReady(false);
+    }
+  }
+
+  async function reactToComment(commentId: string, emoji: ReactionEmoji) {
+    setBusyCommentId(commentId);
+    try {
+      const res = await fetch("/api/beta/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "react", commentId, emoji }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Reaction failed");
+        return;
+      }
+      void load();
+    } finally {
+      setBusyCommentId(null);
+    }
+  }
+
+  async function replyToComment(parentId: string) {
+    const text = (replyDrafts[parentId] || "").trim();
+    if (!text) return;
+    setBusyCommentId(parentId);
+    try {
+      const res = await fetch("/api/beta/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reply",
+          parentId,
+          projectId,
+          text,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Reply failed");
+        return;
+      }
+      setReplyDrafts((prev) => ({ ...prev, [parentId]: "" }));
+      setNote("Reply posted.");
+      void load();
+    } finally {
+      setBusyCommentId(null);
+    }
+  }
 
   async function commentAct(
     commentId: string,
@@ -235,7 +387,9 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         return;
       }
       if (action === "delete") {
-        setComments((prev) => prev.filter((c) => c.id !== commentId));
+        setComments((prev) =>
+          prev.filter((c) => c.id !== commentId && c.parentId !== commentId)
+        );
         setNote("Comment deleted.");
       } else {
         const completed = action === "complete";
@@ -469,6 +623,255 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
     setDraftFields((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   }
 
+  function readerStatsLine(inv: Invite): string | null {
+    const s = inv.readerStats;
+    if (!s) return null;
+    return `Finished ${s.finished} · DNF ${s.dnf} · Reading ${s.reading}`;
+  }
+
+  function reviewSummaryLine(inv: Invite): string | null {
+    if (inv.reviewCount == null && inv.avgRating == null) return null;
+    const parts: string[] = [];
+    if (inv.reviewCount != null) parts.push(`Reviews: ${inv.reviewCount}`);
+    if (inv.avgRating != null) parts.push(`Avg ${inv.avgRating.toFixed(1)}`);
+    return parts.join(" · ");
+  }
+
+  async function loadReaderReviews(inv: Invite) {
+    const open = reviewsOpenId === inv.id;
+    if (open) {
+      setReviewsOpenId(null);
+      return;
+    }
+    setReviewsOpenId(inv.id);
+    if (reviewsByInvite[inv.id]) return;
+    setReviewsLoadingId(inv.id);
+    try {
+      const res = await fetch(
+        `/api/beta/reader-reviews?email=${encodeURIComponent(inv.email)}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not load reviews");
+        return;
+      }
+      setReviewsByInvite((prev) => ({
+        ...prev,
+        [inv.id]: (data.reviews || []) as ReaderReview[],
+      }));
+    } finally {
+      setReviewsLoadingId(null);
+    }
+  }
+
+  async function submitReaderReview(inv: Invite) {
+    const draft = reviewDrafts[inv.id] || { rating: "", text: "" };
+    const text = draft.text.trim();
+    if (!text) {
+      setNote("Review text required.");
+      return;
+    }
+    setSocialBusyId(inv.id);
+    try {
+      const ratingNum = draft.rating ? Number(draft.rating) : null;
+      const res = await fetch("/api/beta/reader-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inviteId: inv.id,
+          text,
+          rating: ratingNum,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not post review");
+        return;
+      }
+      setReviewDrafts((prev) => ({ ...prev, [inv.id]: { rating: "", text: "" } }));
+      setNote("Review posted.");
+      // Refresh cached reviews if the panel is open
+      setReviewsByInvite((prev) => {
+        const next = { ...prev };
+        delete next[inv.id];
+        return next;
+      });
+      if (reviewsOpenId === inv.id) {
+        setReviewsLoadingId(inv.id);
+        try {
+          const refresh = await fetch(
+            `/api/beta/reader-reviews?email=${encodeURIComponent(inv.email)}`
+          );
+          const refreshData = await refresh.json();
+          if (refresh.ok) {
+            setReviewsByInvite((prev) => ({
+              ...prev,
+              [inv.id]: (refreshData.reviews || []) as ReaderReview[],
+            }));
+          }
+        } finally {
+          setReviewsLoadingId(null);
+        }
+      }
+      void load();
+    } finally {
+      setSocialBusyId(null);
+    }
+  }
+
+  async function sendReaderMessage(inv: Invite) {
+    const text = (messageDrafts[inv.id] || "").trim();
+    if (!text) {
+      setNote("Message text required.");
+      return;
+    }
+    setSocialBusyId(inv.id);
+    try {
+      const res = await fetch("/api/beta/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          readerEmail: inv.email,
+          readerUserId: inv.readerUserId,
+          projectId,
+          text,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not send message");
+        return;
+      }
+      setMessageDrafts((prev) => ({ ...prev, [inv.id]: "" }));
+      setNote("Message sent.");
+    } finally {
+      setSocialBusyId(null);
+    }
+  }
+
+  function renderInviteSocial(
+    inv: Invite,
+    tone: "default" | "danger" = "default",
+    opts?: { hideStats?: boolean }
+  ) {
+    const stats = opts?.hideStats ? null : readerStatsLine(inv);
+    const summary = opts?.hideStats ? null : reviewSummaryLine(inv);
+    const reviewsOpen = reviewsOpenId === inv.id;
+    const reviews = reviewsByInvite[inv.id];
+    const loadingReviews = reviewsLoadingId === inv.id;
+    const busy = socialBusyId === inv.id;
+    const draft = reviewDrafts[inv.id] || { rating: "", text: "" };
+    const labelClass = tone === "danger" ? "text-danger" : "text-muted";
+    const accentClass =
+      tone === "danger" ? "text-danger underline" : "text-accent hover:underline";
+
+    return (
+      <div className="space-y-3">
+        {(stats || summary) && (
+          <div className={`space-y-1 text-xs ${labelClass}`}>
+            {stats && <p>{stats}</p>}
+            {summary && <p>{summary}</p>}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3 text-xs">
+          <button
+            type="button"
+            className={accentClass}
+            onClick={() => void loadReaderReviews(inv)}
+          >
+            {reviewsOpen ? "Hide reviews" : "View reviews"}
+          </button>
+        </div>
+
+        {reviewsOpen && (
+          <div className="space-y-2 border border-line bg-paper-deep/20 p-2 text-sm">
+            {loadingReviews ? (
+              <p className="text-xs text-muted">Loading reviews…</p>
+            ) : !reviews?.length ? (
+              <p className="text-xs text-muted">No reviews yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {reviews.map((r) => (
+                  <li key={r.id} className="border-b border-line pb-2 last:border-0 last:pb-0">
+                    <p className="text-[10px] uppercase tracking-wide text-muted">
+                      {r.authorName}
+                      {r.rating != null ? ` · ${r.rating}/5` : ""}
+                      {r.projectTitle ? ` · ${r.projectTitle}` : ""}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-ink">{r.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <p className="text-[10px] uppercase tracking-wide text-muted">Leave a review</p>
+          <select
+            className="border border-line px-2 py-1.5 text-sm"
+            value={draft.rating}
+            onChange={(e) =>
+              setReviewDrafts((prev) => ({
+                ...prev,
+                [inv.id]: { ...draft, rating: e.target.value },
+              }))
+            }
+          >
+            <option value="">Rating (optional)</option>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={String(n)}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <textarea
+            className="w-full border border-line px-2 py-1.5 text-sm"
+            rows={2}
+            placeholder="How was this reader?"
+            value={draft.text}
+            onChange={(e) =>
+              setReviewDrafts((prev) => ({
+                ...prev,
+                [inv.id]: { ...draft, text: e.target.value },
+              }))
+            }
+          />
+          <button
+            type="button"
+            disabled={busy || !draft.text.trim()}
+            className="border border-line px-3 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
+            onClick={() => void submitReaderReview(inv)}
+          >
+            Submit review
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-[10px] uppercase tracking-wide text-muted">Message</p>
+          <textarea
+            className="w-full border border-line px-2 py-1.5 text-sm"
+            rows={2}
+            placeholder="Write a message…"
+            value={messageDrafts[inv.id] || ""}
+            onChange={(e) =>
+              setMessageDrafts((prev) => ({ ...prev, [inv.id]: e.target.value }))
+            }
+          />
+          <button
+            type="button"
+            disabled={busy || !(messageDrafts[inv.id] || "").trim()}
+            className="border border-line px-3 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
+            onClick={() => void sendReaderMessage(inv)}
+          >
+            Send message
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   function updateFollowUp(
     idx: number,
     branch: "followUpYes" | "followUpNo",
@@ -500,8 +903,20 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
           <div>
             <h2 className="font-display text-2xl">Beta readers</h2>
             <p className="mt-1 text-sm text-muted">
-              Build an application form, invite people, track reading progress, and review comments.
+              Turn on Ready, then copy your share link. Readers log in (or set a password), apply if
+              needed, and read from their dashboard.
             </p>
+            {!loading && (
+              <label className="font-ui mt-3 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={betaReady}
+                  disabled={savingReady}
+                  onChange={(e) => void setReady(e.target.checked)}
+                />
+                Ready for beta readers
+              </label>
+            )}
           </div>
 
           <section className="font-ui border border-line p-4">
@@ -727,22 +1142,42 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                 </button>
               </div>
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-muted">Application link</p>
-              <p className="mt-1 text-xs text-muted">
-                Share this so readers fill out your form first.
-              </p>
-              <button
-                type="button"
-                className="mt-2 border border-line px-3 py-2 text-xs text-accent hover:border-accent"
-                onClick={() => {
-                  if (!applyLink) return;
-                  void navigator.clipboard.writeText(applyLink);
-                  setNote("Application link copied.");
-                }}
-              >
-                Copy apply link
-              </button>
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-muted">Share link</p>
+                <p className="mt-1 text-xs text-muted">
+                  Book gate for readers — prefer this over legacy token links.
+                </p>
+                <button
+                  type="button"
+                  className="mt-2 bg-accent px-3 py-2 text-xs text-paper disabled:opacity-50"
+                  disabled={!shareLink}
+                  onClick={() => {
+                    if (!shareLink) return;
+                    void navigator.clipboard.writeText(shareLink);
+                    setNote("Share link copied.");
+                  }}
+                >
+                  Copy share link
+                </button>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-muted">Application link</p>
+                <p className="mt-1 text-xs text-muted">
+                  Share this so readers fill out your form first.
+                </p>
+                <button
+                  type="button"
+                  className="mt-2 border border-line px-3 py-2 text-xs text-accent hover:border-accent"
+                  onClick={() => {
+                    if (!applyLink) return;
+                    void navigator.clipboard.writeText(applyLink);
+                    setNote("Application link copied.");
+                  }}
+                >
+                  Copy apply link
+                </button>
+              </div>
             </div>
             {note && <p className="text-sm text-accent md:col-span-2">{note}</p>}
           </section>
@@ -1038,8 +1473,15 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                           </button>
                         </span>
                       </div>
+                      {(readerStatsLine(inv) || reviewSummaryLine(inv)) && (
+                        <p className="mt-1 text-xs text-muted">
+                          {[readerStatsLine(inv), reviewSummaryLine(inv)]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      )}
                       {open && (
-                        <div className="mt-2 space-y-2 border-t border-accent/20 pt-2 text-sm">
+                        <div className="mt-2 space-y-3 border-t border-accent/20 pt-2 text-sm">
                           {lines.length === 0 ? (
                             <p className="text-muted">No form answers (email only).</p>
                           ) : (
@@ -1052,6 +1494,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                               </div>
                             ))
                           )}
+                          {renderInviteSocial(inv, "default", { hideStats: true })}
                         </div>
                       )}
                     </li>
@@ -1081,13 +1524,27 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
 
             {readersOpen && (
               <div className="mt-4">
-                <button
-                  type="button"
-                  className="border border-line px-3 py-1.5 text-xs text-accent hover:border-accent"
-                  onClick={exportReadersCsv}
-                >
-                  Export readers (CSV)
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    className="border border-line px-3 py-1.5 text-xs text-accent hover:border-accent"
+                    onClick={exportReadersCsv}
+                  >
+                    Export readers (CSV)
+                  </button>
+                  <label className="flex items-center gap-2 text-xs text-muted">
+                    Sort
+                    <select
+                      className="border border-line px-2 py-1 text-xs text-ink"
+                      value={readerSort}
+                      onChange={(e) => setReaderSort(e.target.value as ReaderSort)}
+                    >
+                      <option value="recent">Most recent</option>
+                      <option value="comments">Most comments</option>
+                      <option value="furthest">Furthest chapter</option>
+                    </select>
+                  </label>
+                </div>
                 {loading && readers.length === 0 ? (
                   <p className="mt-2 text-sm text-muted">Loading…</p>
                 ) : readers.length === 0 ? (
@@ -1118,6 +1575,14 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                               >
                                 {isDnf ? "DNF" : inv.status === "accepted" ? "reading" : "invited"}
                               </span>
+                              {(inv.commentCount || 0) > 0 && (
+                                <span
+                                  className={`ml-2 text-[10px] ${isDnf ? "text-danger/90" : "text-muted"}`}
+                                >
+                                  {inv.commentCount} comment
+                                  {inv.commentCount === 1 ? "" : "s"}
+                                </span>
+                              )}
                               {inv.currentChapter && (
                                 <span
                                   className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}
@@ -1141,10 +1606,22 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                   className="text-xs text-accent hover:underline"
                                   onClick={() => {
                                     void navigator.clipboard.writeText(inv.link!);
-                                    setNote("Reading link copied.");
+                                    setNote("Share link copied.");
                                   }}
                                 >
                                   Copy link
+                                </button>
+                              )}
+                              {inv.legacyLink && !isDnf && (
+                                <button
+                                  type="button"
+                                  className="text-xs text-muted hover:underline"
+                                  onClick={() => {
+                                    void navigator.clipboard.writeText(inv.legacyLink!);
+                                    setNote("Invite claim link copied.");
+                                  }}
+                                >
+                                  Invite claim link
                                 </button>
                               )}
                               <button
@@ -1225,6 +1702,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                   </ul>
                                 )}
                               </div>
+                              {renderInviteSocial(inv, isDnf ? "danger" : "default")}
                             </div>
                           )}
                         </li>
@@ -1306,7 +1784,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
           <section>
             <h3 className="font-display text-xl">Comments</h3>
             <p className="mt-1 text-sm text-muted">
-              {openCount} open · {comments.length} total. Pick a chapter — you only see that
+              {openCount} open · {topLevelComments.length} total. Pick a chapter — you only see that
               chapter’s notes.
             </p>
             <label className="font-ui mt-2 flex items-center gap-2 text-xs text-muted">
@@ -1349,10 +1827,16 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                   <ul className="space-y-3">
                     {chapterComments.map((c) => {
                       const busy = busyCommentId === c.id;
-                      const readerLabel =
-                        c.readerName && c.readerEmail
+                      const readerLabel = c.authorUserId
+                        ? "You (author)"
+                        : c.readerName && c.readerEmail
                           ? `${c.readerName} (${c.readerEmail})`
                           : c.readerName || c.readerEmail || "Reader";
+                      const replies = repliesByParent.get(c.id) || [];
+                      const reactionCounts = new Map<string, number>();
+                      for (const r of c.reactions || []) {
+                        reactionCounts.set(r.emoji, (reactionCounts.get(r.emoji) || 0) + 1);
+                      }
                       return (
                         <li
                           key={c.id}
@@ -1383,6 +1867,28 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
                             {c.body}
                           </p>
+                          <div className="font-ui mt-3 flex flex-wrap gap-1.5">
+                            {REACTION_EMOJIS.map((re) => {
+                              const count = reactionCounts.get(re.id) || 0;
+                              return (
+                                <button
+                                  key={re.id}
+                                  type="button"
+                                  title={re.label}
+                                  disabled={busy}
+                                  className={`border px-2 py-0.5 text-xs disabled:opacity-50 ${
+                                    count
+                                      ? "border-accent/40 bg-accent/10"
+                                      : "border-line"
+                                  }`}
+                                  onClick={() => void reactToComment(c.id, re.id)}
+                                >
+                                  {re.glyph}
+                                  {count > 0 ? ` ${count}` : ""}
+                                </button>
+                              );
+                            })}
+                          </div>
                           <div className="font-ui mt-3 flex flex-wrap gap-2">
                             {c.chapterId && onOpenComment && (
                               <button
@@ -1416,6 +1922,50 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                               Delete
                             </button>
                           </div>
+                          <div className="font-ui mt-3 space-y-2 border-t border-line pt-3">
+                            <textarea
+                              className="w-full border border-line px-2 py-1.5 text-sm"
+                              rows={2}
+                              placeholder="Reply as author…"
+                              value={replyDrafts[c.id] || ""}
+                              onChange={(e) =>
+                                setReplyDrafts((prev) => ({
+                                  ...prev,
+                                  [c.id]: e.target.value,
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              disabled={busy || !(replyDrafts[c.id] || "").trim()}
+                              className="border border-line px-3 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
+                              onClick={() => void replyToComment(c.id)}
+                            >
+                              Reply
+                            </button>
+                          </div>
+                          {replies.length > 0 && (
+                            <ul className="mt-3 space-y-2 border-l-2 border-line pl-3">
+                              {replies.map((r) => {
+                                const replyLabel = r.authorUserId
+                                  ? "You (author)"
+                                  : r.readerName && r.readerEmail
+                                    ? `${r.readerName} (${r.readerEmail})`
+                                    : r.readerName || r.readerEmail || "Reader";
+                                return (
+                                  <li key={r.id} className="text-sm">
+                                    <div className="font-ui flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-muted">
+                                      <span>{replyLabel}</span>
+                                      <time dateTime={r.createdAt}>
+                                        {new Date(r.createdAt).toLocaleString()}
+                                      </time>
+                                    </div>
+                                    <p className="mt-1 whitespace-pre-wrap text-ink">{r.body}</p>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
                         </li>
                       );
                     })}

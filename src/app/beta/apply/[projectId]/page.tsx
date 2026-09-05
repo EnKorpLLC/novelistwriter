@@ -23,6 +23,13 @@ export default async function BetaApplyPage({
     <div className="mx-auto max-w-lg px-6 py-16">
       <p className="font-ui text-xs uppercase tracking-wide text-muted">Beta reader application</p>
       <h1 className="font-display mt-2 text-3xl">{project.title || "Manuscript"}</h1>
+      <p className="mt-3 text-sm text-muted">
+        Prefer the reader dashboard?{" "}
+        <a href={`/beta/book/${project.id}`} className="text-accent underline">
+          Open the book page
+        </a>{" "}
+        after you log in.
+      </p>
       {!form.intro && (
         <p className="mt-3 text-sm text-muted">
           Fill out this form to request access. If you’re already approved, use the email check at

@@ -14,6 +14,9 @@ create table if not exists public.profiles (
   byok_openai_key text,
   referral_code text,
   referred_by uuid references public.profiles(id) on delete set null,
+  is_author boolean not null default true,
+  is_beta_reader boolean not null default false,
+  beta_onboarded_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -71,6 +74,7 @@ create table if not exists public.projects (
   beta_application_form jsonb not null default '[]'::jsonb,
   beta_auto_approve jsonb not null default '{"mode":"off","rules":[]}'::jsonb,
   beta_expires_at timestamptz,
+  beta_ready boolean not null default false,
   is_unlocked boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -227,6 +231,8 @@ create table if not exists public.beta_invites (
   dnf_at timestamptz,
   current_chapter_id uuid references public.chapters(id) on delete set null,
   last_read_at timestamptz,
+  reader_user_id uuid references auth.users(id) on delete set null,
+  finished_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -235,6 +241,9 @@ create table if not exists public.beta_comments (
   project_id uuid not null references public.projects(id) on delete cascade,
   chapter_id uuid references public.chapters(id) on delete cascade,
   invite_id uuid references public.beta_invites(id) on delete set null,
+  parent_id uuid references public.beta_comments(id) on delete cascade,
+  author_user_id uuid references auth.users(id) on delete set null,
+  reader_user_id uuid references auth.users(id) on delete set null,
   body text not null,
   excerpt text,
   completed boolean not null default false,
@@ -262,6 +271,25 @@ create table if not exists public.beta_contacts (
   unique (project_id, email)
 );
 
+create table if not exists public.beta_comment_reactions (
+  id uuid primary key default gen_random_uuid(),
+  comment_id uuid not null references public.beta_comments(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  emoji text not null check (emoji in ('thumbsup', 'thumbsdown', 'heart', 'laugh', 'thanks')),
+  created_at timestamptz not null default now(),
+  unique (comment_id, user_id)
+);
+
+create table if not exists public.beta_book_reviews (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  invite_id uuid not null references public.beta_invites(id) on delete cascade,
+  reader_user_id uuid references auth.users(id) on delete set null,
+  body text not null,
+  created_at timestamptz not null default now(),
+  unique (project_id, invite_id)
+);
+
 create index if not exists idx_projects_user on public.projects(user_id);
 create index if not exists idx_chapters_project on public.chapters(project_id, sort_order);
 create index if not exists idx_bible_project on public.bible_entries(project_id);
@@ -278,13 +306,20 @@ returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
+declare
+  role_hint text := coalesce(new.raw_user_meta_data->>'signup_role', 'author');
+  as_author boolean := role_hint is distinct from 'beta_reader';
+  as_beta boolean := role_hint = 'beta_reader';
 begin
-  insert into public.profiles (id, email, display_name, referral_code)
+  insert into public.profiles (id, email, display_name, referral_code, is_author, is_beta_reader, beta_onboarded_at)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)),
-    upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10))
+    upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10)),
+    as_author,
+    as_beta,
+    case when as_beta then now() else null end
   );
   insert into public.credit_balances (user_id, balance, free_ai_taste_remaining)
   values (new.id, 0, 3);
@@ -317,6 +352,8 @@ alter table public.beta_invites enable row level security;
 alter table public.beta_comments enable row level security;
 alter table public.beta_reading_progress enable row level security;
 alter table public.beta_contacts enable row level security;
+alter table public.beta_comment_reactions enable row level security;
+alter table public.beta_book_reviews enable row level security;
 
 create policy "profiles_own" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
 create policy "credits_select_own" on public.credit_balances for select using (auth.uid() = user_id);
@@ -357,6 +394,9 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 ) with check (
   auth.uid() = user_id
 );
+
+-- See migration_beta_social.sql for: beta_reader_reviews, beta_conversations,
+-- beta_messages, beta_author_follows, beta_notifications
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
 -- Optional private bucket `manuscripts` for raw uploads if needed later

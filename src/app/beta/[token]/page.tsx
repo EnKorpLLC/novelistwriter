@@ -1,75 +1,115 @@
-import { createServiceClient } from "@/lib/supabase/admin";
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
-import { BetaReaderClient } from "@/components/BetaReaderClient";
-import {
-  missingRequiredAnswers,
-  normalizeBetaApplicationForm,
-  sanitizeApplicationAnswers,
-} from "@/lib/beta-form";
+"use client";
 
-type InviteRow = {
-  id: string;
-  project_id: string;
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+
+type ClaimInfo = {
+  email: string;
+  displayName: string | null;
+  projectId: string;
+  projectTitle: string;
   status: string;
-  application_answers: unknown;
-  projects:
-    | { title: string; beta_application_form: unknown }
-    | { title: string; beta_application_form: unknown }[]
-    | null;
+  hasAccount: boolean;
+  nextPath: string;
+  bookPath: string;
+  loginUrl: string;
+  signupUrl: string;
 };
 
-function projectFromInvite(invite: InviteRow) {
-  return Array.isArray(invite.projects) ? invite.projects[0] : invite.projects;
-}
+/** Legacy invite links land here: email identity → login/signup → dashboard (no direct manuscript unlock). */
+export default function BetaClaimPage() {
+  const params = useParams();
+  const token = String(params.token || "");
+  const [info, setInfo] = useState<ClaimInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export default async function BetaPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ token: string }>;
-  searchParams: Promise<{ chapter?: string }>;
-}) {
-  const { token } = await params;
-  const { chapter: chapterParam } = await searchParams;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/beta/claim?token=${encodeURIComponent(token)}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) throw new Error(data.error || "Invalid link");
+        setInfo(data);
+        try {
+          sessionStorage.setItem("nw_beta_claim_token", token);
+          sessionStorage.setItem("nw_beta_claim_email", data.email);
+        } catch {
+          /* ignore */
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Invalid link");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
-  let invite: InviteRow | null = null;
-
-  try {
-    const admin = createServiceClient();
-    const { data } = await admin
-      .from("beta_invites")
-      .select("id, project_id, status, application_answers, projects(title, beta_application_form)")
-      .eq("token", token)
-      .maybeSingle();
-    invite = data as InviteRow | null;
-  } catch {
-    notFound();
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-lg px-6 py-16">
+        <p className="text-sm text-muted">Opening your invite…</p>
+      </div>
+    );
   }
 
-  if (!invite) notFound();
+  if (error || !info) {
+    return (
+      <div className="mx-auto max-w-lg px-6 py-16">
+        <p className="text-sm text-danger">{error || "Invite not found"}</p>
+        <Link href="/beta/signup" className="mt-4 inline-block text-accent underline">
+          Create a beta reader account
+        </Link>
+      </div>
+    );
+  }
 
-  const project = projectFromInvite(invite);
-  const form = normalizeBetaApplicationForm(project?.beta_application_form);
-  const answers = sanitizeApplicationAnswers(form.fields, invite.application_answers);
-  const needsApplication =
-    (invite.status === "pending" || invite.status === "accepted" || invite.status === "dnf") &&
-    form.fields.length > 0 &&
-    missingRequiredAnswers(form.fields, answers).length > 0;
+  const signupHref = `/beta/signup?email=${encodeURIComponent(info.email)}&name=${encodeURIComponent(info.displayName || "")}&next=${encodeURIComponent("/beta/dashboard")}`;
+  const loginHref = `/login?email=${encodeURIComponent(info.email)}&next=${encodeURIComponent("/beta/dashboard")}`;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
-      <p className="font-ui text-xs uppercase tracking-wide text-muted">Beta read</p>
-      <h1 className="font-display mt-2 text-3xl">{project?.title || "Manuscript"}</h1>
-      <Suspense fallback={<p className="mt-8 text-sm text-muted">Loading…</p>}>
-        <BetaReaderClient
-          token={token}
-          projectId={invite.project_id}
-          form={form}
-          needsApplication={needsApplication}
-          initialChapterId={chapterParam}
-        />
-      </Suspense>
+    <div className="mx-auto max-w-lg px-6 py-16">
+      <p className="font-ui text-xs uppercase tracking-wide text-muted">Beta reader invite</p>
+      <h1 className="font-display mt-2 text-3xl">{info.projectTitle}</h1>
+      <p className="mt-3 text-sm text-muted">
+        Beta reading now uses your Novelist Writer account. Sign in with{" "}
+        <strong className="text-ink">{info.email}</strong>
+        {info.hasAccount
+          ? " (you already have an account)."
+          : " and set a password to save your place and open your dashboard."}
+      </p>
+
+      <div className="font-ui mt-8 space-y-3">
+        {info.hasAccount ? (
+          <Link href={loginHref} className="block bg-accent px-4 py-3 text-center text-paper">
+            Log in to continue
+          </Link>
+        ) : (
+          <Link href={signupHref} className="block bg-accent px-4 py-3 text-center text-paper">
+            Set a password & open dashboard
+          </Link>
+        )}
+        <Link
+          href={info.hasAccount ? signupHref : loginHref}
+          className="block border border-line px-4 py-3 text-center text-sm text-accent"
+        >
+          {info.hasAccount ? "Need to create a password instead?" : "Already have an account? Log in"}
+        </Link>
+        <p className="pt-2 text-xs text-muted">
+          After you sign in, your invites are linked automatically. Continue reading from your
+          dashboard or{" "}
+          <Link href={info.bookPath} className="text-accent underline">
+            open this book
+          </Link>
+          .
+        </p>
+      </div>
     </div>
   );
 }

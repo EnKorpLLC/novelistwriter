@@ -6,8 +6,11 @@ import { CreateProjectButton } from "@/components/CreateProjectButton";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DeleteProjectButton } from "@/components/DeleteProjectButton";
 import { ClaimReferral } from "@/components/ClaimReferral";
+import { DashboardRoleNav } from "@/components/DashboardRoleNav";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
+import { normalizeRoles, linkInvitesForEmail } from "@/lib/beta-platform";
+import { createServiceClient } from "@/lib/supabase/admin";
 
 function formatWords(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
@@ -20,6 +23,43 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // If this author's email appears on any beta invites, unlock beta-reader dashboard
+  try {
+    const admin = createServiceClient();
+    await linkInvitesForEmail(admin, user.id, user.email);
+    const email = String(user.email || "")
+      .trim()
+      .toLowerCase();
+    let hasInvites = false;
+    if (email.includes("@")) {
+      const { count } = await admin
+        .from("beta_invites")
+        .select("id", { count: "exact", head: true })
+        .ilike("email", email);
+      hasInvites = (count || 0) > 0;
+    }
+    if (!hasInvites) {
+      const { count } = await admin
+        .from("beta_invites")
+        .select("id", { count: "exact", head: true })
+        .eq("reader_user_id", user.id);
+      hasInvites = (count || 0) > 0;
+    }
+    if (hasInvites) {
+      await supabase
+        .from("profiles")
+        .update({
+          is_beta_reader: true,
+          beta_onboarded_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id)
+        .eq("is_beta_reader", false);
+    }
+  } catch {
+    /* ignore */
+  }
 
   const [{ data: projects }, { data: credits }, { data: profile }, { data: chapterRows }] =
     await Promise.all([
@@ -64,6 +104,7 @@ export default async function DashboardPage() {
           Novelist Writer
         </Link>
         <div className="flex flex-wrap items-center gap-4 text-sm">
+          <DashboardRoleNav roles={normalizeRoles(profile)} side="author" />
           <span className="text-muted">
             Credits:{" "}
             <strong className="text-ink">

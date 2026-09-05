@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { fetchProfileRoles, homePathForRoles, type AppSide } from "@/lib/beta-platform";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -34,18 +35,42 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/dashboard") ||
     path.startsWith("/project") ||
     path.startsWith("/billing") ||
-    path.startsWith("/settings");
+    path.startsWith("/settings") ||
+    path.startsWith("/beta/dashboard") ||
+    path.startsWith("/beta/read");
 
   if (!user && isProtected) {
     const redirect = request.nextUrl.clone();
     redirect.pathname = "/login";
-    redirect.searchParams.set("next", path);
+    redirect.searchParams.set("next", `${path}${request.nextUrl.search}`);
     return NextResponse.redirect(redirect);
   }
 
-  if (user && (path === "/login" || path === "/signup")) {
+  if (user && (path === "/login" || path === "/signup" || path === "/beta/signup")) {
+    const roles = await fetchProfileRoles(supabase, user.id);
+    const next = request.nextUrl.searchParams.get("next");
+    const lastSide = request.cookies.get("nw_last_side")?.value as AppSide | undefined;
     const redirect = request.nextUrl.clone();
-    redirect.pathname = "/dashboard";
+    redirect.pathname = homePathForRoles(roles, next, lastSide || null);
+    redirect.search = "";
+    return NextResponse.redirect(redirect);
+  }
+
+  if (user && path === "/beta/login") {
+    const redirect = request.nextUrl.clone();
+    redirect.pathname = "/login";
+    const next = request.nextUrl.searchParams.get("next") || "/beta/dashboard";
+    redirect.search = "";
+    redirect.searchParams.set("next", next);
+    return NextResponse.redirect(redirect);
+  }
+
+  if (!user && path === "/beta/login") {
+    const redirect = request.nextUrl.clone();
+    redirect.pathname = "/login";
+    const next = request.nextUrl.searchParams.get("next") || "/beta/dashboard";
+    redirect.search = "";
+    redirect.searchParams.set("next", next);
     return NextResponse.redirect(redirect);
   }
 

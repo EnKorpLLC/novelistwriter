@@ -1,37 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { rememberSide } from "@/lib/beta-platform";
 
-export default function SignupPage() {
+export default function BetaSignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [refCode, setRefCode] = useState<string | null>(null);
+  const [nextPath, setNextPath] = useState("/beta/dashboard");
   const router = useRouter();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const ref = params.get("ref");
-    if (ref) setRefCode(ref.trim().toUpperCase());
+    const e = params.get("email");
+    const n = params.get("name");
+    const next = params.get("next");
+    if (e) setEmail(e);
+    if (n) setName(n);
+    if (next && next.startsWith("/")) setNextPath(next);
   }, []);
-
-  async function claimPendingReferral() {
-    try {
-      await fetch("/api/referral", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(refCode ? { code: refCode } : {}),
-      });
-    } catch {
-      /* ignore */
-    }
-  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,18 +37,30 @@ export default function SignupPage() {
         email,
         password,
         options: {
-          data: { display_name: name },
-          emailRedirectTo: `${appUrl}/dashboard`,
+          data: { display_name: name, signup_role: "beta_reader" },
+          emailRedirectTo: `${appUrl}${nextPath}`,
         },
       });
-      if (err) throw err;
+      if (err) {
+        if (/already registered|already been registered|User already/i.test(err.message)) {
+          setError("Account exists — log in with this email to open your dashboard.");
+          return;
+        }
+        throw err;
+      }
+
       if (data.session) {
-        await claimPendingReferral();
-        router.push("/dashboard");
+        await fetch("/api/profile/roles", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enableBetaReader: true, is_author: false }),
+        });
+        rememberSide("beta");
+        await fetch("/api/beta/dashboard").catch(() => null);
+        router.push(nextPath);
         router.refresh();
         return;
       }
-      // Email confirmation required — cookie still holds ref for claim after login
       setCheckEmail(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
@@ -74,10 +79,10 @@ export default function SignupPage() {
           <h1 className="font-display text-2xl text-ink">Check your email</h1>
           <p className="mt-3 text-sm text-muted">
             We sent a confirmation link to <strong className="text-ink">{email}</strong>.
-            Open it, then log in to start writing.
+            Open it, then log in to open your beta dashboard.
           </p>
           <Link
-            href="/login"
+            href="/login?next=/beta/dashboard"
             className="mt-6 inline-block w-full bg-accent py-2.5 text-paper hover:bg-accent-soft"
           >
             Go to log in
@@ -93,13 +98,10 @@ export default function SignupPage() {
         Novelist Writer
       </Link>
       <form onSubmit={onSubmit} className="font-ui mt-10 w-full max-w-sm space-y-4">
-        <h1 className="font-display text-3xl">Create account</h1>
-        <p className="text-sm text-muted">First project free. AI never writes your novel.</p>
-        {refCode && (
-          <p className="border border-line bg-paper-deep/40 px-3 py-2 text-xs text-muted">
-            Invited by a fellow writer — referral saved for 30 days if you leave and come back.
-          </p>
-        )}
+        <h1 className="font-display text-3xl">Beta reader signup</h1>
+        <p className="text-sm text-muted">
+          Same login as authors. Browse ready manuscripts and leave feedback.
+        </p>
         {error && <p className="text-sm text-danger">{error}</p>}
         <label className="block text-sm">
           Display name
@@ -135,18 +137,18 @@ export default function SignupPage() {
           disabled={loading}
           className="w-full bg-accent py-2.5 text-paper hover:bg-accent-soft disabled:opacity-60"
         >
-          {loading ? "Creating…" : "Start writing free"}
+          {loading ? "Creating…" : "Create reader account"}
         </button>
         <p className="text-center text-sm text-muted">
           Have an account?{" "}
-          <Link href="/login" className="text-accent underline">
+          <Link href="/login?next=/beta/dashboard" className="text-accent underline">
             Log in
           </Link>
         </p>
         <p className="text-center text-sm text-muted">
-          Beta reader?{" "}
-          <Link href="/beta/signup" className="text-accent underline">
-            Sign up to read
+          Want to write?{" "}
+          <Link href="/signup" className="text-accent underline">
+            Author signup
           </Link>
         </p>
       </form>

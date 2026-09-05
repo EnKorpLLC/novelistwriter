@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import {
   normalizeBetaAutoApprove,
@@ -51,6 +52,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
+  let readerUserId: string | null = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.email && user.email.trim().toLowerCase() === trimmed) {
+      readerUserId = user.id;
+    }
+  } catch {
+    /* ignore */
+  }
+
   const admin = createServiceClient();
   const { data: project } = await admin
     .from("projects")
@@ -81,10 +95,12 @@ export async function POST(req: Request) {
   const autoApproved = shouldAutoApprove(autoSettings, form.fields, answers);
   const status = autoApproved ? "pending" : "requested";
 
-  const approvedMessage =
-    "You're approved. Enter your email below to unlock the manuscript.";
-  const reviewMessage =
-    "Application submitted. Enter your email below to check your status.";
+  const approvedMessage = readerUserId
+    ? "You're approved. Open the manuscript from your dashboard."
+    : "You're approved. Enter your email below to unlock the manuscript.";
+  const reviewMessage = readerUserId
+    ? "Application submitted. We'll update your status when the author reviews it."
+    : "Application submitted. Enter your email below to check your status.";
 
   const { data: existing } = await admin
     .from("beta_invites")
@@ -107,8 +123,11 @@ export async function POST(req: Request) {
       message: isPending ? approvedMessage : reviewMessage,
       unlockReady: true,
       autoApproved: isPending,
+      readUrl: isPending && readerUserId ? `/beta/read/${body.projectId}` : null,
     });
   }
+
+  const readerPatch = readerUserId ? { reader_user_id: readerUserId } : {};
 
   if (existing) {
     if (existing.status === "denied" || existing.status === "revoked" || existing.status === "dnf") {
@@ -122,6 +141,7 @@ export async function POST(req: Request) {
           status_reason: null,
           dnf_reason: null,
           dnf_at: null,
+          ...readerPatch,
         })
         .eq("id", existing.id);
       if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
@@ -136,18 +156,19 @@ export async function POST(req: Request) {
           email: trimmed,
           display_name: displayName,
           status_reason: null,
+          ...readerPatch,
         })
         .eq("id", existing.id);
       if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
       return finish(status);
     }
-    // Already pending / accepted — refresh contact info, keep access
     const { error } = await admin
       .from("beta_invites")
       .update({
         email: trimmed,
         display_name: displayName,
         application_answers: answers,
+        ...readerPatch,
       })
       .eq("id", existing.id);
     if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
@@ -162,6 +183,7 @@ export async function POST(req: Request) {
     status,
     application_answers: answers,
     status_reason: null,
+    ...readerPatch,
   });
 
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
@@ -178,9 +200,10 @@ function migrationHint(message: string) {
     message.includes("display_name") ||
     message.includes("status_reason") ||
     message.includes("beta_auto_approve") ||
-    message.includes("beta_contacts")
+    message.includes("beta_contacts") ||
+    message.includes("reader_user_id")
   ) {
-    return "This project’s database needs an update. Run supabase/migration_beta_access.sql in the Supabase SQL editor.";
+    return "This project’s database needs an update. Run supabase/migration_beta_platform.sql in the Supabase SQL editor.";
   }
   return message;
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/admin";
 import { appUrl } from "@/lib/stripe";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import {
@@ -8,6 +9,7 @@ import {
   BETA_PERIOD_ENDED_REASON,
 } from "@/lib/beta-access";
 import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
+import { computeReaderStats, notifyAuthorFollowersOfReady } from "@/lib/beta-social";
 
 async function requireProject(projectId: string) {
   const supabase = await createClient();
@@ -15,17 +17,30 @@ async function requireProject(projectId: string) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  const { data: project } = await supabase
+  const { data: project, error } = await supabase
     .from("projects")
-    .select("id, beta_application_form, beta_auto_approve, beta_expires_at")
+    .select("id, beta_application_form, beta_auto_approve, beta_expires_at, beta_ready")
     .eq("id", projectId)
     .eq("user_id", user.id)
     .maybeSingle();
+  if (error) {
+    return {
+      error: NextResponse.json({ error: migrationHint(error.message) }, { status: 500 }),
+    };
+  }
   if (!project) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   return { supabase, user, project };
 }
 
 function migrationHint(message: string) {
+  if (
+    message.includes("beta_ready") ||
+    message.includes("parent_id") ||
+    message.includes("author_user_id") ||
+    message.includes("beta_comment_reactions")
+  ) {
+    return "Database needs an update. Run supabase/migration_beta_platform.sql in the Supabase SQL editor.";
+  }
   if (
     message.includes("display_name") ||
     message.includes("status_reason") ||
@@ -37,6 +52,10 @@ function migrationHint(message: string) {
     return "Database needs an update. Run supabase/migration_beta_access.sql in the Supabase SQL editor.";
   }
   return message;
+}
+
+function bookShareLink(projectId: string) {
+  return appUrl(`/beta/book/${projectId}`);
 }
 
 export async function GET(
@@ -60,13 +79,15 @@ export async function GET(
     supabase
       .from("beta_invites")
       .select(
-        "id, email, token, status, created_at, application_answers, dnf_reason, dnf_at, current_chapter_id, display_name, status_reason, last_read_at"
+        "id, email, token, status, created_at, application_answers, dnf_reason, dnf_at, current_chapter_id, display_name, status_reason, last_read_at, reader_user_id, finished_at"
       )
       .eq("project_id", projectId)
       .order("created_at", { ascending: false }),
     supabase
       .from("beta_comments")
-      .select("id, body, excerpt, chapter_id, invite_id, completed, created_at")
+      .select(
+        "id, body, excerpt, chapter_id, invite_id, parent_id, author_user_id, completed, created_at"
+      )
       .eq("project_id", projectId)
       .order("created_at", { ascending: false })
       .limit(2000),
@@ -86,17 +107,51 @@ export async function GET(
       .order("email"),
   ]);
 
-  if (commentsError?.message?.includes("completed")) {
-    return NextResponse.json(
-      {
-        error:
-          "Database needs an update. Run supabase/migration_beta_comments.sql in the Supabase SQL editor.",
-      },
-      { status: 500 }
-    );
+  if (commentsError) {
+    if (commentsError.message.includes("completed")) {
+      return NextResponse.json(
+        {
+          error:
+            "Database needs an update. Run supabase/migration_beta_comments.sql in the Supabase SQL editor.",
+        },
+        { status: 500 }
+      );
+    }
+    if (
+      commentsError.message.includes("parent_id") ||
+      commentsError.message.includes("author_user_id")
+    ) {
+      return NextResponse.json({ error: migrationHint(commentsError.message) }, { status: 500 });
+    }
+    return NextResponse.json({ error: commentsError.message }, { status: 500 });
   }
   if (contactsError) {
     return NextResponse.json({ error: migrationHint(contactsError.message) }, { status: 500 });
+  }
+
+  const commentIds = (comments || []).map((c) => c.id);
+  const { data: reactions, error: reactionsError } = commentIds.length
+    ? await supabase
+        .from("beta_comment_reactions")
+        .select("comment_id, emoji, user_id")
+        .in("comment_id", commentIds)
+    : { data: [] as { comment_id: string; emoji: string; user_id: string }[], error: null };
+
+  if (reactionsError?.message?.includes("beta_comment_reactions")) {
+    return NextResponse.json({ error: migrationHint(reactionsError.message) }, { status: 500 });
+  }
+
+  const reactionsByComment = new Map<string, { emoji: string; userId: string }[]>();
+  for (const r of reactions || []) {
+    const list = reactionsByComment.get(r.comment_id) || [];
+    list.push({ emoji: r.emoji, userId: r.user_id });
+    reactionsByComment.set(r.comment_id, list);
+  }
+
+  const commentCountByInvite = new Map<string, number>();
+  for (const c of comments || []) {
+    if (!c.invite_id) continue;
+    commentCountByInvite.set(c.invite_id, (commentCountByInvite.get(c.invite_id) || 0) + 1);
   }
 
   const inviteIds = [
@@ -132,10 +187,82 @@ export async function GET(
     list.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
+  const shareLink = bookShareLink(projectId);
   const applicationForm = normalizeBetaApplicationForm(project.beta_application_form);
   const autoApprove = normalizeBetaAutoApprove(project.beta_auto_approve);
 
+  const emails = [
+    ...new Set(
+      (invites || [])
+        .map((i) => String(i.email || "").trim().toLowerCase())
+        .filter((e) => e.includes("@"))
+    ),
+  ];
+  const statsByEmail = new Map<string, ReturnType<typeof computeReaderStats>>();
+  const reviewCountByEmail = new Map<string, number>();
+  const avgRatingByEmail = new Map<string, number | null>();
+
+  if (emails.length) {
+    try {
+      const admin = createServiceClient();
+      const { data: allInvites } = await admin
+        .from("beta_invites")
+        .select("email, project_id, status, finished_at")
+        .in("email", emails);
+      const byEmailProjects = new Map<
+        string,
+        { status: string; finished_at: string | null; project_id: string }[]
+      >();
+      for (const row of allInvites || []) {
+        const e = String(row.email || "")
+          .trim()
+          .toLowerCase();
+        const list = byEmailProjects.get(e) || [];
+        if (!list.some((x) => x.project_id === row.project_id)) {
+          list.push({
+            status: row.status,
+            finished_at: row.finished_at,
+            project_id: row.project_id,
+          });
+        }
+        byEmailProjects.set(e, list);
+      }
+      for (const [e, rows] of byEmailProjects) {
+        statsByEmail.set(e, computeReaderStats(rows));
+      }
+
+      const { data: reviews } = await admin
+        .from("beta_reader_reviews")
+        .select("reader_email, rating")
+        .in("reader_email", emails);
+      const ratingBuckets = new Map<string, number[]>();
+      for (const r of reviews || []) {
+        const e = String(r.reader_email || "")
+          .trim()
+          .toLowerCase();
+        reviewCountByEmail.set(e, (reviewCountByEmail.get(e) || 0) + 1);
+        if (r.rating != null) {
+          const list = ratingBuckets.get(e) || [];
+          list.push(r.rating);
+          ratingBuckets.set(e, list);
+        }
+      }
+      for (const [e, ratings] of ratingBuckets) {
+        avgRatingByEmail.set(
+          e,
+          ratings.length
+            ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
+            : null
+        );
+      }
+    } catch {
+      /* social migration may not be applied yet */
+    }
+  }
+
   return NextResponse.json({
+    betaReady: Boolean(project.beta_ready),
+    shareLink,
     applyLink: appUrl(`/beta/apply/${projectId}`),
     applicationForm,
     autoApprove,
@@ -153,24 +280,46 @@ export async function GET(
     })),
     invites: (invites || []).map((i) => {
       const chapterProgress = progressByInvite.get(i.id) || [];
+      const furthest = chapterProgress.reduce<{
+        sortOrder: number;
+        percent: number;
+      } | null>((best, p) => {
+        if (!best) return { sortOrder: p.sortOrder, percent: p.percent };
+        if (p.sortOrder > best.sortOrder) return { sortOrder: p.sortOrder, percent: p.percent };
+        if (p.sortOrder === best.sortOrder && p.percent > best.percent) {
+          return { sortOrder: p.sortOrder, percent: p.percent };
+        }
+        return best;
+      }, null);
       const currentId = i.current_chapter_id as string | null;
       const current =
         (currentId && chapterProgress.find((p) => p.chapterId === currentId)) ||
         [...chapterProgress].sort((a, b) => b.percent - a.percent)[0] ||
         null;
+      const canShare =
+        i.status !== "requested" && i.status !== "denied" && i.status !== "revoked";
+      const emailKey = String(i.email || "")
+        .trim()
+        .toLowerCase();
+      const stats = statsByEmail.get(emailKey) || { finished: 0, dnf: 0, reading: 0 };
       return {
         ...i,
         displayName: i.display_name,
         statusReason: i.status_reason,
         lastReadAt: i.last_read_at,
-        link:
-          i.status === "requested" || i.status === "denied" || i.status === "revoked"
-            ? null
-            : appUrl(`/beta/${i.token}`),
+        readerUserId: (i as { reader_user_id?: string | null }).reader_user_id ?? null,
+        commentCount: commentCountByInvite.get(i.id) || 0,
+        furthestSortOrder: furthest?.sortOrder ?? -1,
+        furthestPercent: furthest?.percent ?? 0,
+        link: canShare ? shareLink : null,
+        legacyLink: canShare ? appUrl(`/beta/${i.token}`) : null,
         applicationAnswers: i.application_answers || {},
         dnfReason: i.dnf_reason,
         dnfAt: i.dnf_at,
         chapterProgress,
+        readerStats: stats,
+        reviewCount: reviewCountByEmail.get(emailKey) || 0,
+        avgRating: avgRatingByEmail.get(emailKey) ?? null,
         currentChapter: current
           ? {
               id: current.chapterId,
@@ -193,10 +342,14 @@ export async function GET(
       chapterId: c.chapter_id,
       chapterTitle: c.chapter_id ? chapterTitle.get(c.chapter_id) || "Chapter" : null,
       chapterOrder: c.chapter_id != null ? (chapterOrder.get(c.chapter_id) ?? 9999) : -1,
+      inviteId: c.invite_id,
+      parentId: c.parent_id || null,
+      authorUserId: c.author_user_id || null,
       readerEmail: c.invite_id ? inviteEmail.get(c.invite_id) || null : null,
       readerName: c.invite_id ? inviteName.get(c.invite_id) || null : null,
       completed: Boolean(c.completed),
       createdAt: c.created_at,
+      reactions: reactionsByComment.get(c.id) || [],
     })),
   });
 }
@@ -208,9 +361,63 @@ export async function POST(
   const { id: projectId } = await params;
   const auth = await requireProject(projectId);
   if ("error" in auth && auth.error) return auth.error;
-  const { supabase, user } = auth;
+  const { supabase, user, project } = auth;
 
   const body = await req.json();
+
+  if (body?.action === "setReady") {
+    const betaReady = Boolean(body.betaReady);
+    const wasReady = Boolean(project.beta_ready);
+
+    const { data: projectRow } = await supabase
+      .from("projects")
+      .select("id, title")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const { error } = await supabase
+      .from("projects")
+      .update({
+        beta_ready: betaReady,
+        beta_ready_changed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", projectId)
+      .eq("user_id", user.id);
+    if (error) {
+      if (error.message.includes("beta_ready")) {
+        return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (betaReady && !wasReady) {
+      try {
+        const admin = createServiceClient();
+        const { count } = await admin
+          .from("beta_invites")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId);
+        const { data: author } = await admin
+          .from("profiles")
+          .select("display_name")
+          .eq("id", user.id)
+          .maybeSingle();
+        await notifyAuthorFollowersOfReady(admin, {
+          authorUserId: user.id,
+          authorName: author?.display_name || "An author",
+          projectId,
+          projectTitle: projectRow?.title || "a manuscript",
+          rerelease: (count || 0) > 0,
+        });
+      } catch {
+        /* non-fatal */
+      }
+    }
+
+    return NextResponse.json({ ok: true, betaReady });
+  }
 
   if (body?.action === "saveForm") {
     const applicationForm = normalizeBetaApplicationForm({
@@ -315,11 +522,16 @@ export async function POST(
         .select("*")
         .single();
       if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
-      return NextResponse.json({ invite: data, link: appUrl(`/beta/${data.token}`) });
+      return NextResponse.json({
+        invite: data,
+        link: bookShareLink(projectId),
+        legacyLink: appUrl(`/beta/${data.token}`),
+      });
     }
     return NextResponse.json({
       invite: existing,
-      link: appUrl(`/beta/${existing.token}`),
+      link: bookShareLink(projectId),
+      legacyLink: appUrl(`/beta/${existing.token}`),
       error: "That email is already on the list.",
     });
   }
@@ -340,7 +552,8 @@ export async function POST(
 
   return NextResponse.json({
     invite: data,
-    link: appUrl(`/beta/${data.token}`),
+    link: bookShareLink(projectId),
+    legacyLink: appUrl(`/beta/${data.token}`),
   });
 }
 
@@ -441,6 +654,7 @@ export async function PATCH(
 
   return NextResponse.json({
     invite: data,
-    link: status === "pending" ? appUrl(`/beta/${data.token}`) : null,
+    link: status === "pending" ? bookShareLink(projectId) : null,
+    legacyLink: status === "pending" ? appUrl(`/beta/${data.token}`) : null,
   });
 }

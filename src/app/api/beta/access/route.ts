@@ -63,9 +63,7 @@ export async function POST(req: Request) {
     invite.status === "denied" ||
     invite.status === "revoked"
   ) {
-    return NextResponse.json(
-      accessMessageForStatus(invite.status, invite.status_reason)
-    );
+    return NextResponse.json(accessMessageForStatus(invite.status, invite.status_reason));
   }
 
   if (
@@ -73,14 +71,16 @@ export async function POST(req: Request) {
     invite.status === "accepted" ||
     invite.status === "dnf"
   ) {
+    // Platform path: claim account / dashboard instead of legacy token reader
     return NextResponse.json({
       code: "ok",
       token: invite.token,
       readUrl: appUrl(`/beta/${invite.token}`),
+      claimUrl: appUrl(`/beta/${invite.token}`),
+      bookUrl: appUrl(`/beta/book/${projectId}`),
+      dashboardUrl: appUrl("/beta/dashboard"),
     });
   }
 
-  return NextResponse.json(
-    accessMessageForStatus(invite.status, invite.status_reason)
-  );
+  return NextResponse.json(accessMessageForStatus(invite.status, invite.status_reason));
 }

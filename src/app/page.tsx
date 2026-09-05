@@ -9,12 +9,12 @@ const BETA_POINTS = [
     d: "Custom forms, yes/no rules with AND/OR matching, and optional blanket auto-approve.",
   },
   {
-    t: "Reading that you can manage",
-    d: "Progress by chapter, last-read times, DNF with reasons, and an expiration date that ends the period cleanly.",
+    t: "Reader accounts & catalog",
+    d: "Beta readers sign in once, browse ready books by genre, and resume where they left off.",
   },
   {
     t: "Comments tied to the page",
-    d: "Readers highlight a phrase; you open it in Write, jump to the passage, and mark notes complete.",
+    d: "Readers highlight a phrase; you react, reply, open it in Write, and mark notes complete.",
   },
   {
     t: "Contacts you keep",
@@ -38,6 +38,9 @@ export default function HomePage() {
           </Link>
           <Link href="/login" className="text-muted hover:text-ink">
             Log in
+          </Link>
+          <Link href="/beta/signup" className="text-muted hover:text-ink">
+            Beta readers
           </Link>
           <Link
             href="/signup"

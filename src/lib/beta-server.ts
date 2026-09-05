@@ -4,8 +4,69 @@ import {
   isBetaExpired,
   sanitizeDisplayName,
 } from "@/lib/beta-access";
+import { isActiveReaderStatus } from "@/lib/beta-platform";
 
 type Admin = SupabaseClient;
+
+export type BetaInviteRow = {
+  id: string;
+  project_id: string;
+  user_id: string;
+  email: string;
+  status: string;
+  status_reason: string | null;
+  display_name: string | null;
+  application_answers: unknown;
+  token: string;
+  reader_user_id: string | null;
+  current_chapter_id: string | null;
+  last_read_at: string | null;
+  finished_at: string | null;
+  dnf_reason: string | null;
+  dnf_at: string | null;
+};
+
+/** Find invite for a logged-in reader on a project (by user id or email). */
+export async function findReaderInvite(
+  admin: Admin,
+  opts: { projectId: string; userId: string; email?: string | null }
+): Promise<BetaInviteRow | null> {
+  const { data: byUser } = await admin
+    .from("beta_invites")
+    .select("*")
+    .eq("project_id", opts.projectId)
+    .eq("reader_user_id", opts.userId)
+    .maybeSingle();
+  if (byUser) return byUser as BetaInviteRow;
+
+  const email = String(opts.email || "")
+    .trim()
+    .toLowerCase();
+  if (!email.includes("@")) return null;
+
+  const { data: byEmail } = await admin
+    .from("beta_invites")
+    .select("*")
+    .eq("project_id", opts.projectId)
+    .ilike("email", email)
+    .maybeSingle();
+
+  if (!byEmail) return null;
+
+  if (!byEmail.reader_user_id) {
+    await admin
+      .from("beta_invites")
+      .update({ reader_user_id: opts.userId })
+      .eq("id", byEmail.id);
+    return { ...byEmail, reader_user_id: opts.userId } as BetaInviteRow;
+  }
+
+  return byEmail as BetaInviteRow;
+}
+
+export function inviteAllowsReading(invite: { status: string } | null | undefined): boolean {
+  return Boolean(invite && isActiveReaderStatus(invite.status));
+}
 
 export async function upsertBetaContact(
   admin: Admin,
