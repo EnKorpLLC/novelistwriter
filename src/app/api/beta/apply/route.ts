@@ -153,6 +153,7 @@ export async function POST(req: Request) {
           status_reason: null,
           dnf_reason: null,
           dnf_at: null,
+          finished_at: null,
           ...readerPatch,
         })
         .eq("id", existing.id);

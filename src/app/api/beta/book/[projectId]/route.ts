@@ -146,10 +146,27 @@ export async function GET(
   }
 
   if (invite?.status === "denied" || invite?.status === "revoked") {
+    // Book open again → allow reapply (apply API restores the invite row)
+    if (publiclyListed) {
+      return NextResponse.json({
+        ...base,
+        loggedIn: true,
+        access: "apply" as const,
+        reapply: true,
+        previousStatus: invite.status,
+        email: user.email || null,
+        message:
+          invite.status === "revoked"
+            ? "Your previous access was removed. You can apply again while this book is open for beta."
+            : "Your previous application was denied. You can apply again while this book is open for beta.",
+      });
+    }
     const msg = accessMessageForStatus(
       invite.status,
       invite.status_reason ||
-        (invite.status_reason === BETA_PERIOD_ENDED_REASON ? BETA_PERIOD_ENDED_REASON : invite.status_reason)
+        (invite.status_reason === BETA_PERIOD_ENDED_REASON
+          ? BETA_PERIOD_ENDED_REASON
+          : invite.status_reason)
     );
     return NextResponse.json({
       ...base,

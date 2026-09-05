@@ -23,6 +23,7 @@ type GateData = {
   readUrl?: string;
   email?: string | null;
   currentChapterId?: string | null;
+  reapply?: boolean;
 };
 
 export default function BetaBookGatePage() {
@@ -204,7 +205,12 @@ export default function BetaBookGatePage() {
 
       {data.loggedIn && data.access === "apply" && (
         <div className="mt-8 space-y-4 border border-line p-5">
-          <h2 className="font-display text-xl">Apply to beta read</h2>
+          <h2 className="font-display text-xl">
+            {data.reapply ? "Apply again" : "Apply to beta read"}
+          </h2>
+          {data.reapply && data.message && (
+            <p className="text-sm text-muted">{data.message}</p>
+          )}
           <BetaFormFields
             form={data.applicationForm}
             displayName={displayName}
@@ -222,7 +228,7 @@ export default function BetaBookGatePage() {
             onClick={() => void apply()}
             className="bg-accent px-4 py-2 text-sm text-paper disabled:opacity-60"
           >
-            {busy ? "Submitting…" : "Submit application"}
+            {busy ? "Submitting…" : data.reapply ? "Submit application again" : "Submit application"}
           </button>
         </div>
       )}

@@ -73,6 +73,70 @@ function bookShareLink(projectId: string) {
   return appUrl(`/beta/book/${projectId}`);
 }
 
+/** Create or reopen an invite as pending (author restore / invite). */
+async function restoreInviteAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  opts: {
+    projectId: string;
+    userId: string;
+    email: string;
+    displayName?: string | null;
+  }
+): Promise<
+  | { invite: { id: string; token: string; status: string; email: string }; alreadyActive?: boolean }
+  | { error: string }
+> {
+  const email = opts.email.trim().toLowerCase();
+  const name = sanitizeDisplayName(opts.displayName);
+
+  const { data: existing } = await supabase
+    .from("beta_invites")
+    .select("id, status, token, email")
+    .eq("project_id", opts.projectId)
+    .ilike("email", email)
+    .maybeSingle();
+
+  if (existing) {
+    if (
+      existing.status === "pending" ||
+      existing.status === "accepted" ||
+      existing.status === "requested"
+    ) {
+      return { invite: existing, alreadyActive: true };
+    }
+    const { data, error } = await supabase
+      .from("beta_invites")
+      .update({
+        status: "pending",
+        email,
+        ...(name ? { display_name: name } : {}),
+        dnf_reason: null,
+        dnf_at: null,
+        status_reason: null,
+        finished_at: null,
+      })
+      .eq("id", existing.id)
+      .select("id, status, token, email")
+      .single();
+    if (error) return { error: error.message };
+    return { invite: data };
+  }
+
+  const { data, error } = await supabase
+    .from("beta_invites")
+    .insert({
+      project_id: opts.projectId,
+      user_id: opts.userId,
+      email,
+      display_name: name || null,
+      status: "pending",
+    })
+    .select("id, status, token, email")
+    .single();
+  if (error) return { error: error.message };
+  return { invite: data };
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -321,13 +385,29 @@ export async function GET(
       project.beta_expires_at && new Date(project.beta_expires_at).getTime() <= Date.now()
     ),
     chapters: chapters || [],
-    contacts: (contacts || []).map((c) => ({
-      id: c.id,
-      email: c.email,
-      displayName: c.display_name,
-      createdAt: c.created_at,
-      updatedAt: c.updated_at,
-    })),
+    contacts: (contacts || []).map((c) => {
+      const emailKey = String(c.email || "")
+        .trim()
+        .toLowerCase();
+      const inv = (invites || []).find(
+        (i) =>
+          String(i.email || "")
+            .trim()
+            .toLowerCase() === emailKey
+      );
+      const status = inv?.status || null;
+      const canRestore =
+        !status || status === "revoked" || status === "denied" || status === "dnf";
+      return {
+        id: c.id,
+        email: c.email,
+        displayName: c.display_name,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+        inviteStatus: status,
+        canRestore,
+      };
+    }),
     invites: (invites || []).map((i) => {
       const chapterProgress = progressByInvite.get(i.id) || [];
       const furthest = chapterProgress.reduce<{
@@ -546,12 +626,92 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
 
+  if (body?.action === "restoreAccess") {
+    if (!project.beta_ready) {
+      return NextResponse.json(
+        { error: "Mark the book Ready before restoring reader access." },
+        { status: 400 }
+      );
+    }
+
+    let email = "";
+    let displayName: string | null = null;
+    const contactId = String(body.contactId || "").trim();
+    const inviteId = String(body.inviteId || "").trim();
+
+    if (contactId) {
+      const { data: contact } = await supabase
+        .from("beta_contacts")
+        .select("id, email, display_name")
+        .eq("id", contactId)
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (!contact) return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+      email = String(contact.email || "")
+        .trim()
+        .toLowerCase();
+      displayName = contact.display_name;
+    } else if (inviteId) {
+      const { data: inv } = await supabase
+        .from("beta_invites")
+        .select("id, email, display_name, status")
+        .eq("id", inviteId)
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (!inv) return NextResponse.json({ error: "Invite not found" }, { status: 404 });
+      if (inv.status === "pending" || inv.status === "accepted" || inv.status === "requested") {
+        return NextResponse.json({ error: "That reader already has access or a pending request." }, { status: 400 });
+      }
+      email = String(inv.email || "")
+        .trim()
+        .toLowerCase();
+      displayName = inv.display_name;
+    } else {
+      return NextResponse.json({ error: "contactId or inviteId required" }, { status: 400 });
+    }
+
+    if (!email.includes("@")) {
+      return NextResponse.json({ error: "Invalid contact email" }, { status: 400 });
+    }
+
+    await upsertBetaContact(supabase, {
+      projectId,
+      userId: user.id,
+      email,
+      displayName,
+    });
+
+    const restored = await restoreInviteAccess(supabase, {
+      projectId,
+      userId: user.id,
+      email,
+      displayName,
+    });
+    if ("error" in restored) {
+      return NextResponse.json({ error: migrationHint(restored.error) }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      invite: restored.invite,
+      link: bookShareLink(projectId),
+      legacyLink: appUrl(`/beta/${restored.invite.token}`),
+    });
+  }
+
   const trimmed = String(body.email || "")
     .trim()
     .toLowerCase();
   const displayName = sanitizeDisplayName(body.displayName);
   if (!trimmed || !trimmed.includes("@")) {
     return NextResponse.json({ error: "Email required" }, { status: 400 });
+  }
+
+  if (!project.beta_ready) {
+    return NextResponse.json(
+      { error: "Mark the book Ready before inviting readers." },
+      { status: 400 }
+    );
   }
 
   await upsertBetaContact(supabase, {
@@ -561,61 +721,28 @@ export async function POST(
     displayName,
   });
 
-  const { data: existing } = await supabase
-    .from("beta_invites")
-    .select("id, status, token")
-    .eq("project_id", projectId)
-    .ilike("email", trimmed)
-    .maybeSingle();
-
-  if (existing) {
-    if (existing.status === "revoked" || existing.status === "denied" || existing.status === "dnf") {
-      const { data, error } = await supabase
-        .from("beta_invites")
-        .update({
-          status: "pending",
-          email: trimmed,
-          display_name: displayName || undefined,
-          dnf_reason: null,
-          dnf_at: null,
-          status_reason: null,
-        })
-        .eq("id", existing.id)
-        .select("*")
-        .single();
-      if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
-      return NextResponse.json({
-        invite: data,
-        link: bookShareLink(projectId),
-        legacyLink: appUrl(`/beta/${data.token}`),
-      });
-    }
+  const restored = await restoreInviteAccess(supabase, {
+    projectId,
+    userId: user.id,
+    email: trimmed,
+    displayName,
+  });
+  if ("error" in restored) {
+    return NextResponse.json({ error: migrationHint(restored.error) }, { status: 500 });
+  }
+  if (restored.alreadyActive) {
     return NextResponse.json({
-      invite: existing,
+      invite: restored.invite,
       link: bookShareLink(projectId),
-      legacyLink: appUrl(`/beta/${existing.token}`),
+      legacyLink: appUrl(`/beta/${restored.invite.token}`),
       error: "That email is already on the list.",
     });
   }
 
-  const { data, error } = await supabase
-    .from("beta_invites")
-    .insert({
-      project_id: projectId,
-      user_id: user.id,
-      email: trimmed,
-      display_name: displayName || null,
-      status: "pending",
-    })
-    .select("*")
-    .single();
-
-  if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
-
   return NextResponse.json({
-    invite: data,
+    invite: restored.invite,
     link: bookShareLink(projectId),
-    legacyLink: appUrl(`/beta/${data.token}`),
+    legacyLink: appUrl(`/beta/${restored.invite.token}`),
   });
 }
 

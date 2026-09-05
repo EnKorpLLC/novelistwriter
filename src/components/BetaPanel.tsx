@@ -56,6 +56,8 @@ type Contact = {
   displayName: string | null;
   createdAt: string;
   updatedAt: string;
+  inviteStatus?: string | null;
+  canRestore?: boolean;
 };
 
 type CommentReaction = { emoji: string; userId: string };
@@ -543,6 +545,30 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
     }
     setContacts((prev) => prev.filter((c) => c.id !== contactId));
     setNote("Contact deleted.");
+  }
+
+  async function restoreAccess(opts: { contactId?: string; inviteId?: string }) {
+    if (!betaReady) {
+      setNote("Mark the book Ready before restoring reader access.");
+      return;
+    }
+    setSocialBusyId(opts.contactId || opts.inviteId || "restore");
+    try {
+      const res = await fetch(`/api/projects/${projectId}/beta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restoreAccess", ...opts }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not restore access");
+        return;
+      }
+      setNote("Access restored — reader can open the manuscript again.");
+      void load();
+    } finally {
+      setSocialBusyId(null);
+    }
   }
 
   function downloadCsv(
@@ -1753,10 +1779,35 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                   </ul>
                 )}
                 {closed.length > 0 && (
-                  <p className="mt-3 text-[11px] text-muted">
-                    {closed.filter((i) => i.status === "denied").length} denied ·{" "}
-                    {closed.filter((i) => i.status === "revoked").length} removed
-                  </p>
+                  <div className="mt-4 border-t border-line pt-3">
+                    <p className="text-[11px] text-muted">
+                      {closed.filter((i) => i.status === "denied").length} denied ·{" "}
+                      {closed.filter((i) => i.status === "revoked").length} removed
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      {closed.map((inv) => (
+                        <li
+                          key={inv.id}
+                          className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                        >
+                          <span>
+                            {inviteLabel(inv)}
+                            <span className="ml-2 text-xs text-muted">
+                              {inv.status === "denied" ? "denied" : "removed"}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            disabled={!betaReady || socialBusyId === inv.id}
+                            className="text-xs text-accent underline disabled:opacity-50"
+                            onClick={() => void restoreAccess({ inviteId: inv.id })}
+                          >
+                            Restore access
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}
@@ -1772,7 +1823,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
               <span>
                 <span className="font-display block text-lg text-ink">Contacts</span>
                 <span className="mt-1 block text-xs text-muted">
-                  {contacts.length} saved · kept after the beta period ends
+                  {contacts.length} saved · restore access anytime the book is Ready
                 </span>
               </span>
               <span className="shrink-0 text-xs text-accent">
@@ -1807,14 +1858,31 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                           ) : (
                             c.email
                           )}
+                          {c.inviteStatus && (
+                            <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
+                              {c.inviteStatus}
+                            </span>
+                          )}
                         </span>
-                        <button
-                          type="button"
-                          className="text-xs text-danger hover:underline"
-                          onClick={() => void deleteContact(c.id)}
-                        >
-                          Delete
-                        </button>
+                        <span className="flex items-center gap-3">
+                          {c.canRestore && (
+                            <button
+                              type="button"
+                              disabled={!betaReady || socialBusyId === c.id}
+                              className="text-xs text-accent underline disabled:opacity-50"
+                              onClick={() => void restoreAccess({ contactId: c.id })}
+                            >
+                              Restore access
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="text-xs text-danger hover:underline"
+                            onClick={() => void deleteContact(c.id)}
+                          >
+                            Delete
+                          </button>
+                        </span>
                       </li>
                     ))}
                   </ul>
