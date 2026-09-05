@@ -222,7 +222,7 @@ export async function POST(req: Request) {
       type: "reader_review",
       title: `${author?.display_name || "An author"} left you a review`,
       body: text.slice(0, 200),
-      href: "/beta/dashboard#reviews",
+      href: "/beta/dashboard?tab=reviews",
       meta: { reviewId: data.id },
     });
   }

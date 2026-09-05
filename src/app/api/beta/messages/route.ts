@@ -237,7 +237,7 @@ export async function POST(req: Request) {
         ? convo.project_id
           ? `/project/${convo.project_id}?tab=beta`
           : "/dashboard"
-        : "/beta/dashboard#messages";
+        : "/beta/dashboard?tab=messages";
     await createNotification(admin, {
       userId: recipientId,
       type: "message",
