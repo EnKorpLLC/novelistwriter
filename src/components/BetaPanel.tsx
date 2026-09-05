@@ -326,7 +326,17 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         return;
       }
       setBetaReady(Boolean(data.betaReady));
-      setNote(data.betaReady ? "Marked ready for beta readers." : "No longer listed as ready.");
+      if (data.betaReady) {
+        setNote("Marked ready for beta readers.");
+      } else {
+        const n = Number(data.revokedCount) || 0;
+        setNote(
+          n > 0
+            ? `No longer ready — removed access for ${n} reader${n === 1 ? "" : "s"}.`
+            : "No longer ready — reader access closed."
+        );
+        void load();
+      }
     } finally {
       setSavingReady(false);
     }
@@ -931,8 +941,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
             ) : (
               <>
                 <p className="mt-1 text-sm text-muted">
-                  Turn on Ready, then copy your share link. Readers log in (or set a password), apply
-                  if needed, and read from their dashboard.
+                  Turn on Ready, then copy your share link. Turning Ready off removes readers from
+                  the manuscript (contacts stay so you can re-invite later).
                 </p>
                 {!loading && (
                   <label className="font-ui mt-3 flex items-center gap-2 text-sm">

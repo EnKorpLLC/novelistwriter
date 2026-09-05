@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { linkInvitesForEmail, type ReactionEmoji, REACTION_EMOJIS } from "@/lib/beta-platform";
-import { findReaderInvite, inviteAllowsReading } from "@/lib/beta-server";
+import { findReaderInvite, inviteAllowsReading, enforceBetaAccessGates } from "@/lib/beta-server";
 
 const REACTION_IDS = new Set(REACTION_EMOJIS.map((r) => r.id));
 
@@ -281,6 +281,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No access" }, { status: 403 });
     }
 
+    const { data: readerProject } = await admin
+      .from("projects")
+      .select("id, beta_expires_at, beta_ready")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (!readerProject) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const gate = await enforceBetaAccessGates(admin, readerProject);
+    if (gate.blocked) {
+      return NextResponse.json({ error: gate.reason, code: "removed" }, { status: 403 });
+    }
+
     const { data, error } = await admin
       .from("beta_comments")
       .insert({
@@ -313,6 +324,18 @@ export async function POST(req: Request) {
     if (!invite || (invite.status !== "pending" && invite.status !== "accepted")) {
       return NextResponse.json({ error: "Invalid invite" }, { status: 403 });
     }
+
+    const { data: commentProject } = await admin
+      .from("projects")
+      .select("id, beta_expires_at, beta_ready")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (!commentProject) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const gate = await enforceBetaAccessGates(admin, commentProject);
+    if (gate.blocked) {
+      return NextResponse.json({ error: gate.reason, code: "removed" }, { status: 403 });
+    }
+
     if (invite.status === "pending") {
       await admin.from("beta_invites").update({ status: "accepted" }).eq("id", invite.id);
     }

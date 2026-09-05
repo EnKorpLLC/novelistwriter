@@ -9,6 +9,7 @@ import {
   normalizeRoles,
 } from "@/lib/beta-platform";
 import { computeReaderStats } from "@/lib/beta-social";
+import { revokeProjectBetaAccess } from "@/lib/beta-server";
 
 export async function GET() {
   const supabase = await createClient();
@@ -88,13 +89,12 @@ export async function GET() {
   // Drop non-Studio listings that slipped into beta_ready (e.g. free-plan authors)
   const nonStudioReady = (readyProjects || []).filter((p) => !studioAuthors.has(p.user_id));
   if (nonStudioReady.length) {
+    const ids = nonStudioReady.map((p) => p.id);
     await admin
       .from("projects")
       .update({ beta_ready: false, updated_at: new Date().toISOString() })
-      .in(
-        "id",
-        nonStudioReady.map((p) => p.id)
-      );
+      .in("id", ids);
+    await Promise.all(ids.map((id) => revokeProjectBetaAccess(admin, id)));
   }
 
   const shelf = invites

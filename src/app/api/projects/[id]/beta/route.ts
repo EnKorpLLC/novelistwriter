@@ -7,7 +7,11 @@ import {
   normalizeBetaAutoApprove,
   sanitizeDisplayName,
 } from "@/lib/beta-access";
-import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
+import {
+  enforceBetaExpiry,
+  revokeProjectBetaAccess,
+  upsertBetaContact,
+} from "@/lib/beta-server";
 import { computeReaderStats, notifyAuthorFollowersOfReady } from "@/lib/beta-social";
 import { userHasStudio } from "@/lib/credits";
 
@@ -87,6 +91,12 @@ export async function GET(
         .update({ beta_ready: false, updated_at: new Date().toISOString() })
         .eq("id", projectId)
         .eq("user_id", user.id);
+      try {
+        const admin = createServiceClient();
+        await revokeProjectBetaAccess(admin, projectId);
+      } catch {
+        /* non-fatal */
+      }
     }
     return NextResponse.json({
       studioAccess: false,
@@ -458,7 +468,17 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ ok: true, betaReady });
+    let revokedCount = 0;
+    if (!betaReady && wasReady) {
+      try {
+        const admin = createServiceClient();
+        revokedCount = await revokeProjectBetaAccess(admin, projectId);
+      } catch {
+        /* non-fatal */
+      }
+    }
+
+    return NextResponse.json({ ok: true, betaReady, revokedCount });
   }
 
   if (body?.action === "saveForm") {

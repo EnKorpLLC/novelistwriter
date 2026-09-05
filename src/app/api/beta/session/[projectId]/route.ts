@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { accessMessageForStatus, BETA_PERIOD_ENDED_REASON } from "@/lib/beta-access";
+import { accessMessageForStatus } from "@/lib/beta-access";
 import {
   missingRequiredAnswers,
   normalizeBetaApplicationForm,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/beta-form";
 import { linkInvitesForEmail } from "@/lib/beta-platform";
 import {
-  enforceBetaExpiry,
+  enforceBetaAccessGates,
   findReaderInvite,
   inviteAllowsReading,
   upsertBetaContact,
@@ -34,14 +34,14 @@ export async function GET(
 
   const { data: project } = await admin
     .from("projects")
-    .select("id, title, user_id, beta_application_form, beta_expires_at")
+    .select("id, title, user_id, beta_application_form, beta_expires_at, beta_ready")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { expired } = await enforceBetaExpiry(admin, project);
-  if (expired) {
-    const blocked = accessMessageForStatus("revoked", BETA_PERIOD_ENDED_REASON);
+  const gate = await enforceBetaAccessGates(admin, project);
+  if (gate.blocked) {
+    const blocked = accessMessageForStatus("revoked", gate.reason);
     return NextResponse.json(blocked, { status: 403 });
   }
 
@@ -148,15 +148,15 @@ export async function POST(
 
   const { data: project } = await admin
     .from("projects")
-    .select("id, user_id, beta_application_form, beta_expires_at")
+    .select("id, user_id, beta_application_form, beta_expires_at, beta_ready")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { expired } = await enforceBetaExpiry(admin, project);
-  if (expired) {
+  const gate = await enforceBetaAccessGates(admin, project);
+  if (gate.blocked) {
     return NextResponse.json(
-      { error: BETA_PERIOD_ENDED_REASON, code: "removed" },
+      { error: gate.reason, code: "removed", reason: gate.reason },
       { status: 403 }
     );
   }

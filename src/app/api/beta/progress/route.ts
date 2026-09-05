@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { BETA_PERIOD_ENDED_REASON } from "@/lib/beta-access";
-import { enforceBetaExpiry } from "@/lib/beta-server";
+import { enforceBetaAccessGates } from "@/lib/beta-server";
 
 async function loadInvite(token: string, projectId: string) {
   const admin = createServiceClient();
@@ -57,19 +56,19 @@ export async function POST(req: Request) {
   const admin = createServiceClient();
   const { data: project } = await admin
     .from("projects")
-    .select("id, beta_expires_at")
+    .select("id, beta_expires_at, beta_ready")
     .eq("id", body.projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { expired } = await enforceBetaExpiry(admin, project);
-  if (expired) {
+  const gate = await enforceBetaAccessGates(admin, project);
+  if (gate.blocked) {
     return NextResponse.json(
       {
-        error: BETA_PERIOD_ENDED_REASON,
+        error: gate.reason,
         code: "removed",
-        message: BETA_PERIOD_ENDED_REASON,
-        reason: BETA_PERIOD_ENDED_REASON,
+        message: gate.reason,
+        reason: gate.reason,
       },
       { status: 403 }
     );

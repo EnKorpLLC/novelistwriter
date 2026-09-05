@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import {
   accessMessageForStatus,
-  BETA_PERIOD_ENDED_REASON,
   sanitizeDisplayName,
 } from "@/lib/beta-access";
-import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
+import { enforceBetaAccessGates, upsertBetaContact } from "@/lib/beta-server";
 import {
   missingRequiredAnswers,
   normalizeBetaApplicationForm,
@@ -58,14 +57,14 @@ export async function POST(req: Request) {
 
   const { data: project } = await admin
     .from("projects")
-    .select("id, user_id, beta_application_form, beta_expires_at")
+    .select("id, user_id, beta_application_form, beta_expires_at, beta_ready")
     .eq("id", invite.project_id)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { expired } = await enforceBetaExpiry(admin, project);
-  if (expired) {
-    const blocked = accessMessageForStatus("revoked", BETA_PERIOD_ENDED_REASON);
+  const gate = await enforceBetaAccessGates(admin, project);
+  if (gate.blocked) {
+    const blocked = accessMessageForStatus("revoked", gate.reason);
     return NextResponse.json(blocked, { status: 403 });
   }
 

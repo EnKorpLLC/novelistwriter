@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  BETA_CLOSED_REASON,
   BETA_PERIOD_ENDED_REASON,
   isBetaExpired,
   sanitizeDisplayName,
@@ -107,6 +108,26 @@ export async function upsertBetaContact(
   });
 }
 
+const ACTIVE_INVITE_STATUSES = ["pending", "accepted", "requested", "dnf"] as const;
+
+/** Revoke all open invites for a project (contacts kept for re-invite). */
+export async function revokeProjectBetaAccess(
+  admin: Admin,
+  projectId: string,
+  reason: string = BETA_CLOSED_REASON
+): Promise<number> {
+  const { data } = await admin
+    .from("beta_invites")
+    .update({
+      status: "revoked",
+      status_reason: reason,
+    })
+    .eq("project_id", projectId)
+    .in("status", [...ACTIVE_INVITE_STATUSES])
+    .select("id");
+  return data?.length || 0;
+}
+
 /** If the beta period ended, revoke active invites with a fixed reason. Contacts are kept. */
 export async function enforceBetaExpiry(
   admin: Admin,
@@ -114,14 +135,35 @@ export async function enforceBetaExpiry(
 ): Promise<{ expired: boolean }> {
   if (!isBetaExpired(project.beta_expires_at)) return { expired: false };
 
-  await admin
-    .from("beta_invites")
-    .update({
-      status: "revoked",
-      status_reason: BETA_PERIOD_ENDED_REASON,
-    })
-    .eq("project_id", project.id)
-    .in("status", ["pending", "accepted", "requested", "dnf"]);
-
+  await revokeProjectBetaAccess(admin, project.id, BETA_PERIOD_ENDED_REASON);
   return { expired: true };
+}
+
+/**
+ * If the book is not marked ready, revoke leftover reader access.
+ * Keeps catalog/toggle and live reading in sync.
+ */
+export async function enforceBetaReady(
+  admin: Admin,
+  project: { id: string; beta_ready?: boolean | null }
+): Promise<{ closed: boolean }> {
+  if (project.beta_ready) return { closed: false };
+  await revokeProjectBetaAccess(admin, project.id, BETA_CLOSED_REASON);
+  return { closed: true };
+}
+
+/** Expiry + ready gates; revokes invites when either closes the book. */
+export async function enforceBetaAccessGates(
+  admin: Admin,
+  project: {
+    id: string;
+    beta_expires_at?: string | null;
+    beta_ready?: boolean | null;
+  }
+): Promise<{ blocked: false } | { blocked: true; reason: string }> {
+  const { expired } = await enforceBetaExpiry(admin, project);
+  if (expired) return { blocked: true, reason: BETA_PERIOD_ENDED_REASON };
+  const { closed } = await enforceBetaReady(admin, project);
+  if (closed) return { blocked: true, reason: BETA_CLOSED_REASON };
+  return { blocked: false };
 }

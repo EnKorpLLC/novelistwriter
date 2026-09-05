@@ -1,6 +1,7 @@
 import type { BetaApplicationAnswers, BetaFormField } from "@/lib/beta-form";
 
 export const BETA_PERIOD_ENDED_REASON = "The beta read time period ended.";
+export const BETA_CLOSED_REASON = "This book is no longer open for beta reading.";
 
 export type BetaAutoApproveMode = "off" | "all" | "rules";
 

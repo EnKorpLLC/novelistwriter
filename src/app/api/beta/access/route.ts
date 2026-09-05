@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { accessMessageForStatus, BETA_PERIOD_ENDED_REASON } from "@/lib/beta-access";
-import { enforceBetaExpiry } from "@/lib/beta-server";
+import { accessMessageForStatus } from "@/lib/beta-access";
+import { enforceBetaAccessGates } from "@/lib/beta-server";
 import { appUrl } from "@/lib/stripe";
 
 export async function POST(req: Request) {
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
 
   const { data: project } = await admin
     .from("projects")
-    .select("id, beta_expires_at")
+    .select("id, beta_expires_at, beta_ready")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -31,8 +31,8 @@ export async function POST(req: Request) {
     .ilike("email", email)
     .maybeSingle();
 
-  const { expired } = await enforceBetaExpiry(admin, project);
-  if (expired) {
+  const gate = await enforceBetaAccessGates(admin, project);
+  if (gate.blocked) {
     if (invite) {
       const { data: refreshed } = await admin
         .from("beta_invites")
@@ -47,8 +47,7 @@ export async function POST(req: Request) {
         message: "No application found for that email.",
       });
     }
-    const blocked = accessMessageForStatus("revoked", BETA_PERIOD_ENDED_REASON);
-    return NextResponse.json(blocked);
+    return NextResponse.json(accessMessageForStatus("revoked", gate.reason));
   }
 
   if (!invite) {

@@ -5,7 +5,7 @@ import { accessMessageForStatus, BETA_PERIOD_ENDED_REASON } from "@/lib/beta-acc
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel, linkInvitesForEmail } from "@/lib/beta-platform";
-import { enforceBetaExpiry, findReaderInvite, inviteAllowsReading } from "@/lib/beta-server";
+import { enforceBetaAccessGates, findReaderInvite, inviteAllowsReading, revokeProjectBetaAccess } from "@/lib/beta-server";
 import { userHasStudio } from "@/lib/credits";
 
 export async function GET(
@@ -39,6 +39,7 @@ export async function GET(
       .update({ beta_ready: false, updated_at: new Date().toISOString() })
       .eq("id", projectId);
     project.beta_ready = false;
+    await revokeProjectBetaAccess(admin, projectId);
   }
 
   const publiclyListed = Boolean(project.beta_ready && authorHasStudio);
@@ -57,7 +58,7 @@ export async function GET(
     }
   }
 
-  await enforceBetaExpiry(admin, project);
+  await enforceBetaAccessGates(admin, project);
 
   const { data: author } = await admin
     .from("profiles")
