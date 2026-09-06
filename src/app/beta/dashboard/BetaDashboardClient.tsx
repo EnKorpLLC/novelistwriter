@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DashboardRoleNav } from "@/components/DashboardRoleNav";
@@ -20,16 +21,29 @@ type ShelfBook = {
   coverUrl: string | null;
 };
 
+type CatalogBook = {
+  projectId: string;
+  title: string;
+  genre: string;
+  blurb: string;
+  authorUserId?: string;
+  authorName: string;
+  coverUrl: string | null;
+};
+
 type CatalogGenre = {
   genre: string;
-  books: {
-    projectId: string;
-    title: string;
-    genre: string;
-    authorUserId?: string;
-    authorName: string;
-    coverUrl: string | null;
-  }[];
+  books: CatalogBook[];
+};
+
+type PreviewData = {
+  projectId: string;
+  title: string;
+  blurb: string;
+  authorName: string;
+  coverUrl: string | null;
+  applyUrl: string;
+  firstChapter: { id: string; title: string; contentHtml: string } | null;
 };
 
 type Thread = {
@@ -163,6 +177,10 @@ export default function BetaDashboardClient() {
   const [messageDraft, setMessageDraft] = useState("");
   const [follows, setFollows] = useState<FollowItem[]>([]);
   const [followBusy, setFollowBusy] = useState<string | null>(null);
+  const [expandedBlurbs, setExpandedBlurbs] = useState<Record<string, boolean>>({});
+  const [preview, setPreview] = useState<PreviewData | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     const fromQuery = parseTab(searchParams.get("tab"));
@@ -323,6 +341,50 @@ export default function BetaDashboardClient() {
     }
   }
 
+  async function openBookPreview(book: CatalogBook) {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreview({
+      projectId: book.projectId,
+      title: book.title,
+      blurb: book.blurb,
+      authorName: book.authorName,
+      coverUrl: book.coverUrl,
+      applyUrl: `/beta/book/${book.projectId}`,
+      firstChapter: null,
+    });
+    try {
+      const res = await fetch(`/api/beta/preview/${book.projectId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not load preview");
+      setPreview(json);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Could not load preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function closePreview() {
+    setPreview(null);
+    setPreviewError(null);
+    setPreviewLoading(false);
+  }
+
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePreview();
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [preview]);
+
   const followingIds = new Set(follows.map((f) => f.authorUserId));
   const activeRole = conversations.find((c) => c.id === activeConvoId)?.role;
   const myUserId =
@@ -461,79 +523,117 @@ export default function BetaDashboardClient() {
                 <section>
                   <h2 className="sr-only">Available by keyword</h2>
                   <p className="text-sm text-muted">
-                    Manuscripts marked ready, grouped by the author&apos;s genre keywords.
+                    Browse by cover. Expand the blurb, or open a book to sample the first chapter
+                    before applying.
                   </p>
                   {catalog.length === 0 ? (
                     <p className="mt-3 text-sm text-muted">No other ready books right now.</p>
                   ) : (
-                    <div className="mt-6 space-y-8">
+                    <div className="mt-6 space-y-10">
                       {catalog.map((g) => (
                         <div key={g.genre}>
                           <h3 className="font-ui text-xs uppercase tracking-wide text-muted">
                             {g.genre}
                           </h3>
-                          <ul className="mt-3 space-y-2">
-                            {g.books.map((b) => (
-                              <li
-                                key={`${g.genre}-${b.projectId}`}
-                                className="flex items-center justify-between gap-4 border border-line px-4 py-3 transition hover:border-accent"
-                              >
-                                <Link
-                                  href={`/beta/book/${b.projectId}`}
-                                  className="flex min-w-0 flex-1 items-center gap-4"
+                          <ul className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                            {g.books.map((b) => {
+                              const blurbKey = `${g.genre}-${b.projectId}`;
+                              const blurbOpen = Boolean(expandedBlurbs[blurbKey]);
+                              return (
+                                <li
+                                  key={blurbKey}
+                                  className="flex flex-col border border-line bg-paper"
                                 >
-                                  <div className="relative h-16 w-11 shrink-0 overflow-hidden border border-line bg-paper-deep">
+                                  <button
+                                    type="button"
+                                    className="group relative aspect-square w-full overflow-hidden bg-paper-deep text-left"
+                                    onClick={() => void openBookPreview(b)}
+                                    aria-label={`Preview ${b.title}`}
+                                  >
                                     {b.coverUrl ? (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img
                                         src={b.coverUrl}
                                         alt=""
-                                        className="h-full w-full object-cover"
+                                        className="h-full w-full object-cover transition group-hover:scale-[1.02]"
                                       />
                                     ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-[10px] text-muted">
-                                        —
+                                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-3 text-center">
+                                        <span className="font-display text-sm text-ink line-clamp-3">
+                                          {b.title}
+                                        </span>
+                                        <span className="text-[10px] text-muted">No cover</span>
                                       </div>
                                     )}
-                                  </div>
-                                  <span className="min-w-0">
-                                    <span className="font-display block text-lg">{b.title}</span>
-                                    <span className="mt-0.5 block text-sm text-muted">
-                                      {b.authorName}
+                                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/75 to-transparent px-2 pb-2 pt-8">
+                                      <span className="font-display block text-sm text-paper line-clamp-2">
+                                        {b.title}
+                                      </span>
+                                      <span className="mt-0.5 block text-[11px] text-paper/80 line-clamp-1">
+                                        {b.authorName}
+                                      </span>
                                     </span>
-                                  </span>
-                                </Link>
-                                <div className="flex shrink-0 items-center gap-3">
-                                  {b.authorUserId && (
-                                    <button
-                                      type="button"
-                                      disabled={followBusy === b.authorUserId}
-                                      className="font-ui border border-line px-3 py-1.5 text-xs text-accent disabled:opacity-60"
-                                      onClick={() =>
-                                        void setFollow(
-                                          b.authorUserId!,
-                                          followingIds.has(b.authorUserId!)
-                                            ? "unfollow"
-                                            : "follow"
-                                        )
-                                      }
-                                    >
-                                      {followBusy === b.authorUserId
-                                        ? "…"
-                                        : followingIds.has(b.authorUserId)
-                                          ? "Unfollow"
-                                          : "Follow"}
-                                    </button>
-                                  )}
-                                  <Link
-                                    href={`/beta/book/${b.projectId}`}
-                                    className="font-ui text-sm text-accent"
-                                  >
-                                    View →
-                                  </Link>
-                                </div>
-                              </li>
-                            ))}
+                                  </button>
+                                  <div className="flex flex-1 flex-col gap-2 p-2.5">
+                                    {b.blurb ? (
+                                      <>
+                                        <p
+                                          className={`font-ui text-[11px] leading-snug text-muted ${
+                                            blurbOpen ? "" : "line-clamp-2"
+                                          }`}
+                                        >
+                                          {b.blurb}
+                                        </p>
+                                        <button
+                                          type="button"
+                                          className="font-ui self-start text-[11px] text-accent underline"
+                                          onClick={() =>
+                                            setExpandedBlurbs((m) => ({
+                                              ...m,
+                                              [blurbKey]: !blurbOpen,
+                                            }))
+                                          }
+                                        >
+                                          {blurbOpen ? "Hide blurb" : "Read blurb"}
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <p className="font-ui text-[11px] text-muted">No blurb yet.</p>
+                                    )}
+                                    <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+                                      {b.authorUserId && (
+                                        <button
+                                          type="button"
+                                          disabled={followBusy === b.authorUserId}
+                                          className="font-ui border border-line px-2 py-1 text-[10px] text-accent disabled:opacity-60"
+                                          onClick={() =>
+                                            void setFollow(
+                                              b.authorUserId!,
+                                              followingIds.has(b.authorUserId!)
+                                                ? "unfollow"
+                                                : "follow"
+                                            )
+                                          }
+                                        >
+                                          {followBusy === b.authorUserId
+                                            ? "…"
+                                            : followingIds.has(b.authorUserId)
+                                              ? "Unfollow"
+                                              : "Follow"}
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        className="font-ui text-[10px] text-accent underline"
+                                        onClick={() => void openBookPreview(b)}
+                                      >
+                                        Sample chapter
+                                      </button>
+                                    </div>
+                                  </div>
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       ))}
@@ -831,6 +931,87 @@ export default function BetaDashboardClient() {
           </>
         )}
       </main>
+
+      {preview &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[70] flex items-end justify-center bg-ink/50 p-3 sm:items-center sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="beta-preview-title"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closePreview();
+            }}
+          >
+            <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden border border-line bg-paper shadow-lg">
+              <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+                <div className="min-w-0">
+                  <p className="font-ui text-[10px] uppercase tracking-wide text-muted">
+                    Sample chapter
+                  </p>
+                  <h2 id="beta-preview-title" className="font-display mt-1 text-2xl text-ink">
+                    {preview.title}
+                  </h2>
+                  <p className="mt-0.5 text-sm text-muted">{preview.authorName}</p>
+                </div>
+                <button
+                  type="button"
+                  className="font-ui shrink-0 text-sm text-accent underline"
+                  onClick={closePreview}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+                {previewLoading && (
+                  <p className="text-sm text-muted">Loading first chapter…</p>
+                )}
+                {previewError && <p className="text-sm text-danger">{previewError}</p>}
+                {!previewLoading && !previewError && (
+                  <>
+                    {preview.blurb ? (
+                      <p className="mb-4 border-b border-line pb-4 text-sm text-muted">
+                        {preview.blurb}
+                      </p>
+                    ) : null}
+                    {preview.firstChapter ? (
+                      <>
+                        <h3 className="font-display text-xl text-ink">
+                          {preview.firstChapter.title}
+                        </h3>
+                        <div
+                          className="manuscript-prose mt-4 max-w-none"
+                          dangerouslySetInnerHTML={{
+                            __html: preview.firstChapter.contentHtml,
+                          }}
+                        />
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted">
+                        This book doesn&apos;t have a chapter to sample yet.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-paper px-4 py-3 sm:px-5">
+                <p className="font-ui text-xs text-muted">
+                  Like the sample? Apply to read the full manuscript.
+                </p>
+                <Link
+                  href={preview.applyUrl}
+                  className="font-ui bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
+                >
+                  Apply to beta read
+                </Link>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

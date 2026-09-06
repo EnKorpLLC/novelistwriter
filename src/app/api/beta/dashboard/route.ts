@@ -45,7 +45,7 @@ export async function GET() {
         : Promise.resolve({ data: [] as never[] }),
       admin
         .from("projects")
-        .select("id, title, genre, cover_path, updated_at, user_id, beta_ready, metadata")
+        .select("id, title, genre, blurb, cover_path, updated_at, user_id, beta_ready, metadata")
         .eq("beta_ready", true)
         .order("genre", { ascending: true })
         .order("title", { ascending: true }),
@@ -163,6 +163,7 @@ export async function GET() {
           projectId: p.id,
           title: p.title,
           genre,
+          blurb: String(p.blurb || "").trim(),
           authorUserId: p.user_id,
           authorName: authorName.get(p.user_id) || "Author",
           coverUrl: coverPublicUrl(
