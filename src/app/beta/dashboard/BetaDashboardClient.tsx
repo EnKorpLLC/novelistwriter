@@ -177,7 +177,7 @@ export default function BetaDashboardClient() {
   const [messageDraft, setMessageDraft] = useState("");
   const [follows, setFollows] = useState<FollowItem[]>([]);
   const [followBusy, setFollowBusy] = useState<string | null>(null);
-  const [expandedBlurbs, setExpandedBlurbs] = useState<Record<string, boolean>>({});
+  const [blurbPopup, setBlurbPopup] = useState<CatalogBook | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -371,10 +371,16 @@ export default function BetaDashboardClient() {
     setPreviewLoading(false);
   }
 
+  function closeBlurb() {
+    setBlurbPopup(null);
+  }
+
   useEffect(() => {
-    if (!preview) return;
+    if (!preview && !blurbPopup) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePreview();
+      if (e.key !== "Escape") return;
+      if (preview) closePreview();
+      else closeBlurb();
     };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
@@ -383,7 +389,7 @@ export default function BetaDashboardClient() {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [preview]);
+  }, [preview, blurbPopup]);
 
   const followingIds = new Set(follows.map((f) => f.authorUserId));
   const activeRole = conversations.find((c) => c.id === activeConvoId)?.role;
@@ -523,8 +529,7 @@ export default function BetaDashboardClient() {
                 <section>
                   <h2 className="sr-only">Available by keyword</h2>
                   <p className="text-sm text-muted">
-                    Browse by cover. Expand the blurb, or open a book to sample the first chapter
-                    before applying.
+                    Browse by cover. Open the blurb, or sample the first chapter before applying.
                   </p>
                   {catalog.length === 0 ? (
                     <p className="mt-3 text-sm text-muted">No other ready books right now.</p>
@@ -537,11 +542,10 @@ export default function BetaDashboardClient() {
                           </h3>
                           <ul className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                             {g.books.map((b) => {
-                              const blurbKey = `${g.genre}-${b.projectId}`;
-                              const blurbOpen = Boolean(expandedBlurbs[blurbKey]);
+                              const tileKey = `${g.genre}-${b.projectId}`;
                               return (
                                 <li
-                                  key={blurbKey}
+                                  key={tileKey}
                                   className="flex flex-col border border-line bg-paper"
                                 >
                                   <button
@@ -576,27 +580,13 @@ export default function BetaDashboardClient() {
                                   </button>
                                   <div className="flex flex-1 flex-col gap-2 p-2.5">
                                     {b.blurb ? (
-                                      <>
-                                        <p
-                                          className={`font-ui text-[11px] leading-snug text-muted ${
-                                            blurbOpen ? "" : "line-clamp-2"
-                                          }`}
-                                        >
-                                          {b.blurb}
-                                        </p>
-                                        <button
-                                          type="button"
-                                          className="font-ui self-start text-[11px] text-accent underline"
-                                          onClick={() =>
-                                            setExpandedBlurbs((m) => ({
-                                              ...m,
-                                              [blurbKey]: !blurbOpen,
-                                            }))
-                                          }
-                                        >
-                                          {blurbOpen ? "Hide blurb" : "Read blurb"}
-                                        </button>
-                                      </>
+                                      <button
+                                        type="button"
+                                        className="font-ui self-start text-[11px] text-accent underline"
+                                        onClick={() => setBlurbPopup(b)}
+                                      >
+                                        Read blurb
+                                      </button>
                                     ) : (
                                       <p className="font-ui text-[11px] text-muted">No blurb yet.</p>
                                     )}
@@ -932,6 +922,64 @@ export default function BetaDashboardClient() {
         )}
       </main>
 
+      {blurbPopup &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[70] flex items-end justify-center bg-ink/50 p-3 sm:items-center sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="beta-blurb-title"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closeBlurb();
+            }}
+          >
+            <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden border border-line bg-paper shadow-lg">
+              <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+                <div className="min-w-0">
+                  <p className="font-ui text-[10px] uppercase tracking-wide text-muted">Blurb</p>
+                  <h2 id="beta-blurb-title" className="font-display mt-1 text-2xl text-ink">
+                    {blurbPopup.title}
+                  </h2>
+                  <p className="mt-0.5 text-sm text-muted">{blurbPopup.authorName}</p>
+                </div>
+                <button
+                  type="button"
+                  className="font-ui shrink-0 text-sm text-accent underline"
+                  onClick={closeBlurb}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                  {blurbPopup.blurb}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3 sm:px-5">
+                <button
+                  type="button"
+                  className="font-ui border border-line px-4 py-2 text-sm text-accent"
+                  onClick={() => {
+                    const book = blurbPopup;
+                    closeBlurb();
+                    void openBookPreview(book);
+                  }}
+                >
+                  Sample chapter
+                </button>
+                <Link
+                  href={`/beta/book/${blurbPopup.projectId}`}
+                  className="font-ui bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
+                >
+                  Apply to beta read
+                </Link>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
       {preview &&
         typeof document !== "undefined" &&
         createPortal(
@@ -971,11 +1019,6 @@ export default function BetaDashboardClient() {
                 {previewError && <p className="text-sm text-danger">{previewError}</p>}
                 {!previewLoading && !previewError && (
                   <>
-                    {preview.blurb ? (
-                      <p className="mb-4 border-b border-line pb-4 text-sm text-muted">
-                        {preview.blurb}
-                      </p>
-                    ) : null}
                     {preview.firstChapter ? (
                       <>
                         <h3 className="font-display text-xl text-ink">
