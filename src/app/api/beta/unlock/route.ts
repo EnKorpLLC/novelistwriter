@@ -77,6 +77,7 @@ export async function POST(req: Request) {
 
   if (
     current.status === "requested" ||
+    current.status === "backup" ||
     current.status === "denied" ||
     current.status === "revoked"
   ) {

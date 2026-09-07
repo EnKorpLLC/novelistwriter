@@ -48,6 +48,9 @@ function studioRequiredResponse() {
 }
 
 function migrationHint(message: string) {
+  if (message.includes("beta_invites_status_check") || message.includes("backup")) {
+    return "Database needs an update. Run supabase/migration_beta_backup.sql in the Supabase SQL editor.";
+  }
   if (
     message.includes("beta_ready") ||
     message.includes("parent_id") ||
@@ -397,7 +400,11 @@ export async function GET(
       );
       const status = inv?.status || null;
       const canRestore =
-        !status || status === "revoked" || status === "denied" || status === "dnf";
+        !status ||
+        status === "revoked" ||
+        status === "denied" ||
+        status === "dnf" ||
+        status === "backup";
       return {
         id: c.id,
         email: c.email,
@@ -761,7 +768,7 @@ export async function PATCH(
     inviteId?: string;
     commentId?: string;
     reason?: string;
-    action?: "approve" | "deny" | "remove" | "complete" | "uncomplete" | "delete";
+    action?: "approve" | "deny" | "remove" | "backup" | "complete" | "uncomplete" | "delete";
   };
 
   if (body.commentId && body.action) {
@@ -817,7 +824,7 @@ export async function PATCH(
   if (!inviteId || !action) {
     return NextResponse.json({ error: "inviteId and action required" }, { status: 400 });
   }
-  if (action !== "approve" && action !== "deny" && action !== "remove") {
+  if (action !== "approve" && action !== "deny" && action !== "remove" && action !== "backup") {
     return NextResponse.json({ error: "Invalid invite action" }, { status: 400 });
   }
 
@@ -827,13 +834,19 @@ export async function PATCH(
   }
 
   const status =
-    action === "approve" ? "pending" : action === "deny" ? "denied" : "revoked";
+    action === "approve"
+      ? "pending"
+      : action === "backup"
+        ? "backup"
+        : action === "deny"
+          ? "denied"
+          : "revoked";
 
   const { data, error } = await supabase
     .from("beta_invites")
     .update({
       status,
-      status_reason: action === "approve" ? null : reason,
+      status_reason: action === "approve" || action === "backup" ? null : reason,
     })
     .eq("id", inviteId)
     .eq("project_id", projectId)

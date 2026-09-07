@@ -145,6 +145,18 @@ export async function GET(
     });
   }
 
+  if (invite?.status === "backup") {
+    const msg = accessMessageForStatus("backup", invite.status_reason);
+    return NextResponse.json({
+      ...base,
+      loggedIn: true,
+      access: "backup" as const,
+      status: invite.status,
+      message: msg.message,
+      reason: msg.reason,
+    });
+  }
+
   if (invite?.status === "denied" || invite?.status === "revoked") {
     // Book open again → allow reapply (apply API restores the invite row)
     if (publiclyListed) {

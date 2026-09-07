@@ -221,6 +221,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   }, [projectId]);
 
   const requests = invites.filter((i) => i.status === "requested");
+  const backups = invites.filter((i) => i.status === "backup");
   const readers = useMemo(() => {
     const list = invites.filter(
       (i) => i.status === "pending" || i.status === "accepted" || i.status === "dnf"
@@ -457,7 +458,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
 
   async function act(
     inviteId: string,
-    action: "approve" | "deny" | "remove",
+    action: "approve" | "deny" | "remove" | "backup",
     reason?: string
   ) {
     if (action === "deny" || action === "remove") {
@@ -491,6 +492,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
       } catch {
         setNote(`Approved. Share: ${data.link}`);
       }
+    } else if (action === "backup") {
+      setNote("Added to backup list — no manuscript access yet.");
     } else if (action === "deny") {
       setNote("Request denied.");
     } else {
@@ -1498,7 +1501,9 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
           {requests.length > 0 && (
             <section>
               <h3 className="font-display text-xl">Requests</h3>
-              <p className="mt-1 text-sm text-muted">Review answers, then approve or deny.</p>
+              <p className="mt-1 text-sm text-muted">
+                Review answers, then approve, add to backup, or deny.
+              </p>
               <ul className="font-ui mt-3 space-y-2">
                 {requests.map((inv) => {
                   const lines = answerLines(inv);
@@ -1524,7 +1529,90 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                             </span>
                           )}
                         </button>
-                        <span className="flex gap-2">
+                        <span className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="bg-accent px-3 py-1 text-xs text-paper"
+                            onClick={() => void act(inv.id, "approve")}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="border border-line px-3 py-1 text-xs text-accent"
+                            onClick={() => void act(inv.id, "backup")}
+                          >
+                            Backup
+                          </button>
+                          <button
+                            type="button"
+                            className="border border-line px-3 py-1 text-xs text-danger"
+                            onClick={() => void act(inv.id, "deny")}
+                          >
+                            Deny
+                          </button>
+                        </span>
+                      </div>
+                      {(readerStatsLine(inv) || reviewSummaryLine(inv)) && (
+                        <p className="mt-1 text-xs text-muted">
+                          {[readerStatsLine(inv), reviewSummaryLine(inv)]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      )}
+                      {open && (
+                        <div className="mt-2 space-y-3 border-t border-accent/20 pt-2 text-sm">
+                          {lines.length === 0 ? (
+                            <p className="text-muted">No form answers (email only).</p>
+                          ) : (
+                            lines.map((line) => (
+                              <div key={line.label}>
+                                <p className="text-[10px] uppercase tracking-wide text-muted">
+                                  {line.label}
+                                </p>
+                                <p className="whitespace-pre-wrap text-ink">{line.value}</p>
+                              </div>
+                            ))
+                          )}
+                          {renderInviteSocial(inv, "default", { hideStats: true })}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
+          {backups.length > 0 && (
+            <section>
+              <h3 className="font-display text-xl">Backup list</h3>
+              <p className="mt-1 text-sm text-muted">
+                Held without manuscript access. Approve when a spot opens, or deny.
+              </p>
+              <ul className="font-ui mt-3 space-y-2">
+                {backups.map((inv) => {
+                  const lines = answerLines(inv);
+                  const open = expandedInvite === inv.id;
+                  return (
+                    <li key={inv.id} className="border border-line px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          className="text-left text-sm"
+                          onClick={() => setExpandedInvite(open ? null : inv.id)}
+                        >
+                          {inviteLabel(inv)}
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
+                            backup
+                          </span>
+                          {lines.length > 0 && (
+                            <span className="ml-2 text-[10px] text-accent">
+                              {open ? "Hide answers" : "View answers"}
+                            </span>
+                          )}
+                        </button>
+                        <span className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             className="bg-accent px-3 py-1 text-xs text-paper"
@@ -1549,7 +1637,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                         </p>
                       )}
                       {open && (
-                        <div className="mt-2 space-y-3 border-t border-accent/20 pt-2 text-sm">
+                        <div className="mt-2 space-y-3 border-t border-line pt-2 text-sm">
                           {lines.length === 0 ? (
                             <p className="text-muted">No form answers (email only).</p>
                           ) : (
@@ -1872,7 +1960,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                               className="text-xs text-accent underline disabled:opacity-50"
                               onClick={() => void restoreAccess({ contactId: c.id })}
                             >
-                              Restore access
+                              {c.inviteStatus === "backup" ? "Approve from backup" : "Restore access"}
                             </button>
                           )}
                           <button

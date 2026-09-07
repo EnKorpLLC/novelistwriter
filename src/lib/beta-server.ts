@@ -108,7 +108,7 @@ export async function upsertBetaContact(
   });
 }
 
-const ACTIVE_INVITE_STATUSES = ["pending", "accepted", "requested", "dnf"] as const;
+const ACTIVE_INVITE_STATUSES = ["pending", "accepted", "requested", "dnf", "backup"] as const;
 
 /** Revoke all open invites for a project (contacts kept for re-invite). */
 export async function revokeProjectBetaAccess(

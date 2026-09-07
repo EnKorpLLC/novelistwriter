@@ -224,7 +224,7 @@ create table if not exists public.beta_invites (
   email text not null,
   display_name text,
   token text not null unique default encode(gen_random_bytes(24), 'hex'),
-  status text not null default 'pending' check (status in ('pending', 'requested', 'accepted', 'denied', 'revoked', 'dnf')),
+  status text not null default 'pending' check (status in ('pending', 'requested', 'accepted', 'denied', 'revoked', 'dnf', 'backup')),
   status_reason text,
   application_answers jsonb not null default '{}'::jsonb,
   dnf_reason text,

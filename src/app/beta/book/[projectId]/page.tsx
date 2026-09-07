@@ -196,6 +196,16 @@ export default function BetaBookGatePage() {
         </p>
       )}
 
+      {data.loggedIn && data.access === "backup" && (
+        <div className="mt-8 border border-line bg-paper p-5">
+          <h2 className="font-display text-xl">Backup list</h2>
+          <p className="mt-2 text-sm text-ink">
+            {data.message}
+            {data.reason ? ` ${data.reason}` : ""}
+          </p>
+        </div>
+      )}
+
       {data.loggedIn && (data.access === "denied" || data.access === "removed") && (
         <p className="mt-8 text-sm text-danger">
           {data.message}

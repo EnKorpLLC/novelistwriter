@@ -59,6 +59,7 @@ export async function POST(req: Request) {
 
   if (
     invite.status === "requested" ||
+    invite.status === "backup" ||
     invite.status === "denied" ||
     invite.status === "revoked"
   ) {

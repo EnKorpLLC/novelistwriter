@@ -129,11 +129,16 @@ export async function POST(req: Request) {
       displayName,
     });
     const isPending = finalStatus === "pending";
+    const isBackup = finalStatus === "backup";
     return NextResponse.json({
       ok: true,
       status: finalStatus,
-      message: isPending ? approvedMessage : reviewMessage,
-      unlockReady: true,
+      message: isPending
+        ? approvedMessage
+        : isBackup
+          ? "You're on the author's backup list. They'll contact you if a spot opens."
+          : reviewMessage,
+      unlockReady: isPending,
       autoApproved: isPending,
       readUrl: isPending && readerUserId ? `/beta/read/${body.projectId}` : null,
     });
@@ -142,6 +147,19 @@ export async function POST(req: Request) {
   const readerPatch = readerUserId ? { reader_user_id: readerUserId } : {};
 
   if (existing) {
+    if (existing.status === "backup") {
+      const { error } = await admin
+        .from("beta_invites")
+        .update({
+          email: trimmed,
+          display_name: displayName,
+          application_answers: answers,
+          ...readerPatch,
+        })
+        .eq("id", existing.id);
+      if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
+      return finish("backup");
+    }
     if (existing.status === "denied" || existing.status === "revoked" || existing.status === "dnf") {
       const { error } = await admin
         .from("beta_invites")
@@ -205,6 +223,9 @@ export async function POST(req: Request) {
 }
 
 function migrationHint(message: string) {
+  if (message.includes("beta_invites_status_check") || message.includes("backup")) {
+    return "This project’s database needs an update. Run supabase/migration_beta_backup.sql in the Supabase SQL editor.";
+  }
   if (
     message.includes("application_answers") ||
     message.includes("beta_application_form") ||

@@ -73,6 +73,7 @@ export function isBetaExpired(expiresAt: string | null | undefined, now = new Da
 export type BetaAccessCode =
   | "ok"
   | "pending_review"
+  | "backup"
   | "denied"
   | "removed"
   | "unknown"
@@ -86,6 +87,14 @@ export function accessMessageForStatus(
     return {
       code: "pending_review",
       message: "Your application has not been processed yet. Please check back later.",
+    };
+  }
+  if (status === "backup") {
+    return {
+      code: "backup",
+      message:
+        "You're on the author's backup list. They'll reach out if a spot opens — you don't have manuscript access yet.",
+      reason: reason || undefined,
     };
   }
   if (status === "denied") {
