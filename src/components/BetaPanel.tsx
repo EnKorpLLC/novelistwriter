@@ -56,6 +56,7 @@ type Contact = {
   displayName: string | null;
   createdAt: string;
   updatedAt: string;
+  inviteId?: string | null;
   inviteStatus?: string | null;
   canRestore?: boolean;
 };
@@ -1526,13 +1527,22 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
             </div>
           )}
 
-          {requests.length > 0 && (
-            <section>
-              <h3 className="font-display text-xl">Requests</h3>
-              <p className="mt-1 text-sm text-muted">
-                Review answers, then approve, add to backup, or deny.
-              </p>
-              <ul className="font-ui mt-3 space-y-2">
+          <section className="font-ui border border-line p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <div>
+                <h3 className="font-display text-lg text-ink">Requests</h3>
+                <p className="mt-1 text-xs text-muted">
+                  {requests.length === 0
+                    ? "No pending applications right now."
+                    : `${requests.length} awaiting review — approve, add to backup, or deny.`}
+                  {autoApprove.mode === "all"
+                    ? " Auto-approve is on, so new applicants skip this list and get access immediately."
+                    : ""}
+                </p>
+              </div>
+            </div>
+            {requests.length > 0 && (
+              <ul className="mt-3 space-y-2">
                 {requests.map((inv) => {
                   const lines = answerLines(inv);
                   const open = expandedInvite === inv.id;
@@ -1609,8 +1619,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                   );
                 })}
               </ul>
-            </section>
-          )}
+            )}
+          </section>
 
           {backups.length > 0 && (
             <section className="font-ui border border-line p-4">
@@ -2007,15 +2017,58 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                             </span>
                           )}
                         </span>
-                        <span className="flex items-center gap-3">
-                          {c.canRestore && (
+                        <span className="flex flex-wrap items-center gap-2">
+                          {c.inviteStatus === "requested" && c.inviteId && (
+                            <>
+                              <button
+                                type="button"
+                                className="bg-accent px-2 py-1 text-[10px] text-paper"
+                                onClick={() => void act(c.inviteId!, "approve")}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="border border-line px-2 py-1 text-[10px] text-accent"
+                                onClick={() => void act(c.inviteId!, "backup")}
+                              >
+                                Backup
+                              </button>
+                              <button
+                                type="button"
+                                className="border border-line px-2 py-1 text-[10px] text-danger"
+                                onClick={() => void act(c.inviteId!, "deny")}
+                              >
+                                Deny
+                              </button>
+                            </>
+                          )}
+                          {c.inviteStatus === "backup" && c.inviteId && (
+                            <>
+                              <button
+                                type="button"
+                                className="bg-accent px-2 py-1 text-[10px] text-paper"
+                                onClick={() => void act(c.inviteId!, "approve")}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="border border-line px-2 py-1 text-[10px] text-danger"
+                                onClick={() => void act(c.inviteId!, "deny")}
+                              >
+                                Deny
+                              </button>
+                            </>
+                          )}
+                          {c.canRestore && c.inviteStatus !== "backup" && (
                             <button
                               type="button"
                               disabled={!betaReady || socialBusyId === c.id}
                               className="text-xs text-accent underline disabled:opacity-50"
                               onClick={() => void restoreAccess({ contactId: c.id })}
                             >
-                              {c.inviteStatus === "backup" ? "Approve from backup" : "Restore access"}
+                              Restore access
                             </button>
                           )}
                           <button

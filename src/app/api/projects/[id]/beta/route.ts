@@ -185,14 +185,16 @@ export async function GET(
 
   await enforceBetaExpiry(supabase, project);
 
+  // Use service role for invites so applicants always appear for review (RLS edge cases)
+  const admin = createServiceClient();
   const [
-    { data: invites },
+    { data: invites, error: invitesError },
     { data: comments, error: commentsError },
     { data: chapters },
     { data: progress },
     { data: contacts, error: contactsError },
   ] = await Promise.all([
-    supabase
+    admin
       .from("beta_invites")
       .select(
         "id, email, token, status, created_at, application_answers, dnf_reason, dnf_at, current_chapter_id, display_name, status_reason, last_read_at, reader_user_id, finished_at"
@@ -223,6 +225,9 @@ export async function GET(
       .order("email"),
   ]);
 
+  if (invitesError) {
+    return NextResponse.json({ error: migrationHint(invitesError.message) }, { status: 500 });
+  }
   if (commentsError) {
     if (commentsError.message.includes("completed")) {
       return NextResponse.json(
@@ -455,6 +460,7 @@ export async function GET(
         displayName: c.display_name,
         createdAt: c.created_at,
         updatedAt: c.updated_at,
+        inviteId: inv?.id || null,
         inviteStatus: status,
         canRestore,
       };
