@@ -495,13 +495,56 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         setNote(`Approved. Share: ${data.link}`);
       }
     } else if (action === "backup") {
-      setNote("Added to backup list — no manuscript access yet.");
+      setNote("Moved to backup list — manuscript access removed.");
     } else if (action === "deny") {
       setNote("Request denied.");
+    } else if (action === "approve") {
+      setNote("Marked as active reader.");
     } else {
       setNote("Reader removed. Their link no longer works.");
     }
     void load();
+  }
+
+  async function setContactStatus(
+    c: Contact,
+    action: "approve" | "backup" | "deny" | "remove"
+  ) {
+    if (c.inviteId) {
+      await act(c.inviteId, action);
+      return;
+    }
+    if (action === "deny" || action === "remove") {
+      setNote("No invite to update — delete the contact if you want them gone.");
+      return;
+    }
+    // No invite yet: create one, then set target status
+    setSocialBusyId(c.id);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/beta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restoreAccess", contactId: c.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not update status");
+        return;
+      }
+      const inviteId = data.invite?.id as string | undefined;
+      if (!inviteId) {
+        setNote("Could not create invite for this contact.");
+        return;
+      }
+      if (action === "backup") {
+        await act(inviteId, "backup");
+      } else {
+        setNote("Marked as active reader.");
+        void load();
+      }
+    } finally {
+      setSocialBusyId(null);
+    }
   }
 
   async function saveAccessSettings() {
@@ -1847,6 +1890,13 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                               )}
                               <button
                                 type="button"
+                                className="text-xs text-accent hover:underline"
+                                onClick={() => void act(inv.id, "backup")}
+                              >
+                                Move to backup
+                              </button>
+                              <button
+                                type="button"
                                 className="text-xs text-danger hover:underline"
                                 onClick={() => void act(inv.id, "remove")}
                               >
@@ -1976,7 +2026,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
               <span>
                 <span className="font-display block text-lg text-ink">Contacts</span>
                 <span className="mt-1 block text-xs text-muted">
-                  {contacts.length} saved · includes backup list · restore when Ready
+                  {contacts.length} saved · change status anytime (active, backup, or remove)
                 </span>
               </span>
               <span className="shrink-0 text-xs text-accent">
@@ -2018,58 +2068,95 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                           )}
                         </span>
                         <span className="flex flex-wrap items-center gap-2">
-                          {c.inviteStatus === "requested" && c.inviteId && (
+                          {/* Active readers → backup or remove */}
+                          {(c.inviteStatus === "pending" ||
+                            c.inviteStatus === "accepted" ||
+                            c.inviteStatus === "dnf") &&
+                            c.inviteId && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="border border-line px-2 py-1 text-[10px] text-accent"
+                                  onClick={() => void setContactStatus(c, "backup")}
+                                >
+                                  Move to backup
+                                </button>
+                                <button
+                                  type="button"
+                                  className="border border-line px-2 py-1 text-[10px] text-danger"
+                                  onClick={() => void setContactStatus(c, "remove")}
+                                >
+                                  Remove access
+                                </button>
+                              </>
+                            )}
+                          {/* Pending applications */}
+                          {c.inviteStatus === "requested" && (
                             <>
                               <button
                                 type="button"
                                 className="bg-accent px-2 py-1 text-[10px] text-paper"
-                                onClick={() => void act(c.inviteId!, "approve")}
+                                onClick={() => void setContactStatus(c, "approve")}
                               >
-                                Approve
+                                Make active
                               </button>
                               <button
                                 type="button"
                                 className="border border-line px-2 py-1 text-[10px] text-accent"
-                                onClick={() => void act(c.inviteId!, "backup")}
+                                onClick={() => void setContactStatus(c, "backup")}
                               >
                                 Backup
                               </button>
                               <button
                                 type="button"
                                 className="border border-line px-2 py-1 text-[10px] text-danger"
-                                onClick={() => void act(c.inviteId!, "deny")}
+                                onClick={() => void setContactStatus(c, "deny")}
                               >
                                 Deny
                               </button>
                             </>
                           )}
-                          {c.inviteStatus === "backup" && c.inviteId && (
+                          {/* Backup list */}
+                          {c.inviteStatus === "backup" && (
                             <>
                               <button
                                 type="button"
                                 className="bg-accent px-2 py-1 text-[10px] text-paper"
-                                onClick={() => void act(c.inviteId!, "approve")}
+                                onClick={() => void setContactStatus(c, "approve")}
                               >
-                                Approve
+                                Make active
                               </button>
                               <button
                                 type="button"
                                 className="border border-line px-2 py-1 text-[10px] text-danger"
-                                onClick={() => void act(c.inviteId!, "deny")}
+                                onClick={() => void setContactStatus(c, "remove")}
                               >
-                                Deny
+                                Remove access
                               </button>
                             </>
                           )}
-                          {c.canRestore && c.inviteStatus !== "backup" && (
-                            <button
-                              type="button"
-                              disabled={!betaReady || socialBusyId === c.id}
-                              className="text-xs text-accent underline disabled:opacity-50"
-                              onClick={() => void restoreAccess({ contactId: c.id })}
-                            >
-                              Restore access
-                            </button>
+                          {/* No invite / denied / revoked */}
+                          {(!c.inviteStatus ||
+                            c.inviteStatus === "denied" ||
+                            c.inviteStatus === "revoked") && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={!betaReady || socialBusyId === c.id}
+                                className="bg-accent px-2 py-1 text-[10px] text-paper disabled:opacity-50"
+                                onClick={() => void setContactStatus(c, "approve")}
+                              >
+                                Make active
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!betaReady || socialBusyId === c.id}
+                                className="border border-line px-2 py-1 text-[10px] text-accent disabled:opacity-50"
+                                onClick={() => void setContactStatus(c, "backup")}
+                              >
+                                Add to backup
+                              </button>
+                            </>
                           )}
                           <button
                             type="button"
