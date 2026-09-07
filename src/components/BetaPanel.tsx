@@ -630,10 +630,20 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   }
 
   function exportContactsCsv() {
-    const rows = contacts.map((c) => ({
-      name: c.displayName || "",
-      email: c.email,
-    }));
+    const seen = new Set<string>();
+    const rows: { name: string; email: string }[] = [];
+    for (const c of contacts) {
+      const key = c.email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({ name: c.displayName || "", email: c.email });
+    }
+    for (const inv of backups) {
+      const key = inv.email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({ name: inv.displayName || "", email: inv.email });
+    }
     if (!rows.length) {
       setNote("No contacts to export.");
       return;
@@ -1956,7 +1966,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
               <span>
                 <span className="font-display block text-lg text-ink">Contacts</span>
                 <span className="mt-1 block text-xs text-muted">
-                  {contacts.length} saved · restore access anytime the book is Ready
+                  {contacts.length} saved · includes backup list · restore when Ready
                 </span>
               </span>
               <span className="shrink-0 text-xs text-accent">

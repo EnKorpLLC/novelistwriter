@@ -245,6 +245,50 @@ export async function GET(
     return NextResponse.json({ error: migrationHint(contactsError.message) }, { status: 500 });
   }
 
+  // Ensure backup (and other) invite emails live in contacts for the shared list/export
+  let contactRows = contacts || [];
+  {
+    const contactEmails = new Set(
+      contactRows.map((c) =>
+        String(c.email || "")
+          .trim()
+          .toLowerCase()
+      )
+    );
+    const toSync = (invites || []).filter((inv) => {
+      const email = String(inv.email || "")
+        .trim()
+        .toLowerCase();
+      return (
+        email.includes("@") &&
+        !contactEmails.has(email) &&
+        (inv.status === "backup" ||
+          inv.status === "pending" ||
+          inv.status === "accepted" ||
+          inv.status === "requested" ||
+          inv.status === "dnf")
+      );
+    });
+    if (toSync.length) {
+      await Promise.all(
+        toSync.map((inv) =>
+          upsertBetaContact(supabase, {
+            projectId,
+            userId: user.id,
+            email: inv.email,
+            displayName: inv.display_name,
+          })
+        )
+      );
+      const { data: refreshed } = await supabase
+        .from("beta_contacts")
+        .select("id, email, display_name, created_at, updated_at")
+        .eq("project_id", projectId)
+        .order("email");
+      if (refreshed) contactRows = refreshed;
+    }
+  }
+
   const commentIds = (comments || []).map((c) => c.id);
   const { data: reactions, error: reactionsError } = commentIds.length
     ? await supabase
@@ -388,7 +432,7 @@ export async function GET(
       project.beta_expires_at && new Date(project.beta_expires_at).getTime() <= Date.now()
     ),
     chapters: chapters || [],
-    contacts: (contacts || []).map((c) => {
+    contacts: contactRows.map((c) => {
       const emailKey = String(c.email || "")
         .trim()
         .toLowerCase();
@@ -855,6 +899,19 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (action === "approve" || action === "backup") {
+    try {
+      await upsertBetaContact(supabase, {
+        projectId,
+        userId: user.id,
+        email: data.email,
+        displayName: data.display_name,
+      });
+    } catch {
+      /* non-fatal */
+    }
+  }
 
   return NextResponse.json({
     invite: data,
