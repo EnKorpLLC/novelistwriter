@@ -159,6 +159,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [backupOpen, setBackupOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [answersOpenId, setAnswersOpenId] = useState<string | null>(null);
+  const [finishReviewOpenId, setFinishReviewOpenId] = useState<string | null>(null);
   const [reviewsOpenId, setReviewsOpenId] = useState<string | null>(null);
   const [reviewsByInvite, setReviewsByInvite] = useState<Record<string, ReaderReview[]>>({});
   const [reviewsLoadingId, setReviewsLoadingId] = useState<string | null>(null);
@@ -1822,6 +1823,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                       const isFinished = Boolean(inv.finishedAt || inv.bookReview);
                       const detailsOpen = expandedInvite === inv.id;
                       const answersOpen = answersOpenId === inv.id;
+                      const finishReviewOpen = finishReviewOpenId === inv.id;
                       const lines = answerLines(inv);
                       return (
                         <li
@@ -1877,12 +1879,6 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                   {inv.dnfReason}
                                 </p>
                               )}
-                              {inv.bookReview?.body && (
-                                <p className="mt-2 whitespace-pre-wrap text-xs text-ink">
-                                  <span className="font-medium text-muted">Finish review: </span>
-                                  {inv.bookReview.body}
-                                </p>
-                              )}
                             </div>
                             <span className="flex flex-wrap gap-2">
                               {inv.link && !isDnf && (
@@ -1936,6 +1932,17 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                 {answersOpen ? "Hide answers" : "View answers"}
                               </button>
                             )}
+                            {inv.bookReview?.body && (
+                              <button
+                                type="button"
+                                className={isDnf ? "text-danger underline" : "text-accent hover:underline"}
+                                onClick={() =>
+                                  setFinishReviewOpenId(finishReviewOpen ? null : inv.id)
+                                }
+                              >
+                                {finishReviewOpen ? "Hide finish review" : "View finish review"}
+                              </button>
+                            )}
                             <button
                               type="button"
                               className={isDnf ? "text-danger/80 underline" : "text-muted hover:underline"}
@@ -1962,6 +1969,26 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                             </div>
                           )}
 
+                          {finishReviewOpen && inv.bookReview?.body && (
+                            <div
+                              className={`mt-3 space-y-2 border-t pt-3 text-sm ${
+                                isDnf ? "border-danger/30" : "border-line"
+                              }`}
+                            >
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide opacity-70">
+                                  Finish review
+                                  {inv.finishedAt
+                                    ? ` · ${new Date(inv.finishedAt).toLocaleString()}`
+                                    : inv.bookReview.createdAt
+                                      ? ` · ${new Date(inv.bookReview.createdAt).toLocaleString()}`
+                                      : ""}
+                                </p>
+                                <p className="mt-1 whitespace-pre-wrap">{inv.bookReview.body}</p>
+                              </div>
+                            </div>
+                          )}
+
                           {detailsOpen && (
                             <div
                               className={`mt-3 space-y-3 border-t pt-3 text-sm ${
@@ -1972,19 +1999,6 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                 <div>
                                   <p className="text-[10px] uppercase tracking-wide">DNF reason</p>
                                   <p className="mt-1 whitespace-pre-wrap">{inv.dnfReason}</p>
-                                </div>
-                              )}
-                              {inv.bookReview?.body && (
-                                <div>
-                                  <p className="text-[10px] uppercase tracking-wide opacity-80">
-                                    Finish review
-                                    {inv.finishedAt
-                                      ? ` · ${new Date(inv.finishedAt).toLocaleString()}`
-                                      : inv.bookReview.createdAt
-                                        ? ` · ${new Date(inv.bookReview.createdAt).toLocaleString()}`
-                                        : ""}
-                                  </p>
-                                  <p className="mt-1 whitespace-pre-wrap">{inv.bookReview.body}</p>
                                 </div>
                               )}
                               <div>
