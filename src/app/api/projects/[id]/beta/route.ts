@@ -193,6 +193,7 @@ export async function GET(
     { data: chapters },
     { data: progress },
     { data: contacts, error: contactsError },
+    { data: bookReviews },
   ] = await Promise.all([
     admin
       .from("beta_invites")
@@ -223,8 +224,18 @@ export async function GET(
       .select("id, email, display_name, created_at, updated_at")
       .eq("project_id", projectId)
       .order("email"),
+    admin
+      .from("beta_book_reviews")
+      .select("id, invite_id, body, created_at")
+      .eq("project_id", projectId),
   ]);
 
+  const bookReviewByInvite = new Map(
+    (bookReviews || []).map((r) => [
+      r.invite_id as string,
+      { id: r.id as string, body: r.body as string, createdAt: r.created_at as string },
+    ])
+  );
   if (invitesError) {
     return NextResponse.json({ error: migrationHint(invitesError.message) }, { status: 500 });
   }
@@ -503,6 +514,8 @@ export async function GET(
         applicationAnswers: i.application_answers || {},
         dnfReason: i.dnf_reason,
         dnfAt: i.dnf_at,
+        finishedAt: i.finished_at || null,
+        bookReview: bookReviewByInvite.get(i.id) || null,
         chapterProgress,
         readerStats: stats,
         reviewCount: reviewCountByEmail.get(emailKey) || 0,

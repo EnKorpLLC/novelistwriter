@@ -27,6 +27,8 @@ type Invite = {
   applicationAnswers?: Record<string, string>;
   dnfReason?: string | null;
   dnfAt?: string | null;
+  finishedAt?: string | null;
+  bookReview?: { id: string; body: string; createdAt: string } | null;
   chapterProgress?: ChapterProgress[];
   currentChapter?: { id: string; title: string; percent: number } | null;
   displayName?: string | null;
@@ -1817,6 +1819,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                   <ul className="mt-3 space-y-2">
                     {readers.map((inv) => {
                       const isDnf = inv.status === "dnf";
+                      const isFinished = Boolean(inv.finishedAt || inv.bookReview);
                       const detailsOpen = expandedInvite === inv.id;
                       const answersOpen = answersOpenId === inv.id;
                       const lines = answerLines(inv);
@@ -1837,7 +1840,13 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                   isDnf ? "text-danger" : "text-muted"
                                 }`}
                               >
-                                {isDnf ? "DNF" : inv.status === "accepted" ? "reading" : "invited"}
+                                {isDnf
+                                  ? "DNF"
+                                  : isFinished
+                                    ? "finished"
+                                    : inv.status === "accepted"
+                                      ? "reading"
+                                      : "invited"}
                               </span>
                               {(inv.commentCount || 0) > 0 && (
                                 <span
@@ -1847,7 +1856,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                   {inv.commentCount === 1 ? "" : "s"}
                                 </span>
                               )}
-                              {inv.currentChapter && (
+                              {inv.currentChapter && !isFinished && (
                                 <span
                                   className={`mt-1 block text-xs ${isDnf ? "text-danger/90" : "text-muted"}`}
                                 >
@@ -1862,6 +1871,18 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                   ? new Date(inv.lastReadAt).toLocaleString()
                                   : "Never"}
                               </span>
+                              {isDnf && inv.dnfReason && (
+                                <p className="mt-2 whitespace-pre-wrap text-xs text-danger">
+                                  <span className="font-medium">DNF: </span>
+                                  {inv.dnfReason}
+                                </p>
+                              )}
+                              {inv.bookReview?.body && (
+                                <p className="mt-2 whitespace-pre-wrap text-xs text-ink">
+                                  <span className="font-medium text-muted">Finish review: </span>
+                                  {inv.bookReview.body}
+                                </p>
+                              )}
                             </div>
                             <span className="flex flex-wrap gap-2">
                               {inv.link && !isDnf && (
@@ -1951,6 +1972,19 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                 <div>
                                   <p className="text-[10px] uppercase tracking-wide">DNF reason</p>
                                   <p className="mt-1 whitespace-pre-wrap">{inv.dnfReason}</p>
+                                </div>
+                              )}
+                              {inv.bookReview?.body && (
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wide opacity-80">
+                                    Finish review
+                                    {inv.finishedAt
+                                      ? ` · ${new Date(inv.finishedAt).toLocaleString()}`
+                                      : inv.bookReview.createdAt
+                                        ? ` · ${new Date(inv.bookReview.createdAt).toLocaleString()}`
+                                        : ""}
+                                  </p>
+                                  <p className="mt-1 whitespace-pre-wrap">{inv.bookReview.body}</p>
                                 </div>
                               )}
                               <div>
