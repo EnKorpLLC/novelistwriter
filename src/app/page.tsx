@@ -29,7 +29,13 @@ export default function HomePage() {
         <Link href="/" className="font-display text-xl tracking-tight text-ink">
           Novelist Writer
         </Link>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex flex-wrap items-center gap-4 text-sm">
+          <Link href="/books" className="text-muted hover:text-ink">
+            Published books
+          </Link>
+          <Link href="/contact" className="text-muted hover:text-ink">
+            Contact
+          </Link>
           <Link href="/privacy" className="text-muted hover:text-ink">
             Privacy
           </Link>

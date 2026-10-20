@@ -7,6 +7,8 @@ import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel, linkInvitesForEmail } from "@/lib/beta-platform";
 import { enforceBetaAccessGates, findReaderInvite, inviteAllowsReading, revokeProjectBetaAccess } from "@/lib/beta-server";
 import { userHasStudio } from "@/lib/credits";
+import { normalizePublicLinks, publicLinkList } from "@/lib/public-profile";
+import { isSubscribed } from "@/lib/audience";
 
 export async function GET(
   _req: Request,
@@ -62,7 +64,7 @@ export async function GET(
 
   const { data: author } = await admin
     .from("profiles")
-    .select("display_name")
+    .select("display_name, public_links")
     .eq("id", project.user_id)
     .maybeSingle();
 
@@ -85,13 +87,15 @@ export async function GET(
   );
 
   const form = normalizeBetaApplicationForm(project.beta_application_form);
-  const base = {
+  const base: Record<string, unknown> & { subscribed?: boolean } = {
     projectId: project.id,
     title: project.title,
     genre: genreLabel(project.genre),
     betaReady: publiclyListed,
     authorUserId: project.user_id,
     authorName: author?.display_name || "Author",
+    authorLinks: publicLinkList(normalizePublicLinks(author?.public_links)),
+    canSubscribe: authorHasStudio,
     coverUrl: coverPublicUrl(
       projectCoverPath(project),
       project.updated_at ? Date.parse(project.updated_at) : undefined
@@ -117,6 +121,10 @@ export async function GET(
   const invite = await findReaderInvite(admin, {
     projectId,
     userId: user.id,
+    email: user.email,
+  });
+  base.subscribed = await isSubscribed(admin, {
+    authorUserId: project.user_id,
     email: user.email,
   });
 

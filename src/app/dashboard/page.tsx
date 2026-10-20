@@ -11,6 +11,7 @@ import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
 import { normalizeRoles, linkInvitesForEmail } from "@/lib/beta-platform";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { isPlatformAdminEmail } from "@/lib/platform-admin";
 
 function formatWords(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
@@ -116,12 +117,23 @@ export default async function DashboardPage() {
               </span>
             )}
           </span>
+          <Link href="/dashboard/audience" className="text-muted hover:text-ink">
+            Audience
+          </Link>
+          <Link href="/dashboard/profile" className="text-muted hover:text-ink">
+            Public profile
+          </Link>
           <Link href="/billing" className="text-accent hover:underline">
             Billing
           </Link>
           <Link href="/settings" className="text-muted hover:text-ink">
             Settings
           </Link>
+          {(isPlatformAdminEmail(user.email) || profile?.is_platform_admin) && (
+            <Link href="/admin" className="text-accent hover:underline">
+              Admin
+            </Link>
+          )}
           <SignOutButton />
         </div>
       </header>

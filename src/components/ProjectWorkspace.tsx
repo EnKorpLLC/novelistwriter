@@ -8,6 +8,9 @@ import { CritiquePanel } from "@/components/CritiquePanel";
 import { BiblePanel } from "@/components/BiblePanel";
 import { ProjectTools } from "@/components/ProjectTools";
 import { BetaPanel } from "@/components/BetaPanel";
+import { ArcPanel } from "@/components/ArcPanel";
+import { PublishPanel } from "@/components/PublishPanel";
+import { WORKSPACE_TABS, isWorkspaceTab, type WorkspaceTab } from "@/lib/workspace-tabs";
 import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
 import { clientLocalDay } from "@/lib/local-day";
@@ -36,11 +39,9 @@ type Props = {
   initialCredits: number;
   /** From ?chapter= — keeps the open chapter across refresh */
   initialChapterId?: string;
-  /** From ?tab= — keeps write/bible/beta/tools across refresh */
-  initialTab?: "write" | "bible" | "beta" | "tools";
+  /** From ?tab= — keeps the open workspace tab across refresh */
+  initialTab?: WorkspaceTab;
 };
-
-type WorkspaceTab = "write" | "bible" | "beta" | "tools";
 
 function chapterStorageKey(projectId: string) {
   return `nw_active_chapter_${projectId}`;
@@ -48,10 +49,6 @@ function chapterStorageKey(projectId: string) {
 
 function tabStorageKey(projectId: string) {
   return `nw_active_tab_${projectId}`;
-}
-
-function isWorkspaceTab(value: string | null | undefined): value is WorkspaceTab {
-  return value === "write" || value === "bible" || value === "beta" || value === "tools";
 }
 
 function resolveChapterId(
@@ -443,14 +440,14 @@ export function ProjectWorkspace({
             >
               Credits: <strong className="text-ink">{credits}</strong>
             </Link>
-            {(["write", "bible", "beta", "tools"] as const).map((t) => (
+            {WORKSPACE_TABS.map((t) => (
               <button
-                key={t}
+                key={t.id}
                 type="button"
-                onClick={() => selectTab(t)}
-                className={`px-3 py-1 capitalize ${tab === t ? "bg-accent text-paper" : "text-muted hover:text-ink"}`}
+                onClick={() => selectTab(t.id)}
+                className={`px-3 py-1 ${tab === t.id ? "bg-accent text-paper" : "text-muted hover:text-ink"}`}
               >
-                {t}
+                {t.label}
               </button>
             ))}
             <button
@@ -819,6 +816,10 @@ export function ProjectWorkspace({
             }}
           />
         )}
+
+        {tab === "arc" && <ArcPanel projectId={project.id} />}
+
+        {tab === "publish" && <PublishPanel projectId={project.id} />}
 
         {tab === "tools" && (
           <ProjectTools

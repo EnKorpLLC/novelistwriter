@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
+import { isWorkspaceTab } from "@/lib/workspace-tabs";
 import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
 
 export default async function ProjectPage({
@@ -74,13 +75,7 @@ export default async function ProjectPage({
     chapterParam && chapterList.some((c) => c.id === chapterParam)
       ? chapterParam
       : undefined;
-  const initialTab =
-    tabParam === "write" ||
-    tabParam === "bible" ||
-    tabParam === "beta" ||
-    tabParam === "tools"
-      ? tabParam
-      : undefined;
+  const initialTab = isWorkspaceTab(tabParam) ? tabParam : undefined;
 
   return (
     <ProjectWorkspace

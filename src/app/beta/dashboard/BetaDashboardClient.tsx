@@ -21,6 +21,17 @@ type ShelfBook = {
   coverUrl: string | null;
 };
 
+type ArcShelfBook = {
+  projectId: string;
+  title: string;
+  authorName: string;
+  coverUrl: string | null;
+  status: "active" | "requested";
+  deadline: string | null;
+  windowOpen: boolean;
+  finishedAt: string | null;
+};
+
 type CatalogBook = {
   projectId: string;
   title: string;
@@ -160,6 +171,7 @@ export default function BetaDashboardClient() {
   const [roles, setRoles] = useState<ProfileRoles>({ is_author: true, is_beta_reader: true });
   const [stats, setStats] = useState<DashStats>({ finished: 0, dnf: 0, reading: 0 });
   const [shelf, setShelf] = useState<ShelfBook[]>([]);
+  const [arcShelf, setArcShelf] = useState<ArcShelfBook[]>([]);
   const [catalog, setCatalog] = useState<CatalogGenre[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
@@ -225,6 +237,7 @@ export default function BetaDashboardClient() {
       setRoles(dash.roles || { is_author: false, is_beta_reader: true });
       setStats(dash.stats || { finished: 0, dnf: 0, reading: 0 });
       setShelf(dash.shelf || []);
+      setArcShelf(dash.arcShelf || []);
       setCatalog(dash.catalog || []);
       if (commentsRes.ok) setThreads(comments.threads || []);
 
@@ -406,6 +419,12 @@ export default function BetaDashboardClient() {
         </Link>
         <div className="flex flex-wrap items-center gap-4">
           <DashboardRoleNav roles={roles} side="beta" />
+          <Link href="/books" className="font-ui text-sm text-muted hover:text-ink">
+            Published books
+          </Link>
+          <Link href="/contact" className="font-ui text-sm text-muted hover:text-ink">
+            Contact us
+          </Link>
           <SignOutButton />
         </div>
       </header>
@@ -474,10 +493,55 @@ export default function BetaDashboardClient() {
               {tab === "books" && (
                 <section>
                   <h2 className="sr-only">My books</h2>
+                  {arcShelf.length > 0 && (
+                    <div className="mb-8">
+                      <h3 className="font-ui text-xs uppercase tracking-wide text-muted">
+                        Advance reader copies
+                      </h3>
+                      <ul className="mt-3 space-y-3">
+                        {arcShelf.map((b) => (
+                          <li
+                            key={b.projectId}
+                            className="flex items-center justify-between gap-4 border border-line bg-paper px-5 py-4"
+                          >
+                            <div className="flex min-w-0 flex-1 items-center gap-4">
+                              <div className="relative h-16 w-11 shrink-0 overflow-hidden border border-line bg-paper-deep">
+                                {b.coverUrl && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={b.coverUrl} alt="" className="h-full w-full object-cover" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <h3 className="font-display text-xl">{b.title}</h3>
+                                <p className="text-sm text-muted">
+                                  {b.authorName} · ARC
+                                  {b.status === "requested"
+                                    ? " · Requested"
+                                    : b.finishedAt
+                                      ? " · Finished"
+                                      : b.windowOpen && b.deadline
+                                        ? ` · Read by ${new Date(b.deadline).toLocaleDateString(undefined, { timeZone: "UTC" })}`
+                                        : " · Window ended"}
+                                </p>
+                              </div>
+                            </div>
+                            <Link
+                              href={`/arc/book/${b.projectId}`}
+                              className="font-ui shrink-0 text-sm text-accent"
+                            >
+                              {b.finishedAt || !b.windowOpen ? "Reviews" : "Read"} →
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {shelf.length === 0 ? (
-                    <p className="text-sm text-muted">
-                      Nothing on your shelf yet. Check Available or open a share link.
-                    </p>
+                    arcShelf.length > 0 ? null : (
+                      <p className="text-sm text-muted">
+                        Nothing on your shelf yet. Check Available or open a share link.
+                      </p>
+                    )
                   ) : (
                     <ul className="space-y-3">
                       {shelf.map((b) => (

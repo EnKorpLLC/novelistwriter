@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { BetaFormFields } from "@/components/BetaFormFields";
 import type { BetaApplicationForm } from "@/lib/beta-form";
+import type { LabeledLink } from "@/lib/public-profile";
+import { AuthorConnect, AuthorLinks } from "@/components/AuthorConnect";
 
 type GateData = {
   projectId: string;
@@ -13,6 +15,9 @@ type GateData = {
   betaReady: boolean;
   authorUserId?: string;
   authorName: string;
+  authorLinks: LabeledLink[];
+  canSubscribe?: boolean;
+  subscribed?: boolean;
   coverUrl: string | null;
   applicationForm: BetaApplicationForm;
   reviews: { id: string; body: string; createdAt: string; readerName: string }[];
@@ -37,8 +42,6 @@ export default function BetaBookGatePage() {
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [applyMsg, setApplyMsg] = useState("");
-  const [following, setFollowing] = useState(false);
-  const [followBusy, setFollowBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,18 +51,6 @@ export default function BetaBookGatePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Not found");
       setData(json);
-      if (json.loggedIn && json.authorUserId) {
-        const folRes = await fetch("/api/beta/follows");
-        if (folRes.ok) {
-          const fol = await folRes.json();
-          const ids = new Set(
-            ((fol.follows || []) as { authorUserId: string }[]).map((f) => f.authorUserId)
-          );
-          setFollowing(ids.has(json.authorUserId));
-        }
-      } else {
-        setFollowing(false);
-      }
       if (json.access === "approved" && json.readUrl) {
         const q = json.currentChapterId ? `?chapter=${json.currentChapterId}` : "";
         router.replace(`${json.readUrl}${q}`);
@@ -105,24 +96,6 @@ export default function BetaBookGatePage() {
     }
   }
 
-  async function toggleFollow() {
-    if (!data?.authorUserId || !data.loggedIn) return;
-    setFollowBusy(true);
-    try {
-      const action = following ? "unfollow" : "follow";
-      const res = await fetch("/api/beta/follows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authorUserId: data.authorUserId, action }),
-      });
-      const json = await res.json();
-      if (!res.ok) return;
-      setFollowing(Boolean(json.following));
-    } finally {
-      setFollowBusy(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-16">
@@ -159,21 +132,27 @@ export default function BetaBookGatePage() {
       </Link>
       <p className="font-ui mt-6 text-xs uppercase tracking-wide text-muted">Beta manuscript</p>
       <h1 className="font-display mt-2 text-3xl">{data.title}</h1>
-      <div className="mt-1 flex flex-wrap items-center gap-3">
-        <p className="text-sm text-muted">
-          {data.authorName} · {data.genre}
-        </p>
-        {data.loggedIn && data.authorUserId && (
-          <button
-            type="button"
-            disabled={followBusy}
-            onClick={() => void toggleFollow()}
-            className="font-ui border border-line px-3 py-1 text-xs text-accent disabled:opacity-60"
-          >
-            {followBusy ? "…" : following ? "Unfollow" : "Follow"}
-          </button>
-        )}
-      </div>
+      <p className="mt-1 text-sm text-muted">
+        {data.authorUserId ? (
+          <Link href={`/authors/${data.authorUserId}`} className="hover:text-ink">
+            {data.authorName}
+          </Link>
+        ) : (
+          data.authorName
+        )}{" "}
+        · {data.genre}
+      </p>
+      <AuthorLinks links={data.authorLinks || []} className="mt-2" />
+      {data.loggedIn && data.authorUserId && (
+        <div className="mt-3">
+          <AuthorConnect
+            authorUserId={data.authorUserId}
+            authorName={data.authorName}
+            initialSubscribed={Boolean(data.subscribed)}
+            canSubscribe={Boolean(data.canSubscribe)}
+          />
+        </div>
+      )}
 
       {!data.loggedIn && (
         <div className="mt-8 border border-line bg-paper p-5">

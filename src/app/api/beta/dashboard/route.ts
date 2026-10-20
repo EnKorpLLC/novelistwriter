@@ -11,6 +11,7 @@ import {
 import { computeReaderStats } from "@/lib/beta-social";
 import { revokeProjectBetaAccess } from "@/lib/beta-server";
 import { catalogLabelsForProject } from "@/lib/book-keywords";
+import { isArcWindowOpen } from "@/lib/arc";
 
 export async function GET() {
   const supabase = await createClient();
@@ -173,11 +174,59 @@ export async function GET() {
         })),
     }));
 
+  const { data: arcRows } = await admin
+    .from("arc_invites")
+    .select("project_id, status, finished_at, email, reader_user_id")
+    .in("status", ["active", "requested"])
+    .or(
+      email.includes("@")
+        ? `reader_user_id.eq.${user.id},email.eq.${email}`
+        : `reader_user_id.eq.${user.id}`
+    );
+  const arcProjectIds = [...new Set((arcRows || []).map((r) => r.project_id))];
+  const { data: arcProjects } = arcProjectIds.length
+    ? await admin
+        .from("projects")
+        .select("id, title, cover_path, metadata, updated_at, user_id, arc_open, arc_deadline")
+        .in("id", arcProjectIds)
+    : { data: [] as never[] };
+  const arcAuthorIds = [...new Set((arcProjects || []).map((p) => p.user_id))].filter(
+    (id) => !authorName.has(id)
+  );
+  if (arcAuthorIds.length) {
+    const { data: more } = await admin
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", arcAuthorIds);
+    for (const a of more || []) authorName.set(a.id, a.display_name);
+  }
+  const arcProjectById = new Map((arcProjects || []).map((p) => [p.id, p]));
+  const arcShelf = (arcRows || [])
+    .map((r) => {
+      const p = arcProjectById.get(r.project_id);
+      if (!p) return null;
+      return {
+        projectId: p.id,
+        title: p.title,
+        authorName: authorName.get(p.user_id) || "Author",
+        coverUrl: coverPublicUrl(
+          projectCoverPath(p),
+          p.updated_at ? Date.parse(p.updated_at) : undefined
+        ),
+        status: r.status as "active" | "requested",
+        deadline: p.arc_deadline as string | null,
+        windowOpen: isArcWindowOpen(p),
+        finishedAt: r.finished_at as string | null,
+      };
+    })
+    .filter(Boolean);
+
   return NextResponse.json({
     roles: normalizeRoles(profile),
     displayName: profile?.display_name || null,
     stats: computeReaderStats(invites),
     shelf,
+    arcShelf,
     catalog,
   });
 }
