@@ -51,7 +51,9 @@ export async function sendEmail(opts: SendOpts): Promise<SendResult> {
     });
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Send failed" };
+    const message = err instanceof Error ? err.message : "Send failed";
+    console.error("[email] send failed", { to, subject: opts.subject, message });
+    return { ok: false, error: message };
   }
 }
 

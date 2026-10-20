@@ -12,7 +12,9 @@ export async function POST(req: Request) {
   const result = await sendPasswordResetEmail(createServiceClient(), email);
   if (!result.ok && result.error !== "no_account") {
     return NextResponse.json(
-      { error: "We couldn't send the email right now. Use Contact us and we'll help." },
+      {
+        error: `We couldn't send the reset email (${result.error}). Use Contact us and we'll help.`,
+      },
       { status: 503 }
     );
   }
