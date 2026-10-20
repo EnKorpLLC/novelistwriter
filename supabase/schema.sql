@@ -397,6 +397,8 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 
 -- See migration_beta_social.sql for: beta_reader_reviews, beta_conversations,
 -- beta_messages, beta_author_follows, beta_notifications
+-- See migration_platform_admin.sql for: platform admin + public links on profiles,
+-- platform_messages, author_subscribers, arc_invites, ARC and published-listing columns on projects
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
 -- Optional private bucket `manuscripts` for raw uploads if needed later

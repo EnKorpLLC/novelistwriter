@@ -8,6 +8,7 @@ import {
   BETA_PERIOD_ENDED_REASON,
 } from "@/lib/beta-access";
 import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
+import { joinAuthorAudience } from "@/lib/audience";
 import {
   missingRequiredAnswers,
   normalizeBetaApplicationForm,
@@ -130,6 +131,15 @@ export async function POST(req: Request) {
     });
     const isPending = finalStatus === "pending";
     const isBackup = finalStatus === "backup";
+    if (isPending) {
+      await joinAuthorAudience(admin, {
+        authorUserId: project!.user_id,
+        email: trimmed,
+        displayName,
+        readerUserId,
+        source: "beta",
+      });
+    }
     return NextResponse.json({
       ok: true,
       status: finalStatus,

@@ -29,6 +29,8 @@ type Invite = {
   dnfAt?: string | null;
   finishedAt?: string | null;
   bookReview?: { id: string; body: string; createdAt: string } | null;
+  lastRemindedAt?: string | null;
+  canRemind?: boolean;
   chapterProgress?: ChapterProgress[];
   currentChapter?: { id: string; title: string; percent: number } | null;
   displayName?: string | null;
@@ -110,6 +112,15 @@ function inviteLabel(inv: Invite): string {
   return inv.email;
 }
 
+const INACTIVE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isInactiveReader(inv: Invite): boolean {
+  if (inv.status !== "pending" && inv.status !== "accepted") return false;
+  if (inv.finishedAt || inv.bookReview) return false;
+  if (!inv.lastReadAt) return true;
+  return Date.now() - Date.parse(inv.lastReadAt) >= INACTIVE_AFTER_MS;
+}
+
 function csvEscape(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
@@ -169,6 +180,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [messageDrafts, setMessageDrafts] = useState<Record<string, string>>({});
   const [socialBusyId, setSocialBusyId] = useState<string | null>(null);
   const [studioAccess, setStudioAccess] = useState(true);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -459,6 +471,30 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
       }
     }
     void load();
+  }
+
+  async function remind(inv: Invite) {
+    setRemindingId(inv.id);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/beta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remind", inviteId: inv.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not send reminder");
+        return;
+      }
+      setInvites((list) =>
+        list.map((i) =>
+          i.id === inv.id ? { ...i, lastRemindedAt: data.lastRemindedAt, canRemind: false } : i
+        )
+      );
+      setNote(`Reminder emailed to ${inv.email}.`);
+    } finally {
+      setRemindingId(null);
+    }
   }
 
   async function act(
@@ -1905,6 +1941,25 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                   Invite claim link
                                 </button>
                               )}
+                              {isInactiveReader(inv) &&
+                                (inv.canRemind === false ? (
+                                  <span className="text-xs text-muted">
+                                    Reminded{" "}
+                                    {inv.lastRemindedAt
+                                      ? new Date(inv.lastRemindedAt).toLocaleDateString()
+                                      : "recently"}
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={remindingId === inv.id}
+                                    className="text-xs text-accent hover:underline disabled:opacity-50"
+                                    title="Email a friendly nudge. Replies go to you."
+                                    onClick={() => void remind(inv)}
+                                  >
+                                    {remindingId === inv.id ? "Sending…" : "Send reminder"}
+                                  </button>
+                                ))}
                               <button
                                 type="button"
                                 className="text-xs text-accent hover:underline"

@@ -37,7 +37,11 @@ export type NotificationType =
   | "message"
   | "author_new_book"
   | "author_rerelease"
-  | "application_update";
+  | "application_update"
+  | "reading_reminder"
+  | "author_new_arc"
+  | "arc_invite"
+  | "arc_deadline";
 
 export async function createNotification(
   admin: SupabaseClient,
@@ -59,40 +63,6 @@ export async function createNotification(
     href: opts.href || null,
     meta: opts.meta || {},
   });
-}
-
-export async function notifyAuthorFollowersOfReady(
-  admin: SupabaseClient,
-  opts: {
-    authorUserId: string;
-    authorName: string;
-    projectId: string;
-    projectTitle: string;
-    rerelease: boolean;
-  }
-) {
-  const { data: followers } = await admin
-    .from("beta_author_follows")
-    .select("reader_user_id")
-    .eq("author_user_id", opts.authorUserId);
-
-  const rows = (followers || [])
-    .map((f) => f.reader_user_id)
-    .filter(Boolean)
-    .map((readerId) => ({
-      user_id: readerId as string,
-      type: opts.rerelease ? ("author_rerelease" as const) : ("author_new_book" as const),
-      title: opts.rerelease
-        ? `${opts.authorName} reopened a beta`
-        : `${opts.authorName} posted a new beta`,
-      body: opts.projectTitle,
-      href: `/beta/book/${opts.projectId}`,
-      meta: { projectId: opts.projectId, authorUserId: opts.authorUserId },
-    }));
-
-  if (rows.length) {
-    await admin.from("beta_notifications").insert(rows);
-  }
 }
 
 /** Load invites for a reader identity and compute stats. */

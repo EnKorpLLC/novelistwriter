@@ -19,6 +19,9 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState<string | null>(null);
   const router = useRouter();
   const search = useSearchParams();
   const nextParam = search.get("next");
@@ -26,8 +29,34 @@ export default function LoginForm() {
   useEffect(() => {
     const prefill = search.get("email");
     if (prefill) setEmail(prefill);
+    if (search.get("error") === "reset_link") {
+      setError("That reset link has expired or was already used. Request a new one below.");
+      setForgotOpen(true);
+    }
     void getSessionEmail().then(setSessionEmail);
   }, [search]);
+
+  async function sendReset() {
+    if (!email.trim()) {
+      setForgotMsg("Enter your email above first.");
+      return;
+    }
+    setForgotBusy(true);
+    setForgotMsg(null);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      setForgotMsg(data.message || data.error || "Request sent.");
+    } catch {
+      setForgotMsg("Could not send the reset email. Use Contact us and we'll help.");
+    } finally {
+      setForgotBusy(false);
+    }
+  }
 
   const wrongAccount =
     Boolean(sessionEmail && email.trim() && sessionEmail !== email.trim().toLowerCase());
@@ -158,6 +187,40 @@ export default function LoginForm() {
         >
           {loading ? "Signing in…" : "Log in"}
         </button>
+        {!forgotOpen ? (
+          <p className="text-center text-sm">
+            <button
+              type="button"
+              className="text-accent underline"
+              onClick={() => setForgotOpen(true)}
+            >
+              Forgot password?
+            </button>
+          </p>
+        ) : (
+          <div className="border border-line px-3 py-3 text-sm">
+            <p className="text-muted">
+              We&apos;ll email a reset link to the address above. Works for author and beta reader
+              accounts.
+            </p>
+            <button
+              type="button"
+              disabled={forgotBusy}
+              className="mt-2 border border-line px-3 py-1.5 text-accent disabled:opacity-60"
+              onClick={() => void sendReset()}
+            >
+              {forgotBusy ? "Sending…" : "Email me a reset link"}
+            </button>
+            {forgotMsg && <p className="mt-2 text-ink">{forgotMsg}</p>}
+            <p className="mt-2 text-xs text-muted">
+              No email arriving?{" "}
+              <Link href="/contact?topic=password" className="text-accent underline">
+                Contact us
+              </Link>
+              .
+            </p>
+          </div>
+        )}
         <p className="text-center text-sm text-muted">
           Author?{" "}
           <Link href="/signup" className="text-accent underline">
@@ -168,6 +231,11 @@ export default function LoginForm() {
           Beta reader?{" "}
           <Link href="/beta/signup" className="text-accent underline">
             Sign up to read
+          </Link>
+        </p>
+        <p className="text-center text-xs text-muted">
+          <Link href="/contact" className="hover:text-ink">
+            Contact us
           </Link>
         </p>
       </form>

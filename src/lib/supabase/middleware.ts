@@ -37,13 +37,37 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/billing") ||
     path.startsWith("/settings") ||
     path.startsWith("/beta/dashboard") ||
-    path.startsWith("/beta/read");
+    path.startsWith("/beta/read") ||
+    path.startsWith("/arc/read") ||
+    path.startsWith("/admin") ||
+    path === "/auth/reset-password";
 
   if (!user && isProtected) {
     const redirect = request.nextUrl.clone();
     redirect.pathname = "/login";
     redirect.searchParams.set("next", `${path}${request.nextUrl.search}`);
     return NextResponse.redirect(redirect);
+  }
+
+  if (user && path.startsWith("/admin")) {
+    const adminEmail = (process.env.PLATFORM_ADMIN_EMAIL || "ryan.jamison87@gmail.com")
+      .trim()
+      .toLowerCase();
+    let allowed = (user.email || "").trim().toLowerCase() === adminEmail;
+    if (!allowed) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("is_platform_admin")
+        .eq("id", user.id)
+        .maybeSingle();
+      allowed = Boolean(data?.is_platform_admin);
+    }
+    if (!allowed) {
+      const redirect = request.nextUrl.clone();
+      redirect.pathname = "/dashboard";
+      redirect.search = "";
+      return NextResponse.redirect(redirect);
+    }
   }
 
   if (user && (path === "/login" || path === "/signup" || path === "/beta/signup")) {

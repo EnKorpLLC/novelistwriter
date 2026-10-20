@@ -8,6 +8,7 @@ import {
   sanitizeApplicationAnswers,
 } from "@/lib/beta-form";
 import { linkInvitesForEmail } from "@/lib/beta-platform";
+import { joinAuthorAudience } from "@/lib/audience";
 import {
   enforceBetaAccessGates,
   findReaderInvite,
@@ -57,6 +58,14 @@ export async function GET(
       { status: 403 }
     );
   }
+
+  await joinAuthorAudience(admin, {
+    authorUserId: project.user_id,
+    email: invite!.email,
+    displayName: invite!.display_name,
+    readerUserId: user.id,
+    source: "beta",
+  });
 
   const form = normalizeBetaApplicationForm(project.beta_application_form);
   const answers = sanitizeApplicationAnswers(form.fields, invite!.application_answers);
