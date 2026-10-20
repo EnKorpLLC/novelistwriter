@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "@/components/SignOutButton";
+import { AdminModeration } from "./AdminModeration";
 
 type Message = {
   id: string;
@@ -25,18 +26,6 @@ type AdminUser = {
   tier: string;
   createdAt: string;
   lastSignInAt: string | null;
-};
-
-type ModItem = {
-  id: string;
-  projectId: string;
-  bookTitle: string;
-  bookListed: boolean;
-  readerName: string | null;
-  readerEmail: string | null;
-  body: string;
-  excerpt?: string | null;
-  createdAt: string;
 };
 
 const TABS = [
@@ -65,10 +54,6 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   const [userBusy, setUserBusy] = useState<string | null>(null);
   const [tempShown, setTempShown] = useState<{ email: string; password: string } | null>(null);
 
-  const [reviews, setReviews] = useState<ModItem[]>([]);
-  const [comments, setComments] = useState<ModItem[]>([]);
-  const [modLoaded, setModLoaded] = useState(false);
-
   const loadMessages = useCallback(async () => {
     const res = await fetch(`/api/admin/messages?status=${filter}`);
     const data = await res.json();
@@ -83,22 +68,6 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   useEffect(() => {
     void loadMessages();
   }, [loadMessages]);
-
-  async function loadModeration() {
-    const res = await fetch("/api/admin/moderation");
-    const data = await res.json();
-    if (!res.ok) {
-      setNote(data.error || "Could not load moderation queue");
-      return;
-    }
-    setReviews(data.reviews || []);
-    setComments(data.comments || []);
-    setModLoaded(true);
-  }
-
-  useEffect(() => {
-    if (tab === "moderation" && !modLoaded) void loadModeration();
-  }, [tab, modLoaded]);
 
   async function setMessageStatus(id: string, status: Message["status"]) {
     const res = await fetch("/api/admin/messages", {
@@ -156,58 +125,6 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
     } finally {
       setUserBusy(null);
     }
-  }
-
-  async function removeItem(kind: "review" | "comment", item: ModItem) {
-    if (!window.confirm(`Delete this ${kind} on "${item.bookTitle}"? This can't be undone.`)) return;
-    const res = await fetch("/api/admin/moderation", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind, id: item.id }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setNote(data.error || "Delete failed");
-      return;
-    }
-    if (kind === "review") setReviews((l) => l.filter((r) => r.id !== item.id));
-    else setComments((l) => l.filter((c) => c.id !== item.id));
-    setNote(`${kind === "review" ? "Review" : "Comment"} deleted.`);
-  }
-
-  function modList(kind: "review" | "comment", items: ModItem[]) {
-    if (!items.length) {
-      return <p className="mt-2 text-sm text-muted">Nothing here.</p>;
-    }
-    return (
-      <ul className="mt-3 space-y-3">
-        {items.map((it) => (
-          <li key={it.id} className="border border-line px-4 py-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <p className="text-xs text-muted">
-                {it.bookTitle}
-                {it.bookListed ? " · listed" : ""} ·{" "}
-                {it.readerName || it.readerEmail || "Reader"}
-                {it.readerName && it.readerEmail ? ` <${it.readerEmail}>` : ""} · {when(it.createdAt)}
-              </p>
-              <button
-                type="button"
-                className="text-xs text-danger hover:underline"
-                onClick={() => void removeItem(kind, it)}
-              >
-                Delete
-              </button>
-            </div>
-            {it.excerpt && (
-              <p className="mt-2 border-l-2 border-line pl-2 text-xs italic text-muted">
-                “{it.excerpt}”
-              </p>
-            )}
-            <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{it.body}</p>
-          </li>
-        ))}
-      </ul>
-    );
   }
 
   return (
@@ -421,33 +338,7 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
           </section>
         )}
 
-        {tab === "moderation" && (
-          <section className="mt-6 space-y-10">
-            <div>
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className="font-display text-xl">Finished-book reviews</h2>
-                <button
-                  type="button"
-                  className="text-xs text-muted hover:underline"
-                  onClick={() => void loadModeration()}
-                >
-                  Refresh
-                </button>
-              </div>
-              <p className="mt-1 text-xs text-muted">
-                These show publicly on each book&apos;s beta page. Newest 100.
-              </p>
-              {modList("review", reviews)}
-            </div>
-            <div>
-              <h2 className="font-display text-xl">Reader comments</h2>
-              <p className="mt-1 text-xs text-muted">
-                Top-level comments readers left on manuscripts. Newest 100.
-              </p>
-              {modList("comment", comments)}
-            </div>
-          </section>
-        )}
+        {tab === "moderation" && <AdminModeration onNote={setNote} />}
       </main>
     </div>
   );
