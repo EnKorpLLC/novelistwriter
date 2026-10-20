@@ -52,8 +52,17 @@ type ArcCatalogBook = {
   authorName: string;
   coverUrl: string | null;
   deadline: string | null;
-  myStatus: "active" | "requested" | null;
+  myStatus: "active" | "requested" | "author" | null;
 };
+
+type BlurbPopup = CatalogBook & { arcAction?: { href: string; label: string } };
+
+function arcActionLabel(status: ArcCatalogBook["myStatus"]) {
+  if (status === "author") return "Your book";
+  if (status === "active") return "Open your ARC";
+  if (status === "requested") return "Requested";
+  return "Request a copy";
+}
 
 type CatalogGenre = {
   genre: string;
@@ -203,7 +212,7 @@ export default function BetaDashboardClient() {
   const [messageDraft, setMessageDraft] = useState("");
   const [follows, setFollows] = useState<FollowItem[]>([]);
   const [followBusy, setFollowBusy] = useState<string | null>(null);
-  const [blurbPopup, setBlurbPopup] = useState<CatalogBook | null>(null);
+  const [blurbPopup, setBlurbPopup] = useState<BlurbPopup | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -643,6 +652,25 @@ export default function BetaDashboardClient() {
                             </Link>
                             <div className="font-ui flex flex-1 flex-col gap-1.5 p-2.5 text-[11px]">
                               <span className="text-muted">{b.genre}</span>
+                              {b.blurb ? (
+                                <button
+                                  type="button"
+                                  className="self-start text-accent underline"
+                                  onClick={() =>
+                                    setBlurbPopup({
+                                      ...b,
+                                      arcAction: {
+                                        href: `/arc/book/${b.projectId}`,
+                                        label: arcActionLabel(b.myStatus),
+                                      },
+                                    })
+                                  }
+                                >
+                                  Read blurb
+                                </button>
+                              ) : (
+                                <span className="text-muted">No blurb yet.</span>
+                              )}
                               {b.deadline && (
                                 <span className="text-ink">
                                   Read by{" "}
@@ -659,11 +687,7 @@ export default function BetaDashboardClient() {
                                   b.myStatus ? "border border-line text-accent" : "bg-accent text-paper"
                                 }`}
                               >
-                                {b.myStatus === "active"
-                                  ? "Open your ARC"
-                                  : b.myStatus === "requested"
-                                    ? "Requested"
-                                    : "Request a copy"}
+                                {arcActionLabel(b.myStatus)}
                               </Link>
                             </div>
                           </li>
@@ -1109,23 +1133,34 @@ export default function BetaDashboardClient() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3 sm:px-5">
-                <button
-                  type="button"
-                  className="font-ui border border-line px-4 py-2 text-sm text-accent"
-                  onClick={() => {
-                    const book = blurbPopup;
-                    closeBlurb();
-                    void openBookPreview(book);
-                  }}
-                >
-                  Sample chapter
-                </button>
-                <Link
-                  href={`/beta/book/${blurbPopup.projectId}`}
-                  className="font-ui bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
-                >
-                  Apply to beta read
-                </Link>
+                {blurbPopup.arcAction ? (
+                  <Link
+                    href={blurbPopup.arcAction.href}
+                    className="font-ui bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
+                  >
+                    {blurbPopup.arcAction.label}
+                  </Link>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="font-ui border border-line px-4 py-2 text-sm text-accent"
+                      onClick={() => {
+                        const book = blurbPopup;
+                        closeBlurb();
+                        void openBookPreview(book);
+                      }}
+                    >
+                      Sample chapter
+                    </button>
+                    <Link
+                      href={`/beta/book/${blurbPopup.projectId}`}
+                      className="font-ui bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
+                    >
+                      Apply to beta read
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>,

@@ -219,7 +219,7 @@ export async function GET() {
     (arcRows || []).map((r) => [r.project_id, { status: r.status, finishedAt: r.finished_at }])
   );
   const arcCatalog = openArcProjects
-    .filter((p) => studioAuthors.has(p.user_id) && p.user_id !== user.id)
+    .filter((p) => studioAuthors.has(p.user_id))
     .map((p) => ({
       projectId: p.id,
       title: p.title,
@@ -232,7 +232,10 @@ export async function GET() {
         p.updated_at ? Date.parse(p.updated_at) : undefined
       ),
       deadline: p.arc_deadline as string | null,
-      myStatus: (myArcStatus.get(p.id)?.status as "active" | "requested" | undefined) || null,
+      myStatus:
+        p.user_id === user.id
+          ? ("author" as const)
+          : (myArcStatus.get(p.id)?.status as "active" | "requested" | undefined) || null,
     }));
   const arcProjectById = new Map((arcProjects || []).map((p) => [p.id, p]));
   const arcShelf = (arcRows || [])
