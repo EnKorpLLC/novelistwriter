@@ -439,7 +439,7 @@ export default function BetaDashboardClient() {
     <div className="min-h-screen">
       <header className="font-ui flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4">
         <Link href="/beta/dashboard" className="font-display text-xl">
-          Novelist Writer · Beta
+          Novelist Writer · Reader
         </Link>
         <div className="flex flex-wrap items-center gap-4">
           <DashboardRoleNav roles={roles} side="beta" />
@@ -454,8 +454,10 @@ export default function BetaDashboardClient() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="font-display text-3xl">Beta reader dashboard</h1>
-        <p className="mt-1 text-sm text-muted">Your shelf and books open for beta across the platform.</p>
+        <h1 className="font-display text-3xl">Reader dashboard</h1>
+        <p className="mt-1 text-sm text-muted">
+          Your shelf, plus beta reads and advance copies open across the platform.
+        </p>
 
         {loading && <p className="mt-8 text-sm text-muted">Loading…</p>}
         {error && <p className="mt-8 text-sm text-danger">{error}</p>}

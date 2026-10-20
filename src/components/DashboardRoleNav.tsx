@@ -25,7 +25,7 @@ export function DashboardRoleNav({ roles, side }: Props) {
         body: JSON.stringify({ enableBetaReader: true }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not enable beta reader");
+      if (!res.ok) throw new Error(data.error || "Could not enable reader account");
       rememberSide("beta");
       router.push("/beta/dashboard");
       router.refresh();
@@ -65,7 +65,7 @@ export function DashboardRoleNav({ roles, side }: Props) {
           className="text-accent hover:underline"
           onClick={() => rememberSide("beta")}
         >
-          Beta reader dashboard
+          Reader dashboard
         </Link>
       )}
       {side === "author" && !roles.is_beta_reader && (
@@ -75,7 +75,7 @@ export function DashboardRoleNav({ roles, side }: Props) {
           onClick={() => void enableBeta()}
           className="text-accent hover:underline disabled:opacity-60"
         >
-          {busy ? "Enabling…" : "Become a beta reader"}
+          {busy ? "Enabling…" : "Become a reader"}
         </button>
       )}
       {side === "beta" && roles.is_author && (

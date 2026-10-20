@@ -304,7 +304,7 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                       <p className="mt-0.5 text-xs text-muted">
                         {[
                           u.isAuthor ? "Author" : null,
-                          u.isBetaReader ? "Beta reader" : null,
+                          u.isBetaReader ? "Reader" : null,
                           u.isPlatformAdmin ? "Admin" : null,
                         ]
                           .filter(Boolean)

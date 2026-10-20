@@ -11,7 +11,7 @@ export function PublicHeader() {
           Published books
         </Link>
         <Link href="/beta/dashboard" className="text-muted hover:text-ink">
-          Beta readers
+          Readers
         </Link>
         <Link href="/login" className="text-muted hover:text-ink">
           Log in

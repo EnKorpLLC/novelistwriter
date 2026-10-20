@@ -106,7 +106,7 @@ export default function BetaClaimPage() {
       <div className="mx-auto max-w-lg px-6 py-16">
         <p className="text-sm text-danger">{error || "Invite not found"}</p>
         <Link href="/beta/signup" className="mt-4 inline-block text-accent underline">
-          Create a beta reader account
+          Create a reader account
         </Link>
       </div>
     );

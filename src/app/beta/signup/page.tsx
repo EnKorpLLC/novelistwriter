@@ -103,9 +103,9 @@ export default function BetaSignupPage() {
         Novelist Writer
       </Link>
       <form onSubmit={onSubmit} className="font-ui mt-10 w-full max-w-sm space-y-4">
-        <h1 className="font-display text-3xl">Beta reader signup</h1>
+        <h1 className="font-display text-3xl">Reader signup</h1>
         <p className="text-sm text-muted">
-          Set a password for this email to open your beta dashboard.
+          Set a password for this email to open your reader dashboard.
         </p>
         {wrongAccount && (
           <div className="border border-accent bg-paper-deep/40 px-3 py-3 text-sm text-ink">

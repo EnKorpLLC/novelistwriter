@@ -156,13 +156,13 @@ export default function BetaBookGatePage() {
 
       {!data.loggedIn && (
         <div className="mt-8 border border-line bg-paper p-5">
-          <p className="text-sm text-ink">Log in or create a beta reader account to continue.</p>
+          <p className="text-sm text-ink">Log in or create a free reader account to continue.</p>
           <div className="mt-4 flex flex-wrap gap-3 font-ui text-sm">
             <Link href={`/login?next=${next}`} className="bg-accent px-4 py-2 text-paper">
               Log in
             </Link>
             <Link href="/beta/signup" className="border border-line px-4 py-2 text-accent">
-              Sign up as reader
+              Sign up as a reader
             </Link>
           </div>
         </div>

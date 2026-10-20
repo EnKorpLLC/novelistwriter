@@ -228,7 +228,7 @@ export default function LoginForm() {
           </Link>
         </p>
         <p className="text-center text-sm text-muted">
-          Beta reader?{" "}
+          Here to read?{" "}
           <Link href="/beta/signup" className="text-accent underline">
             Sign up to read
           </Link>

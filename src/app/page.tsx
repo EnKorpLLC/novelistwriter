@@ -46,7 +46,7 @@ export default function HomePage() {
             Log in
           </Link>
           <Link href="/beta/signup" className="text-muted hover:text-ink">
-            Beta readers
+            Readers
           </Link>
           <Link
             href="/signup"
