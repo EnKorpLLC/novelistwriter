@@ -135,9 +135,7 @@ export async function GET() {
     .sort((a, b) => String(b.lastReadAt || "").localeCompare(String(a.lastReadAt || "")));
 
   const shelfIds = new Set(shelf.map((s) => s.projectId));
-  const catalogRaw = (readyProjects || []).filter(
-    (p) => !shelfIds.has(p.id) && studioAuthors.has(p.user_id)
-  );
+  const catalogRaw = (readyProjects || []).filter((p) => studioAuthors.has(p.user_id));
 
   type CatalogBook = (typeof catalogRaw)[number];
   const byKeyword = new Map<string, CatalogBook[]>();
@@ -171,6 +169,7 @@ export async function GET() {
             projectCoverPath(p),
             p.updated_at ? Date.parse(p.updated_at) : undefined
           ),
+          onShelf: shelfIds.has(p.id),
         })),
     }));
 
@@ -184,22 +183,57 @@ export async function GET() {
         : `reader_user_id.eq.${user.id}`
     );
   const arcProjectIds = [...new Set((arcRows || []).map((r) => r.project_id))];
-  const { data: arcProjects } = arcProjectIds.length
-    ? await admin
-        .from("projects")
-        .select("id, title, cover_path, metadata, updated_at, user_id, arc_open, arc_deadline")
-        .in("id", arcProjectIds)
-    : { data: [] as never[] };
-  const arcAuthorIds = [...new Set((arcProjects || []).map((p) => p.user_id))].filter(
-    (id) => !authorName.has(id)
-  );
-  if (arcAuthorIds.length) {
-    const { data: more } = await admin
-      .from("profiles")
-      .select("id, display_name")
-      .in("id", arcAuthorIds);
-    for (const a of more || []) authorName.set(a.id, a.display_name);
+  const [{ data: arcProjects }, { data: openArcRaw }] = await Promise.all([
+    arcProjectIds.length
+      ? admin
+          .from("projects")
+          .select("id, title, cover_path, metadata, updated_at, user_id, arc_open, arc_deadline")
+          .in("id", arcProjectIds)
+      : Promise.resolve({ data: [] as never[] }),
+    admin
+      .from("projects")
+      .select("id, title, genre, blurb, cover_path, metadata, updated_at, user_id, arc_open, arc_deadline")
+      .eq("arc_open", true)
+      .order("arc_deadline", { ascending: true })
+      .limit(200),
+  ]);
+  const openArcProjects = (openArcRaw || []).filter((p) => isArcWindowOpen(p));
+  const arcAuthorIds = [
+    ...new Set([...(arcProjects || []), ...openArcProjects].map((p) => p.user_id)),
+  ];
+  const unknownAuthors = arcAuthorIds.filter((id) => !authorName.has(id));
+  const unknownTiers = arcAuthorIds.filter((id) => !authorIds.includes(id));
+  const [{ data: moreNames }, { data: moreTiers }] = await Promise.all([
+    unknownAuthors.length
+      ? admin.from("profiles").select("id, display_name").in("id", unknownAuthors)
+      : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
+    unknownTiers.length
+      ? admin.from("credit_balances").select("user_id, subscription_tier").in("user_id", unknownTiers)
+      : Promise.resolve({ data: [] as { user_id: string; subscription_tier: string | null }[] }),
+  ]);
+  for (const a of moreNames || []) authorName.set(a.id, a.display_name);
+  for (const t of moreTiers || []) {
+    if (t.subscription_tier === "studio") studioAuthors.add(t.user_id);
   }
+  const myArcStatus = new Map(
+    (arcRows || []).map((r) => [r.project_id, { status: r.status, finishedAt: r.finished_at }])
+  );
+  const arcCatalog = openArcProjects
+    .filter((p) => studioAuthors.has(p.user_id) && p.user_id !== user.id)
+    .map((p) => ({
+      projectId: p.id,
+      title: p.title,
+      genre: genreLabel(p.genre),
+      blurb: String(p.blurb || "").trim(),
+      authorUserId: p.user_id,
+      authorName: authorName.get(p.user_id) || "Author",
+      coverUrl: coverPublicUrl(
+        projectCoverPath(p),
+        p.updated_at ? Date.parse(p.updated_at) : undefined
+      ),
+      deadline: p.arc_deadline as string | null,
+      myStatus: (myArcStatus.get(p.id)?.status as "active" | "requested" | undefined) || null,
+    }));
   const arcProjectById = new Map((arcProjects || []).map((p) => [p.id, p]));
   const arcShelf = (arcRows || [])
     .map((r) => {
@@ -228,5 +262,6 @@ export async function GET() {
     shelf,
     arcShelf,
     catalog,
+    arcCatalog,
   });
 }

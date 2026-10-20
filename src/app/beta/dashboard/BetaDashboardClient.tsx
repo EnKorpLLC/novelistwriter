@@ -40,6 +40,19 @@ type CatalogBook = {
   authorUserId?: string;
   authorName: string;
   coverUrl: string | null;
+  onShelf?: boolean;
+};
+
+type ArcCatalogBook = {
+  projectId: string;
+  title: string;
+  genre: string;
+  blurb: string;
+  authorUserId: string;
+  authorName: string;
+  coverUrl: string | null;
+  deadline: string | null;
+  myStatus: "active" | "requested" | null;
 };
 
 type CatalogGenre = {
@@ -173,6 +186,7 @@ export default function BetaDashboardClient() {
   const [shelf, setShelf] = useState<ShelfBook[]>([]);
   const [arcShelf, setArcShelf] = useState<ArcShelfBook[]>([]);
   const [catalog, setCatalog] = useState<CatalogGenre[]>([]);
+  const [arcCatalog, setArcCatalog] = useState<ArcCatalogBook[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
 
@@ -239,6 +253,7 @@ export default function BetaDashboardClient() {
       setShelf(dash.shelf || []);
       setArcShelf(dash.arcShelf || []);
       setCatalog(dash.catalog || []);
+      setArcCatalog(dash.arcCatalog || []);
       if (commentsRes.ok) setThreads(comments.threads || []);
 
       if (notifRes.ok) {
@@ -592,11 +607,76 @@ export default function BetaDashboardClient() {
               {tab === "catalog" && (
                 <section>
                   <h2 className="sr-only">Available by keyword</h2>
-                  <p className="text-sm text-muted">
+                  {arcCatalog.length > 0 && (
+                    <div className="mb-12">
+                      <h3 className="font-display text-xl">Advance reader copies</h3>
+                      <p className="mt-1 text-sm text-muted">
+                        Read before release and leave an honest review by the deadline.
+                      </p>
+                      <ul className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                        {arcCatalog.map((b) => (
+                          <li key={b.projectId} className="flex flex-col border border-line bg-paper">
+                            <Link
+                              href={`/arc/book/${b.projectId}`}
+                              className="group relative aspect-square w-full overflow-hidden bg-paper-deep"
+                            >
+                              {b.coverUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={b.coverUrl}
+                                  alt=""
+                                  className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                                />
+                              ) : (
+                                <span className="flex h-full w-full items-center justify-center px-3 text-center font-display text-sm text-ink">
+                                  {b.title}
+                                </span>
+                              )}
+                              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/75 to-transparent px-2 pb-2 pt-8">
+                                <span className="font-display block text-sm text-paper line-clamp-2">
+                                  {b.title}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] text-paper/80 line-clamp-1">
+                                  {b.authorName}
+                                </span>
+                              </span>
+                            </Link>
+                            <div className="font-ui flex flex-1 flex-col gap-1.5 p-2.5 text-[11px]">
+                              <span className="text-muted">{b.genre}</span>
+                              {b.deadline && (
+                                <span className="text-ink">
+                                  Read by{" "}
+                                  {new Date(b.deadline).toLocaleDateString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    timeZone: "UTC",
+                                  })}
+                                </span>
+                              )}
+                              <Link
+                                href={`/arc/book/${b.projectId}`}
+                                className={`mt-auto self-start px-2 py-1 ${
+                                  b.myStatus ? "border border-line text-accent" : "bg-accent text-paper"
+                                }`}
+                              >
+                                {b.myStatus === "active"
+                                  ? "Open your ARC"
+                                  : b.myStatus === "requested"
+                                    ? "Requested"
+                                    : "Request a copy"}
+                              </Link>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <h3 className="font-display text-xl">Beta reads</h3>
+                  <p className="mt-1 text-sm text-muted">
                     Browse by cover. Open the blurb, or sample the first chapter before applying.
                   </p>
                   {catalog.length === 0 ? (
-                    <p className="mt-3 text-sm text-muted">No other ready books right now.</p>
+                    <p className="mt-3 text-sm text-muted">No books are open for beta right now.</p>
                   ) : (
                     <div className="mt-6 space-y-10">
                       {catalog.map((g) => (
@@ -643,6 +723,14 @@ export default function BetaDashboardClient() {
                                     </span>
                                   </button>
                                   <div className="flex flex-1 flex-col gap-2 p-2.5">
+                                    {b.onShelf && (
+                                      <Link
+                                        href={`/beta/read/${b.projectId}`}
+                                        className="font-ui self-start border border-accent px-1.5 py-0.5 text-[10px] text-accent"
+                                      >
+                                        On your shelf · Continue
+                                      </Link>
+                                    )}
                                     {b.blurb ? (
                                       <button
                                         type="button"
