@@ -9,6 +9,10 @@ export default function SettingsPage() {
   const [wordGoal, setWordGoal] = useState(500);
   const [challenge, setChallenge] = useState(50);
   const [message, setMessage] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -42,6 +46,28 @@ export default function SettingsPage() {
       })
       .eq("id", user.id);
     setMessage(error ? error.message : "Saved.");
+  }
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      setPasswordMessage("Use at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage("Passwords don't match.");
+      return;
+    }
+    setPasswordBusy(true);
+    const { error } = await createClient().auth.updateUser({ password: newPassword });
+    setPasswordBusy(false);
+    if (error) {
+      setPasswordMessage(error.message);
+      return;
+    }
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordMessage("Password changed.");
   }
 
   return (
@@ -84,6 +110,37 @@ export default function SettingsPage() {
         </button>
         {message && <p className="text-sm text-muted">{message}</p>}
       </div>
+      <form onSubmit={(e) => void changePassword(e)} className="font-ui mt-12 space-y-4">
+        <h2 className="font-display text-2xl">Change password</h2>
+        <label className="block text-sm">
+          New password
+          <input
+            type="password"
+            autoComplete="new-password"
+            className="mt-1 w-full border border-line px-3 py-2"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+        </label>
+        <label className="block text-sm">
+          Confirm new password
+          <input
+            type="password"
+            autoComplete="new-password"
+            className="mt-1 w-full border border-line px-3 py-2"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={passwordBusy}
+          className="bg-accent px-4 py-2 text-paper disabled:opacity-60"
+        >
+          {passwordBusy ? "Saving…" : "Change password"}
+        </button>
+        {passwordMessage && <p className="text-sm text-muted">{passwordMessage}</p>}
+      </form>
       <p className="mt-10 text-sm text-muted">
         BYOK keys are managed in the project Tools tab. Privacy: we never train on your book.{" "}
         <Link href="/privacy" className="text-accent underline">

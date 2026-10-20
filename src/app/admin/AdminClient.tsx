@@ -369,8 +369,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                 </p>
                 <p className="mt-2 select-all font-mono text-lg tracking-wide">{tempShown.password}</p>
                 <p className="mt-2 text-xs text-muted">
-                  Shown once. Send it to them, and ask them to change it from Forgot password after
-                  they sign in.
+                  Shown once. Send it to them, and ask them to change it under Settings → Change
+                  password after they sign in.
                 </p>
               </div>
             )}

@@ -16,7 +16,10 @@ export async function sendPasswordResetEmail(
       error?.status === 404 ||
       error?.code === "user_not_found" ||
       /not.?found/i.test(error?.message || "");
-    if (notFound) return { ok: false, error: "no_account" };
+    if (notFound) {
+      console.warn("[password-reset] no auth user for that email");
+      return { ok: false, error: "no_account" };
+    }
     console.error("[password-reset] generateLink failed", {
       status: error?.status,
       code: error?.code,
@@ -36,10 +39,12 @@ export async function sendPasswordResetEmail(
     ],
     button: { label: "Choose a new password", url: link },
   });
-  return sendEmail({
+  const sent = await sendEmail({
     to: email,
     subject: "Reset your Novelist Writer password",
     text: mail.text,
     html: mail.html,
   });
+  if (sent.ok) console.log("[password-reset] reset email handed to SMTP");
+  return sent;
 }
