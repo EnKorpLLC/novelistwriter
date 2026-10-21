@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { SPAM_TIP } from "@/components/EmailOptInPrompt";
 
 export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("");
@@ -13,6 +14,46 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [aiDisabled, setAiDisabled] = useState(false);
+  const [aiDisabledSince, setAiDisabledSince] = useState<string | null>(null);
+  const [emailNotifications, setEmailNotifications] = useState(false);
+  const [trustMessage, setTrustMessage] = useState("");
+  const [trustBusy, setTrustBusy] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/profile/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (!s) return;
+        setAiDisabled(Boolean(s.aiDisabled));
+        setAiDisabledSince(s.aiDisabledSince || null);
+        setEmailNotifications(Boolean(s.emailNotifications));
+      });
+  }, []);
+
+  async function updateTrust(patch: { aiDisabled?: boolean; emailNotifications?: boolean }) {
+    setTrustBusy(true);
+    setTrustMessage("");
+    try {
+      const res = await fetch("/api/profile/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not save");
+      setAiDisabled(Boolean(data.aiDisabled));
+      setAiDisabledSince(data.aiDisabledSince || null);
+      setEmailNotifications(Boolean(data.emailNotifications));
+      if (patch.emailNotifications === true) setTrustMessage(SPAM_TIP);
+      else if (patch.aiDisabled === true) setTrustMessage("AI tools are off. Your books can now show the AI-off badge.");
+      else setTrustMessage("Saved.");
+    } catch (err) {
+      setTrustMessage(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setTrustBusy(false);
+    }
+  }
 
   useEffect(() => {
     void (async () => {
@@ -110,6 +151,46 @@ export default function SettingsPage() {
         </button>
         {message && <p className="text-sm text-muted">{message}</p>}
       </div>
+      <section className="font-ui mt-12 space-y-5">
+        <h2 className="font-display text-2xl">AI and email</h2>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={aiDisabled}
+            disabled={trustBusy}
+            onChange={(e) => void updateTrust({ aiDisabled: e.target.checked })}
+          />
+          <span>
+            <span className="text-ink">Turn off all AI tools</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Hides AI critique and AI bible extract everywhere and blocks them on our servers. Your
+              author page and books show &ldquo;AI tools off
+              {aiDisabled && aiDisabledSince
+                ? ` since ${new Date(aiDisabledSince).toLocaleDateString()}`
+                : ""}
+              &rdquo;. Turning AI back on resets that date.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={emailNotifications}
+            disabled={trustBusy}
+            onChange={(e) => void updateTrust({ emailNotifications: e.target.checked })}
+          />
+          <span>
+            <span className="text-ink">Email me notifications</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Reading reminders, Studio time running low, and new books from authors you follow.
+              Password resets and ARC access emails always send.
+            </span>
+          </span>
+        </label>
+        {trustMessage && <p className="text-sm text-muted">{trustMessage}</p>}
+      </section>
       <form onSubmit={(e) => void changePassword(e)} className="font-ui mt-12 space-y-4">
         <h2 className="font-display text-2xl">Change password</h2>
         <label className="block text-sm">

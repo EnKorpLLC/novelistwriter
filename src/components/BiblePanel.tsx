@@ -20,6 +20,8 @@ type Props = {
   arcs: { id: string; arc_type: string; subject: string; notes: string }[];
   onArcsChange: (arcs: { id: string; arc_type: string; subject: string; notes: string }[]) => void;
   onCreditsChange?: (n: number) => void;
+  /** Author turned off all AI tools in Settings */
+  aiDisabled?: boolean;
 };
 
 const TYPES: BibleEntry["entry_type"][] = [
@@ -45,6 +47,7 @@ export function BiblePanel({
   arcs,
   onArcsChange,
   onCreditsChange,
+  aiDisabled = false,
 }: Props) {
   const [type, setType] = useState<BibleEntry["entry_type"]>("character");
   const [name, setName] = useState("");
@@ -344,6 +347,7 @@ export function BiblePanel({
             Characters, places, lore, rules, timeline — used by lore lock and other critiques.
           </p>
         </div>
+        {!aiDisabled && (
         <div className="font-ui flex shrink-0 flex-col items-end gap-2">
           <div className="flex flex-wrap justify-end gap-1">
             {(Object.keys(AI_MODEL_TIERS) as AiModelTier[]).map((id) => (
@@ -389,6 +393,7 @@ export function BiblePanel({
             existing rows. Still chunked so you can Stop.
           </p>
         </div>
+        )}
       </div>
       {extractMsg && (
         <p className="font-ui mt-3 text-sm text-muted">

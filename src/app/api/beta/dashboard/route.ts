@@ -258,7 +258,15 @@ export async function GET() {
     })
     .filter(Boolean);
 
+  // Separate query so the dashboard still loads before migration_proof_trust.sql is applied
+  const { data: emailPrefs } = await supabase
+    .from("profiles")
+    .select("email_notifications, email_prompt_dismissed_at")
+    .eq("id", user.id)
+    .maybeSingle();
+
   return NextResponse.json({
+    emailPrompt: emailPrefs?.email_notifications === false && !emailPrefs.email_prompt_dismissed_at,
     roles: normalizeRoles(profile),
     displayName: profile?.display_name || null,
     stats: computeReaderStats(invites),

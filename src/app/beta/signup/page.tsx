@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { rememberSide } from "@/lib/beta-platform";
 import { ensureAccountForEmail, getSessionEmail } from "@/lib/beta-auth-switch";
+import { EmailConsentCheckbox } from "@/components/EmailOptInPrompt";
 
 export default function BetaSignupPage() {
   const [email, setEmail] = useState("");
@@ -16,6 +17,7 @@ export default function BetaSignupPage() {
   const [nextPath, setNextPath] = useState("/beta/dashboard");
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [emailNotifications, setEmailNotifications] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function BetaSignupPage() {
           password,
           displayName: name,
           role: "beta_reader",
+          emailNotifications,
         }),
       });
       const createData = await createRes.json();
@@ -153,6 +156,7 @@ export default function BetaSignupPage() {
             className="mt-1 w-full border border-line bg-paper px-3 py-2"
           />
         </label>
+        <EmailConsentCheckbox checked={emailNotifications} onChange={setEmailNotifications} />
         <button
           type="submit"
           disabled={loading || wrongAccount}

@@ -21,6 +21,7 @@ import {
 } from "@/lib/audience";
 import { canRemind } from "@/lib/arc";
 import { emailConfigured, renderEmail, sendEmail } from "@/lib/email";
+import { emailConsentByEmail, emailConsentFor } from "@/lib/notifications";
 
 async function requireProject(projectId: string) {
   const supabase = await createClient();
@@ -250,6 +251,10 @@ export async function GET(
     .eq("project_id", projectId);
   const remindedAtByInvite = new Map(
     (reminderRows || []).map((r) => [r.id as string, (r.last_reminded_at as string | null) || null])
+  );
+  const consentByEmail = await emailConsentByEmail(
+    admin,
+    (invites || []).map((i) => ({ email: String(i.email || ""), userId: i.reader_user_id }))
   );
   if (invitesError) {
     return NextResponse.json({ error: migrationHint(invitesError.message) }, { status: 500 });
@@ -533,6 +538,8 @@ export async function GET(
         bookReview: bookReviewByInvite.get(i.id) || null,
         lastRemindedAt: remindedAtByInvite.get(i.id) || null,
         canRemind: canRemind(remindedAtByInvite.get(i.id)),
+        readerHasAccount: consentByEmail.get(emailKey)?.hasAccount ?? false,
+        readerEmailOptIn: consentByEmail.get(emailKey)?.optedIn ?? false,
         chapterProgress,
         readerStats: stats,
         reviewCount: reviewCountByEmail.get(emailKey) || 0,
@@ -665,46 +672,55 @@ export async function POST(
         { status: 429 }
       );
     }
-    if (!emailConfigured()) {
-      return NextResponse.json({ error: "Email isn't set up on the platform yet." }, { status: 503 });
+    const consent = await emailConsentFor(admin, { userId: inv.reader_user_id, email: inv.email });
+    if (!consent.userId) {
+      return NextResponse.json(
+        {
+          error:
+            "This reader hasn't created an account yet, so there's nowhere to send a reminder. Send them the book link yourself.",
+        },
+        { status: 400 }
+      );
     }
 
     const { data: proj } = await admin.from("projects").select("title").eq("id", projectId).maybeSingle();
     const author = await authorContact(admin, user.id);
     const title = proj?.title || "the manuscript";
-    const greeting = inv.display_name ? `Hi ${inv.display_name},` : "Hi,";
-    const mail = renderEmail({
-      heading: `A note from ${author.name}`,
-      paragraphs: [
-        greeting,
-        `${author.name} wanted to check in on your beta read of "${title}". Your place is saved, so you can pick up right where you left off.`,
-        "If you've decided to stop, you can mark it DNF from the reading page. That helps the author too.",
-      ],
-      button: { label: "Continue reading", url: appUrl(`/beta/book/${projectId}`) },
-      footer: "Reply to this email to reach the author directly.",
-    });
-    const sent = await sendEmail({
-      to: inv.email,
-      subject: `${author.name}: checking in on "${title}"`,
-      text: mail.text,
-      html: mail.html,
-      replyTo: author.email,
-    });
-    if (!sent.ok) return NextResponse.json({ error: sent.error }, { status: 502 });
+
+    let channel: "email" | "in_app" = "in_app";
+    if (consent.optedIn && emailConfigured()) {
+      const mail = renderEmail({
+        heading: `A note from ${author.name}`,
+        paragraphs: [
+          inv.display_name ? `Hi ${inv.display_name},` : "Hi,",
+          `${author.name} wanted to check in on your beta read of "${title}". Your place is saved, so you can pick up right where you left off.`,
+          "If you've decided to stop, you can mark it DNF from the reading page. That helps the author too.",
+        ],
+        button: { label: "Continue reading", url: appUrl(`/beta/book/${projectId}`) },
+        footer: "Reply to this email to reach the author directly.",
+        notification: true,
+      });
+      const sent = await sendEmail({
+        to: inv.email,
+        subject: `${author.name}: checking in on "${title}"`,
+        text: mail.text,
+        html: mail.html,
+        replyTo: author.email,
+      });
+      if (sent.ok) channel = "email";
+    }
 
     const now = new Date().toISOString();
     await admin.from("beta_invites").update({ last_reminded_at: now }).eq("id", inv.id);
-    if (inv.reader_user_id) {
-      await createNotification(admin, {
-        userId: inv.reader_user_id,
-        type: "reading_reminder",
-        title: `${author.name} is checking in`,
-        body: `Pick up "${title}" where you left off.`,
-        href: `/beta/book/${projectId}`,
-        meta: { projectId },
-      });
-    }
-    return NextResponse.json({ ok: true, lastRemindedAt: now });
+    await createNotification(admin, {
+      userId: consent.userId,
+      type: "reading_reminder",
+      title: `${author.name} is checking in`,
+      body: `Pick up "${title}" where you left off.`,
+      href: `/beta/book/${projectId}`,
+      meta: { projectId },
+    });
+    return NextResponse.json({ ok: true, lastRemindedAt: now, channel });
   }
 
   if (body?.action === "saveForm") {

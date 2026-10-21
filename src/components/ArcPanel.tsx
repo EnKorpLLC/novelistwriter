@@ -10,6 +10,7 @@ type ArcInvite = {
   displayName: string | null;
   status: "requested" | "active" | "denied" | "revoked";
   hasAccount: boolean;
+  emailOptIn: boolean;
   lastReadAt: string | null;
   currentChapterTitle: string | null;
   finishedAt: string | null;
@@ -461,16 +462,35 @@ export function ArcPanel({ projectId }: { projectId: string }) {
                         </div>
                         <span className="flex flex-wrap gap-3 text-xs">
                           {!r.finishedAt && state?.windowOpen &&
-                            (r.canRemind ? (
+                            (!r.hasAccount ? (
+                              <span className="text-muted" title="They need a reader account before reminders can reach them">
+                                No account yet
+                              </span>
+                            ) : r.canRemind ? (
                               <button
                                 type="button"
                                 disabled={!!busy}
                                 className="text-accent hover:underline"
+                                title={
+                                  r.emailOptIn
+                                    ? "Email and in-app reminder. Email replies go to you."
+                                    : "They haven't turned on emails, so this arrives as an in-app notification."
+                                }
                                 onClick={() =>
-                                  void act("remind", { inviteId: r.id }, `Reminder sent to ${r.email}.`)
+                                  void act(
+                                    "remind",
+                                    { inviteId: r.id },
+                                    r.emailOptIn
+                                      ? `Reminder emailed to ${r.email} and sent in the app.`
+                                      : `Reminder sent in the app. ${r.email} hasn't turned on email notifications.`
+                                  )
                                 }
                               >
-                                {busy === `remind:${r.id}` ? "Sending…" : "Remind about deadline"}
+                                {busy === `remind:${r.id}`
+                                  ? "Sending…"
+                                  : r.emailOptIn
+                                    ? "Remind about deadline"
+                                    : "Remind about deadline (in-app only)"}
                               </button>
                             ) : (
                               <span className="text-muted">Reminded {shortDate(r.lastRemindedAt)}</span>

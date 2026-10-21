@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { renderEmail, sendEmail } from "@/lib/email";
+import { optedInUserIds } from "@/lib/notifications";
 import { appUrl } from "@/lib/stripe";
 
 export type SubscriberSource = "opt_in" | "beta" | "arc";
@@ -171,7 +172,10 @@ export async function notifyFollowersOfOpening(
     }))
   );
 
-  const { data: profiles } = await admin.from("profiles").select("email").in("id", readerIds);
+  // In-app goes to every follower; email only to those who agreed to notification emails
+  const emailIds = [...(await optedInUserIds(admin, readerIds))];
+  if (!emailIds.length) return;
+  const { data: profiles } = await admin.from("profiles").select("email").in("id", emailIds);
   const what = opts.kind === "arc" ? "advance reader copies" : "beta readers";
   const mail = renderEmail({
     heading: title,
@@ -180,7 +184,8 @@ export async function notifyFollowersOfOpening(
       "You're getting this because you follow this author on Novelist Writer.",
     ],
     button: { label: opts.kind === "arc" ? "Request a copy" : "Apply to read", url: appUrl(path) },
-    footer: "To stop these emails, unfollow the author from your reader dashboard.",
+    footer: "To stop hearing about this author, unfollow them from your reader dashboard.",
+    notification: true,
   });
   for (const p of profiles || []) {
     if (!p.email) continue;

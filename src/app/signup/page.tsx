@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { EmailConsentCheckbox } from "@/components/EmailOptInPrompt";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -12,6 +13,7 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [refCode, setRefCode] = useState<string | null>(null);
+  const [emailNotifications, setEmailNotifications] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export default function SignupPage() {
           password,
           displayName: name,
           role: "author",
+          emailNotifications,
         }),
       });
       const createData = await createRes.json();
@@ -113,6 +116,7 @@ export default function SignupPage() {
             className="mt-1 w-full border border-line bg-paper px-3 py-2"
           />
         </label>
+        <EmailConsentCheckbox checked={emailNotifications} onChange={setEmailNotifications} />
         <button
           type="submit"
           disabled={loading}

@@ -19,6 +19,7 @@ import {
   normalizeReviewLinks,
 } from "@/lib/arc";
 import { emailConfigured, renderEmail, sendEmail } from "@/lib/email";
+import { emailConsentByEmail, emailConsentFor } from "@/lib/notifications";
 
 const ARC_PROJECT_FIELDS =
   "id, title, user_id, arc_open, arc_deadline, arc_collect_address, arc_review_links";
@@ -157,6 +158,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   ]);
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
   const chapterTitle = new Map((chapters || []).map((c) => [c.id, c.title]));
+  const consentByEmail = await emailConsentByEmail(
+    admin,
+    (invites || []).map((i) => ({ email: i.email, userId: i.reader_user_id }))
+  );
   const deadlineMs = project.arc_deadline ? Date.parse(project.arc_deadline) : null;
 
   return NextResponse.json({
@@ -174,7 +179,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       email: i.email,
       displayName: i.display_name,
       status: i.status,
-      hasAccount: Boolean(i.reader_user_id),
+      hasAccount: consentByEmail.get(i.email.toLowerCase())?.hasAccount ?? Boolean(i.reader_user_id),
+      emailOptIn: consentByEmail.get(i.email.toLowerCase())?.optedIn ?? false,
       lastReadAt: i.last_read_at,
       currentChapterTitle: i.current_chapter_id
         ? chapterTitle.get(i.current_chapter_id) || null
@@ -369,46 +375,55 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         { status: 429 }
       );
     }
-    if (!emailConfigured()) {
-      return NextResponse.json({ error: "Email isn't set up on the platform yet." }, { status: 503 });
+    const consent = await emailConsentFor(admin, { userId: inv.reader_user_id, email: inv.email });
+    if (!consent.userId) {
+      return NextResponse.json(
+        {
+          error:
+            "This reader hasn't created an account yet, so there's nowhere to send a reminder. Send them the ARC link yourself.",
+        },
+        { status: 400 }
+      );
     }
 
     const author = await authorContact(admin, user.id);
     const due = formatDeadline(project.arc_deadline);
-    const daysLeft = project.arc_deadline
-      ? Math.max(0, Math.ceil((Date.parse(project.arc_deadline) - Date.now()) / 86400000))
-      : null;
-    const mail = renderEmail({
-      heading: `"${project.title}" is due ${due}`,
-      paragraphs: [
-        inv.display_name ? `Hi ${inv.display_name},` : "Hi,",
-        `A friendly reminder from ${author.name}: your advance copy of "${project.title}" is due ${due}${daysLeft != null ? ` (${daysLeft} day${daysLeft === 1 ? "" : "s"} left)` : ""}.`,
-        "When you finish, the reading page has one-tap links to leave your review.",
-      ],
-      button: { label: "Keep reading", url: arcBookLink(projectId) },
-      footer: "Reply to this email to reach the author directly.",
-    });
-    const sent = await sendEmail({
-      to: inv.email,
-      subject: `Reminder: "${project.title}" ARC due ${due}`,
-      text: mail.text,
-      html: mail.html,
-      replyTo: author.email,
-    });
-    if (!sent.ok) return NextResponse.json({ error: sent.error }, { status: 502 });
+    let channel: "email" | "in_app" = "in_app";
+    if (consent.optedIn && emailConfigured()) {
+      const daysLeft = project.arc_deadline
+        ? Math.max(0, Math.ceil((Date.parse(project.arc_deadline) - Date.now()) / 86400000))
+        : null;
+      const mail = renderEmail({
+        heading: `"${project.title}" is due ${due}`,
+        paragraphs: [
+          inv.display_name ? `Hi ${inv.display_name},` : "Hi,",
+          `A friendly reminder from ${author.name}: your advance copy of "${project.title}" is due ${due}${daysLeft != null ? ` (${daysLeft} day${daysLeft === 1 ? "" : "s"} left)` : ""}.`,
+          "When you finish, the reading page has one-tap links to leave your review.",
+        ],
+        button: { label: "Keep reading", url: arcBookLink(projectId) },
+        footer: "Reply to this email to reach the author directly.",
+        notification: true,
+      });
+      const sent = await sendEmail({
+        to: inv.email,
+        subject: `Reminder: "${project.title}" ARC due ${due}`,
+        text: mail.text,
+        html: mail.html,
+        replyTo: author.email,
+      });
+      if (sent.ok) channel = "email";
+    }
 
     await admin.from("arc_invites").update({ last_reminded_at: now }).eq("id", inv.id);
-    if (inv.reader_user_id) {
-      await createNotification(admin, {
-        userId: inv.reader_user_id,
-        type: "arc_deadline",
-        title: `"${project.title}" ARC due ${due}`,
-        body: `${author.name} sent a reminder.`,
-        href: `/arc/book/${projectId}`,
-        meta: { projectId },
-      });
-    }
-    return NextResponse.json({ ok: true, lastRemindedAt: now });
+    await createNotification(admin, {
+      userId: consent.userId,
+      type: "arc_deadline",
+      title: `"${project.title}" ARC due ${due}`,
+      body: `${author.name} sent a reminder.`,
+      href: `/arc/book/${projectId}`,
+      meta: { projectId },
+    });
+    return NextResponse.json({ ok: true, lastRemindedAt: now, channel });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

@@ -21,10 +21,21 @@ const ui = DM_Sans({
   display: "swap",
 });
 
+const SITE_TITLE = "Novelist Writer — Write it yourself. Prove it.";
+const SITE_DESCRIPTION =
+  "The writing studio that takes your novel from first draft through beta readers and ARCs to launch. A record of how you wrote it, AI that critiques but never writes, and one switch to turn AI off.";
+
 export const metadata: Metadata = {
-  title: "Novelist Writer — Write the book. AI stress-tests the craft.",
-  description:
-    "The writing studio for indie novelists. AI critiques coherence, voice, and arcs — without writing a word of your novel. Export KDP-ready.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://novelistwriter.com"),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    siteName: "Novelist Writer",
+    type: "website",
+  },
+  twitter: { card: "summary", title: SITE_TITLE, description: SITE_DESCRIPTION },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

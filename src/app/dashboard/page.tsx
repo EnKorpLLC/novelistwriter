@@ -12,6 +12,7 @@ import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
 import { normalizeRoles, linkInvitesForEmail } from "@/lib/beta-platform";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { isPlatformAdminEmail } from "@/lib/platform-admin";
+import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 
 function formatWords(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
@@ -139,6 +140,11 @@ export default async function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10">
+        {profile?.email_notifications === false && !profile.email_prompt_dismissed_at && (
+          <div className="mb-8">
+            <EmailOptInPrompt audience="author" />
+          </div>
+        )}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-display text-3xl">Your projects</h1>

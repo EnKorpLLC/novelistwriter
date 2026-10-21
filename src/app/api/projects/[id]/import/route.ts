@@ -22,18 +22,22 @@ function toRows(
   projectId: string,
   userId: string
 ) {
-  return chapters.map((c, i) => ({
-    project_id: projectId,
-    user_id: userId,
-    title: c.title,
-    sort_order: i,
-    content_text: c.body,
-    content_html: c.body
-      .split(/\n\n+/)
-      .map((p) => `<p>${p.replace(/</g, "&lt;")}</p>`)
-      .join(""),
-    word_count: c.body.trim() ? c.body.trim().split(/\s+/).length : 0,
-  }));
+  return chapters.map((c, i) => {
+    const wordCount = c.body.trim() ? c.body.trim().split(/\s+/).length : 0;
+    return {
+      project_id: projectId,
+      user_id: userId,
+      title: c.title,
+      sort_order: i,
+      content_text: c.body,
+      content_html: c.body
+        .split(/\n\n+/)
+        .map((p) => `<p>${p.replace(/</g, "&lt;")}</p>`)
+        .join(""),
+      word_count: wordCount,
+      imported_words: wordCount,
+    };
+  });
 }
 
 export async function POST(

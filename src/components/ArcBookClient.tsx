@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AuthorConnect, AuthorLinks } from "@/components/AuthorConnect";
 import type { LabeledLink } from "@/lib/public-profile";
 import type { MailingAddress } from "@/lib/arc";
+import { TrustBadges } from "@/components/TrustBadges";
+import type { TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type ReviewLink = LabeledLink & { key: string };
 
@@ -17,6 +19,7 @@ type ArcData = {
   authorUserId: string;
   authorName: string;
   authorLinks: LabeledLink[];
+  trust?: TrustBadgeData;
   deadline: string | null;
   windowOpen: boolean;
   deadlinePassed: boolean;
@@ -361,6 +364,7 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
               {data.deadlinePassed ? `ARC window ended ${due}` : `Read by ${due}`}
             </p>
           )}
+          <TrustBadges {...(data.trust || {})} className="mt-2" />
           <AuthorLinks links={data.authorLinks} className="mt-2" />
           {data.loggedIn && data.access !== "author" && (
             <div className="mt-3">

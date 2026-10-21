@@ -45,6 +45,22 @@ export async function DELETE(
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Keep the "AI was used on this book" fact after the report itself is gone
+  const { data: job } = await supabase
+    .from("ai_jobs")
+    .select("project_id, created_at")
+    .eq("id", jobId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (job?.project_id) {
+    await supabase
+      .from("projects")
+      .update({ ai_used_at: job.created_at })
+      .eq("id", job.project_id)
+      .eq("user_id", user.id)
+      .is("ai_used_at", null);
+  }
+
   const { error } = await supabase
     .from("ai_jobs")
     .delete()

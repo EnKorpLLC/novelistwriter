@@ -252,11 +252,11 @@ function BillingInner() {
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
               <li>Everything in Pro</li>
-              <li>{SUB_ALLOWANCE.studio} AI credits every month</li>
               <li>Beta reader desk — forms, auto-approve, progress, highlight comments</li>
+              <li>ARC desk — read-by deadlines, reminders, one-tap review links</li>
+              <li>Audience lists across all your books</li>
               <li>Series tools</li>
-              <li>Bring your own API key (BYOK)</li>
-              <li>Priority AI jobs</li>
+              <li>{SUB_ALLOWANCE.studio} AI credits every month, BYOK, priority AI jobs</li>
             </ul>
             <div className="font-ui mt-4 flex flex-wrap gap-2">
               <button

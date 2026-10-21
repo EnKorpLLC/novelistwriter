@@ -71,7 +71,12 @@ export function renderEmail(opts: {
   paragraphs: string[];
   button?: { label: string; url: string };
   footer?: string;
+  /** Opt-in notification email: adds the not-spam tip and a link to turn emails off */
+  notification?: boolean;
 }): { html: string; text: string } {
+  const notice = opts.notification
+    ? `Getting this in spam? Mark it Not spam and add ${process.env.SMTP_USER || "this address"} to your contacts. Turn these emails off anytime: ${appUrl("/settings")}`
+    : "";
   const paras = opts.paragraphs
     .map((p) => `<p style="margin:0 0 14px;line-height:1.55">${escapeHtml(p)}</p>`)
     .join("");
@@ -85,6 +90,7 @@ export function renderEmail(opts: {
 <h1 style="font-size:22px;font-weight:normal;margin:0 0 16px">${escapeHtml(opts.heading)}</h1>
 ${paras}${button}
 <p style="margin:28px 0 0;font-size:12px;color:#6b6358">${footer}</p>
+${notice ? `<p style="margin:10px 0 0;font-size:11px;color:#6b6358">${escapeHtml(notice)}</p>` : ""}
 </div></body></html>`;
   const text = [
     opts.heading,
@@ -93,6 +99,7 @@ ${paras}${button}
     opts.button ? `${opts.button.label}: ${opts.button.url}` : "",
     "",
     opts.footer || "Novelist Writer",
+    notice,
   ]
     .join("\n")
     .trim();

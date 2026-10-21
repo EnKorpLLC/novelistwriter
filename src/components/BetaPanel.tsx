@@ -31,6 +31,8 @@ type Invite = {
   bookReview?: { id: string; body: string; createdAt: string } | null;
   lastRemindedAt?: string | null;
   canRemind?: boolean;
+  readerHasAccount?: boolean;
+  readerEmailOptIn?: boolean;
   chapterProgress?: ChapterProgress[];
   currentChapter?: { id: string; title: string; percent: number } | null;
   displayName?: string | null;
@@ -491,7 +493,11 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
           i.id === inv.id ? { ...i, lastRemindedAt: data.lastRemindedAt, canRemind: false } : i
         )
       );
-      setNote(`Reminder emailed to ${inv.email}.`);
+      setNote(
+        data.channel === "email"
+          ? `Reminder emailed to ${inv.email} and sent in the app.`
+          : `Reminder sent in the app. ${inv.email} hasn't turned on email notifications.`
+      );
     } finally {
       setRemindingId(null);
     }
@@ -1942,7 +1948,14 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                 </button>
                               )}
                               {isInactiveReader(inv) &&
-                                (inv.canRemind === false ? (
+                                (!inv.readerHasAccount ? (
+                                  <span
+                                    className="text-xs text-muted"
+                                    title="They need a reader account before reminders can reach them"
+                                  >
+                                    No account yet
+                                  </span>
+                                ) : inv.canRemind === false ? (
                                   <span className="text-xs text-muted">
                                     Reminded{" "}
                                     {inv.lastRemindedAt
@@ -1954,10 +1967,18 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                     type="button"
                                     disabled={remindingId === inv.id}
                                     className="text-xs text-accent hover:underline disabled:opacity-50"
-                                    title="Email a friendly nudge. Replies go to you."
+                                    title={
+                                      inv.readerEmailOptIn
+                                        ? "Email and in-app nudge. Email replies go to you."
+                                        : "They haven't turned on emails, so this arrives as an in-app notification."
+                                    }
                                     onClick={() => void remind(inv)}
                                   >
-                                    {remindingId === inv.id ? "Sending…" : "Send reminder"}
+                                    {remindingId === inv.id
+                                      ? "Sending…"
+                                      : inv.readerEmailOptIn
+                                        ? "Send reminder"
+                                        : "Send reminder (in-app only)"}
                                   </button>
                                 ))}
                               <button

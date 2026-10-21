@@ -41,6 +41,8 @@ type Props = {
   initialChapterId?: string;
   /** From ?tab= — keeps the open workspace tab across refresh */
   initialTab?: WorkspaceTab;
+  /** Author turned off all AI tools in Settings */
+  aiDisabled?: boolean;
 };
 
 function chapterStorageKey(projectId: string) {
@@ -72,6 +74,7 @@ export function ProjectWorkspace({
   initialCredits,
   initialChapterId,
   initialTab,
+  aiDisabled = false,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -730,6 +733,7 @@ export function ProjectWorkspace({
                     <div className="min-h-0 flex-1 overflow-hidden">
                       <ManuscriptEditor
                         key={active.id}
+                        projectId={project.id}
                         chapterId={active.id}
                         initialHtml={active.content_html}
                         serverUpdatedAt={active.updated_at}
@@ -745,7 +749,7 @@ export function ProjectWorkspace({
                 )}
               </div>
 
-              {!focusMode && (
+              {!focusMode && !aiDisabled && (
                 <div
                   className={`min-h-0 w-full shrink-0 overflow-hidden lg:block lg:w-[360px] ${
                     writePane === "critique" ? "block" : "hidden"
@@ -772,7 +776,9 @@ export function ProjectWorkspace({
                     ["editor", "Editor"],
                     ["critique", "AI Actions"],
                   ] as const
-                ).map(([id, label]) => (
+                )
+                  .filter(([id]) => !(aiDisabled && id === "critique"))
+                  .map(([id, label]) => (
                   <button
                     key={id}
                     type="button"
@@ -801,6 +807,7 @@ export function ProjectWorkspace({
             arcs={arcs}
             onArcsChange={setArcs}
             onCreditsChange={setCredits}
+            aiDisabled={aiDisabled}
           />
         )}
 

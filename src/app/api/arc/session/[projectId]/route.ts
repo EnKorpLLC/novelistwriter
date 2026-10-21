@@ -8,6 +8,7 @@ import { genreLabel } from "@/lib/beta-platform";
 import { sanitizeDisplayName } from "@/lib/beta-access";
 import { normalizePublicLinks, publicLinkList } from "@/lib/public-profile";
 import { isSubscribed, joinAuthorAudience } from "@/lib/audience";
+import { trustBadgesForBook } from "@/lib/trust-badges";
 import {
   isArcDeadlinePassed,
   isArcWindowOpen,
@@ -101,6 +102,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     authorUserId: project.user_id,
     authorName: author?.display_name || "Author",
     authorLinks: publicLinkList(normalizePublicLinks(author?.public_links)),
+    trust: await trustBadgesForBook(admin, project.user_id, project.id),
     deadline: project.arc_deadline,
     windowOpen,
     deadlinePassed: isArcDeadlinePassed(project.arc_deadline),

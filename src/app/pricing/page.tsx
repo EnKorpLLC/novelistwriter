@@ -10,8 +10,8 @@ export default function PricingPage() {
         </Link>
         <h1 className="font-display mt-8 text-4xl">Pricing</h1>
         <p className="mt-3 max-w-xl text-muted">
-          Write free forever. First project free. Pay for extra projects and AI — or subscribe.
-          AI critiques craft; it never writes your novel.
+          Write free forever. Your first book is free, and every plan keeps a record of how you wrote
+          it and lets you switch AI off entirely. AI critiques craft; it never writes your novel.
         </p>
 
         <div className="mt-12 grid gap-6 md:grid-cols-2">
@@ -20,6 +20,7 @@ export default function PricingPage() {
             <ul className="mt-4 space-y-2 text-sm text-muted">
               <li>Core studio — $0 forever</li>
               <li>1st project — free</li>
+              <li>Writing record and AI off switch — included</li>
               <li>Extra projects — $9 one-time each</li>
               <li>AI credit packs from $5</li>
               <li>Price shown before every AI run</li>
@@ -33,13 +34,17 @@ export default function PricingPage() {
                 {SUB_ALLOWANCE.pro} monthly AI credits (all critique actions)
               </li>
               <li>
-                <strong className="text-ink">Studio</strong> — $32/mo — {SUB_ALLOWANCE.studio}{" "}
-                monthly credits, plus:
+                <strong className="text-ink">Studio</strong> — $32/mo — everything from draft to
+                launch:
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li>Beta reader desk (forms, auto-approve, progress, highlight comments)</li>
+                  <li>ARC desk (read-by deadlines, reminders, one-tap review links)</li>
+                  <li>Audience lists across all your books, with CSV export</li>
                   <li>Series tools</li>
-                  <li>Bring your own API key (BYOK)</li>
-                  <li>Priority AI jobs</li>
+                  <li>
+                    If you use AI: {SUB_ALLOWANCE.studio} monthly credits, bring your own API key,
+                    priority jobs
+                  </li>
                 </ul>
               </li>
             </ul>
@@ -47,9 +52,9 @@ export default function PricingPage() {
         </div>
 
         <p className="font-ui mt-8 max-w-2xl text-sm text-muted">
-          Curious about beta? See how the reader workflow works on the{" "}
+          Curious how beta and ARC reading work? See the{" "}
           <Link href="/#beta" className="text-accent underline-offset-2 hover:underline">
-            homepage
+            Studio tour on the homepage
           </Link>
           .
         </p>

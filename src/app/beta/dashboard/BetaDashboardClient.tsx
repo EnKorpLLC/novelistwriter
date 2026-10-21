@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DashboardRoleNav } from "@/components/DashboardRoleNav";
+import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
 
 type ShelfBook = {
@@ -196,6 +197,7 @@ export default function BetaDashboardClient() {
   const [arcShelf, setArcShelf] = useState<ArcShelfBook[]>([]);
   const [catalog, setCatalog] = useState<CatalogGenre[]>([]);
   const [arcCatalog, setArcCatalog] = useState<ArcCatalogBook[]>([]);
+  const [emailPrompt, setEmailPrompt] = useState(false);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
 
@@ -263,6 +265,7 @@ export default function BetaDashboardClient() {
       setArcShelf(dash.arcShelf || []);
       setCatalog(dash.catalog || []);
       setArcCatalog(dash.arcCatalog || []);
+      setEmailPrompt(Boolean(dash.emailPrompt));
       if (commentsRes.ok) setThreads(comments.threads || []);
 
       if (notifRes.ok) {
@@ -464,6 +467,11 @@ export default function BetaDashboardClient() {
 
         {!loading && !error && (
           <>
+            {emailPrompt && (
+              <div className="mt-8">
+                <EmailOptInPrompt audience="reader" />
+              </div>
+            )}
             <div className="mt-8 flex flex-wrap gap-6 border border-line px-5 py-4 font-ui text-sm">
               <span>
                 <span className="text-muted">Finished</span>{" "}

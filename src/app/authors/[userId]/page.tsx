@@ -8,6 +8,8 @@ import { isArcWindowOpen } from "@/lib/arc";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { PublicHeader } from "@/components/PublicHeader";
 import { AuthorLinks } from "@/components/AuthorConnect";
+import { TrustBadges } from "@/components/TrustBadges";
+import { loadTrustBadges } from "@/lib/trust-badges";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,10 @@ export default async function AuthorPage({ params }: { params: Promise<{ userId:
 
   const name = profile.display_name || "Author";
   const links = publicLinkList(normalizePublicLinks(profile.public_links));
+  const allIds = [...new Set([...betaBooks, ...arcBooks, ...publishedBooks].map((b) => b.id))];
+  const { aiOffSince, noAiProjectIds } = await loadTrustBadges(admin, userId, allIds);
+  const withNoAi = (books: OpenBook[]) =>
+    books.map((b) => (noAiProjectIds.has(b.id) ? { ...b, note: `${b.note} · No AI used` } : b));
 
   return (
     <div className="min-h-screen">
@@ -104,11 +110,12 @@ export default async function AuthorPage({ params }: { params: Promise<{ userId:
       <main className="mx-auto max-w-5xl px-6 py-10">
         <p className="font-ui text-xs uppercase tracking-wide text-muted">Author</p>
         <h1 className="font-display mt-1 text-4xl">{name}</h1>
+        <TrustBadges aiOffSince={aiOffSince} className="mt-3" />
         <AuthorLinks links={links} className="mt-3" />
 
-        <BookRow title="Looking for beta readers" books={betaBooks} />
-        <BookRow title="Advance reader copies" books={arcBooks} />
-        <BookRow title="Published books" books={publishedBooks} />
+        <BookRow title="Looking for beta readers" books={withNoAi(betaBooks)} />
+        <BookRow title="Advance reader copies" books={withNoAi(arcBooks)} />
+        <BookRow title="Published books" books={withNoAi(publishedBooks)} />
 
         {!betaBooks.length && !arcBooks.length && !publishedBooks.length && (
           <p className="font-ui mt-10 text-sm text-muted">No public books yet.</p>

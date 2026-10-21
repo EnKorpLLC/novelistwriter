@@ -67,6 +67,12 @@ export default async function ProjectPage({
       .maybeSingle(),
   ]);
 
+  const { data: aiSwitch } = await supabase
+    .from("profiles")
+    .select("ai_disabled")
+    .eq("id", user.id)
+    .maybeSingle();
+
   const creditTotal =
     (credits?.balance ?? 0) + (credits?.monthly_allowance_remaining ?? 0);
 
@@ -91,6 +97,7 @@ export default async function ProjectPage({
       initialCredits={creditTotal}
       initialChapterId={initialChapterId}
       initialTab={initialTab}
+      aiDisabled={Boolean(aiSwitch?.ai_disabled)}
     />
   );
 }

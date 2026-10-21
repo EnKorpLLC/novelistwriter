@@ -5,6 +5,8 @@ import { getPublishedBook } from "@/lib/public-books";
 import { normalizePublicLinks, publicLinkList } from "@/lib/public-profile";
 import { PublicHeader } from "@/components/PublicHeader";
 import { AuthorLinks } from "@/components/AuthorConnect";
+import { TrustBadges } from "@/components/TrustBadges";
+import { trustBadgesForBook } from "@/lib/trust-badges";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,7 @@ export default async function PublishedBookPage({
     .eq("id", book.authorUserId)
     .maybeSingle();
   const authorLinks = publicLinkList(normalizePublicLinks(author?.public_links));
+  const trust = await trustBadgesForBook(admin, book.authorUserId, book.id);
 
   return (
     <div className="min-h-screen">
@@ -53,6 +56,7 @@ export default async function PublishedBookPage({
                 {book.authorName}
               </Link>
             </p>
+            <TrustBadges {...trust} className="mt-3" />
 
             <p className="font-ui mt-5 text-[10px] uppercase tracking-wide text-muted">Genre</p>
             <p className="font-ui text-sm text-ink">{book.genre}</p>

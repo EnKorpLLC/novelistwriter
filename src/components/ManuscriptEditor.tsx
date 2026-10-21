@@ -22,8 +22,10 @@ import { FontSize } from "@/lib/tiptap-font-size";
 import { SearchHighlight, getSearchState } from "@/lib/tiptap-search-highlight";
 import { EditorToolbar } from "@/components/EditorToolbar";
 import { FindReplaceBar } from "@/components/FindReplaceBar";
+import { createWritingSessionTracker } from "@/lib/writing-session";
 
 type Props = {
+  projectId: string;
   chapterId: string;
   initialHtml: string;
   /** ISO timestamp from server — used so local cache doesn't override newer cloud content */
@@ -77,6 +79,7 @@ function scrollEditorToPos(
 }
 
 export function ManuscriptEditor({
+  projectId,
   chapterId,
   initialHtml,
   serverUpdatedAt,
@@ -98,6 +101,8 @@ export function ManuscriptEditor({
   const [findOpen, setFindOpen] = useState(false);
   const [findReplaceMode, setFindReplaceMode] = useState(false);
   const [findSeed, setFindSeed] = useState("");
+  // Remounted per chapter (key={chapterId}), so one tracker per chapter visit
+  const [tracker] = useState(() => createWritingSessionTracker(projectId, chapterId));
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -147,7 +152,10 @@ export function ManuscriptEditor({
       window.scrollTo(0, 0);
       onWordCountRef.current?.(countWords(ed.getText()));
     },
-    onTransaction: () => setTick((t) => t + 1),
+    onTransaction: ({ transaction }) => {
+      setTick((t) => t + 1);
+      tracker.record(transaction);
+    },
     onUpdate: ({ editor: ed }) => {
       const html = ed.getHTML();
       const text = ed.getText();
@@ -175,6 +183,7 @@ export function ManuscriptEditor({
             lastSynced.current = latestHtml;
             clearDraftLocal(chapterId);
             setSaveHint("All changes saved");
+            tracker.flush();
           } else {
             setSaveHint("Save failed — kept locally; will retry");
           }
@@ -282,10 +291,26 @@ export function ManuscriptEditor({
       lastSynced.current = html;
       clearDraftLocal(chapterId);
       setSaveHint("All changes saved");
+      tracker.flush();
     } else {
       setSaveHint("Save failed — kept locally");
     }
-  }, [editor, onSave, chapterId]);
+  }, [editor, onSave, chapterId, tracker]);
+
+  // Send the writing record when leaving the chapter, the tab, or the page
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") tracker.flush({ beacon: true });
+    };
+    const onPageHide = () => tracker.flush({ beacon: true });
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onPageHide);
+      tracker.flush({ beacon: true });
+    };
+  }, [tracker]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

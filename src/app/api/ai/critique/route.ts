@@ -123,6 +123,18 @@ export async function POST(req: Request) {
     .eq("id", user.id)
     .maybeSingle();
 
+  const { data: aiSwitch } = await supabase
+    .from("profiles")
+    .select("ai_disabled")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (aiSwitch?.ai_disabled) {
+    return NextResponse.json(
+      { error: "AI tools are turned off for your account. Turn them back on in Settings.", code: "ai_disabled" },
+      { status: 403 }
+    );
+  }
+
   const { data: bal } = await supabase
     .from("credit_balances")
     .select("subscription_tier")

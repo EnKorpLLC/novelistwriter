@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { sendWelcomeEmail } from "@/lib/notifications";
 
 /**
  * Create an account without sending Supabase's signup confirmation email.
@@ -11,6 +12,7 @@ export async function POST(req: Request) {
     password?: string;
     displayName?: string;
     role?: "author" | "beta_reader";
+    emailNotifications?: boolean;
   };
 
   const email = String(body.email || "")
@@ -46,6 +48,20 @@ export async function POST(req: Request) {
       );
     }
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  // The profile row is created by the auth trigger, so it exists by now
+  if (body.emailNotifications && data.user?.id) {
+    const now = new Date().toISOString();
+    const { error: consentErr } = await admin
+      .from("profiles")
+      .update({
+        email_notifications: true,
+        email_notifications_at: now,
+        email_prompt_dismissed_at: now,
+      })
+      .eq("id", data.user.id);
+    if (!consentErr) await sendWelcomeEmail(email);
   }
 
   return NextResponse.json({ ok: true, userId: data.user?.id || null });
