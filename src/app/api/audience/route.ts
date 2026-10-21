@@ -28,7 +28,7 @@ export async function GET() {
   const [{ data: subs, error: subErr }, { data: betaRows }, { data: arcRows }] = await Promise.all([
     admin
       .from("author_subscribers")
-      .select("email, display_name, sources, subscribed_at, unsubscribed_at")
+      .select("email, display_name, sources, subscribed_at, unsubscribed_at, confirmed_at")
       .eq("author_user_id", user.id)
       .order("subscribed_at", { ascending: false }),
     projectIds.length
@@ -102,6 +102,7 @@ export async function GET() {
       sources: s.sources || [],
       subscribedAt: s.subscribed_at,
       unsubscribed: Boolean(s.unsubscribed_at),
+      confirmed: Boolean(s.confirmed_at),
     })),
     betaReaders,
     arcReaders,

@@ -25,8 +25,18 @@ export function normalizeReviewLinks(raw: unknown): LabeledLink[] {
   return normalizeLabeledLinks(raw, MAX_REVIEW_LINKS);
 }
 
-export function normalizeBuyLinks(raw: unknown): LabeledLink[] {
-  return normalizeLabeledLinks(raw, MAX_BUY_LINKS);
+export type BuyLink = LabeledLink & { preorder?: boolean };
+
+/** Store links; `preorder` marks links shown before release. */
+export function normalizeBuyLinks(raw: unknown): BuyLink[] {
+  const links = normalizeLabeledLinks(raw, MAX_BUY_LINKS);
+  const src = Array.isArray(raw) ? raw : [];
+  return links.map((l) => {
+    const match = src.find(
+      (s) => s && typeof s === "object" && String((s as { label?: unknown }).label || "").trim() === l.label
+    ) as { preorder?: unknown } | undefined;
+    return match?.preorder ? { ...l, preorder: true } : l;
+  });
 }
 
 export function normalizeTropes(raw: unknown): string[] {

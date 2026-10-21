@@ -27,7 +27,7 @@ export async function upsertAuthorSubscriber(
   try {
     const { data: existing } = await admin
       .from("author_subscribers")
-      .select("id, sources, display_name, unsubscribed_at")
+      .select("id, sources, display_name, unsubscribed_at, confirmed_at")
       .eq("author_user_id", opts.authorUserId)
       .eq("email", email)
       .maybeSingle();
@@ -38,6 +38,8 @@ export async function upsertAuthorSubscriber(
         email,
         display_name: displayName,
         sources: [opts.source],
+        // Signed-in opt-ins and book joins are already verified accounts
+        confirmed_at: now,
       });
       return;
     }
@@ -49,6 +51,10 @@ export async function upsertAuthorSubscriber(
     if (opts.source === "opt_in" && existing.unsubscribed_at) {
       patch.unsubscribed_at = null;
       patch.subscribed_at = now;
+    }
+    if (!existing.confirmed_at) {
+      patch.confirmed_at = now;
+      patch.confirm_token = null;
     }
     if (!Object.keys(patch).length) return;
     patch.updated_at = now;
@@ -79,11 +85,11 @@ export async function isSubscribed(
   if (!email.includes("@")) return false;
   const { data } = await admin
     .from("author_subscribers")
-    .select("id, unsubscribed_at")
+    .select("id, unsubscribed_at, confirmed_at")
     .eq("author_user_id", opts.authorUserId)
     .eq("email", email)
     .maybeSingle();
-  return Boolean(data && !data.unsubscribed_at);
+  return Boolean(data && !data.unsubscribed_at && data.confirmed_at);
 }
 
 export async function followAuthor(

@@ -195,6 +195,39 @@ export default function HomePage() {
           </div>
         </section>
 
+        <section id="launch" className="scroll-mt-24 border-t border-line bg-paper-deep/30 px-6 py-20 md:px-10">
+          <div className="mx-auto max-w-5xl">
+            <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Launch</p>
+            <h2 className="font-display mt-2 text-3xl text-ink">A launch page and an author site, built in</h2>
+            <p className="mt-3 max-w-2xl text-muted">
+              Every book gets a page that grows with it: cover reveal and preorders, then beta and ARC
+              calls, then buy buttons on release day. Your author site gathers every book, your bio,
+              and your links at one short address you can put anywhere.
+            </p>
+            <ul className="mt-10 grid gap-8 md:grid-cols-3">
+              {[
+                {
+                  t: "Made to be shared",
+                  d: "Copy-ready posts for every network, a block for your newsletter, and a square image for Instagram.",
+                },
+                {
+                  t: "Readers join your list",
+                  d: "Visitors sign up on your page and confirm by email, so your list stays real.",
+                },
+                {
+                  t: "Proof travels with it",
+                  d: "Badges like “No AI used on this book” show wherever your book does, including link previews.",
+                },
+              ].map((item) => (
+                <li key={item.t} className="border-t border-line pt-4">
+                  <h3 className="font-display text-xl">{item.t}</h3>
+                  <p className="mt-2 text-sm text-muted">{item.d}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
         <section className="border-y border-line bg-paper-deep/50 px-6 py-16 md:px-10">
           <div className="mx-auto max-w-5xl">
             <h2 className="font-display text-3xl">Your book stays yours</h2>

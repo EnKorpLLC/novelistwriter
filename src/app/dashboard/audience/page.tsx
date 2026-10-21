@@ -9,6 +9,7 @@ type Subscriber = {
   sources: string[];
   subscribedAt: string;
   unsubscribed: boolean;
+  confirmed: boolean;
 };
 
 type ReaderBook = {
@@ -85,7 +86,7 @@ export default function AudiencePage() {
           s.displayName || "",
           s.sources.map((x) => SOURCE_LABEL[x] || x).join("; "),
           day(s.subscribedAt),
-          s.unsubscribed ? "unsubscribed" : "subscribed",
+          s.unsubscribed ? "unsubscribed" : s.confirmed ? "subscribed" : "awaiting confirmation",
         ]),
       ]);
     } else if (tab === "beta") {
@@ -227,6 +228,7 @@ export default function AudiencePage() {
                       </span>
                       <span className="text-xs text-muted">
                         {s.sources.map((x) => SOURCE_LABEL[x] || x).join(", ")} · {day(s.subscribedAt)}
+                        {!s.confirmed && !s.unsubscribed ? " · awaiting confirmation" : ""}
                       </span>
                     </li>
                   ))}

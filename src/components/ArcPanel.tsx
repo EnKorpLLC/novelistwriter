@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { LabeledLink } from "@/lib/public-profile";
 import { formatMailingAddress, reviewSiteKey, type MailingAddress } from "@/lib/arc";
+import { ShareKit } from "@/components/ShareKit";
 
 type ArcInvite = {
   id: string;
@@ -265,6 +266,31 @@ export function ArcPanel({ projectId }: { projectId: string }) {
                   Copy
                 </button>
               </div>
+            )}
+            {state?.shareLink && state.windowOpen && (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs text-accent">More ways to share</summary>
+                <div className="mt-3">
+                  <ShareKit
+                    heading="Find ARC readers"
+                    path={new URL(state.shareLink).pathname}
+                    title="Advance copies available"
+                    posts={[
+                      {
+                        label: "ARC call",
+                        text: `ARC copies of my new book are open. Read it free before release${
+                          state.deadline ? ` (read by ${shortDate(state.deadline)})` : ""
+                        }:`,
+                      },
+                    ]}
+                    newsletter={{
+                      heading: "Read my next book before anyone else",
+                      body: "I'm giving out free advance copies to readers who'll leave an honest review.",
+                      buttonLabel: "Request a copy",
+                    }}
+                  />
+                </div>
+              </details>
             )}
           </section>
 

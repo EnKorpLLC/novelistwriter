@@ -8,6 +8,7 @@ import type { BetaApplicationForm } from "@/lib/beta-form";
 import type { LabeledLink } from "@/lib/public-profile";
 import { AuthorConnect, AuthorLinks } from "@/components/AuthorConnect";
 import { TrustBadges } from "@/components/TrustBadges";
+import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import type { TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type GateData = {
@@ -130,6 +131,7 @@ export default function BetaBookGatePage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
+      <ShareVisitBeacon />
       <Link href="/beta/dashboard" className="font-ui text-xs text-accent underline">
         ← Dashboard
       </Link>

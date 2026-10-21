@@ -5,7 +5,7 @@ export const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "bible", label: "Bible" },
   { id: "beta", label: "Beta" },
   { id: "arc", label: "ARC" },
-  { id: "publish", label: "Publish" },
+  { id: "publish", label: "Launch" },
   { id: "tools", label: "Tools" },
 ];
 

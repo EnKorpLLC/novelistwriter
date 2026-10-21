@@ -10,6 +10,7 @@ import {
   BETA_PERIOD_ENDED_REASON,
 } from "@/lib/beta-access";
 import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/beta-platform";
+import { ShareKit } from "@/components/ShareKit";
 
 type ChapterProgress = {
   chapterId: string;
@@ -1348,6 +1349,29 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                 >
                   Copy share link
                 </button>
+                {shareLink && betaReady && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-xs text-accent">More ways to share</summary>
+                    <div className="mt-3">
+                      <ShareKit
+                        heading="Find beta readers"
+                        path={new URL(shareLink).pathname}
+                        title="Beta readers wanted"
+                        posts={[
+                          {
+                            label: "Beta call",
+                            text: "I'm looking for beta readers for my new book. Apply here:",
+                          },
+                        ]}
+                        newsletter={{
+                          heading: "Want to read my next book early?",
+                          body: "I'm looking for beta readers to give honest feedback before it's finished.",
+                          buttonLabel: "Apply to beta read",
+                        }}
+                      />
+                    </div>
+                  </details>
+                )}
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-muted">Application link</p>

@@ -5,6 +5,8 @@ import { loadTrustBadges } from "@/lib/trust-badges";
 import { aiActionCounts } from "@/lib/ai-usage";
 import { isArcWindowOpen } from "@/lib/arc";
 import { userHasStudio } from "@/lib/credits";
+import { ensureHandle } from "@/lib/public-site";
+import { bookPath } from "@/lib/handles";
 
 /** The author's own badge overview: account badge plus each book's badge and where it's public. */
 export async function GET() {
@@ -15,11 +17,14 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createServiceClient();
-  const { data: projects } = await admin
-    .from("projects")
-    .select("id, title, updated_at, beta_ready, arc_open, arc_deadline, published, ai_used_at")
-    .eq("user_id", user.id)
-    .order("updated_at", { ascending: false });
+  const [{ data: projects }, handle] = await Promise.all([
+    admin
+      .from("projects")
+      .select("id, title, slug, updated_at, beta_ready, arc_open, arc_deadline, published, launch_public, ai_used_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false }),
+    ensureHandle(admin, user.id),
+  ]);
   const list = projects || [];
   const ids = list.map((p) => p.id);
 
@@ -53,9 +58,13 @@ export async function GET() {
     aiOffSince,
     books: list.map((p) => {
       const shownOn: { label: string; href: string }[] = [];
-      if (p.published) shownOn.push({ label: "Published page", href: `/books/${p.id}` });
-      if (studio && p.beta_ready) shownOn.push({ label: "Beta page", href: `/beta/book/${p.id}` });
-      if (studio && isArcWindowOpen(p)) shownOn.push({ label: "ARC page", href: `/arc/book/${p.id}` });
+      const betaOpen = studio && Boolean(p.beta_ready);
+      const arcOpen = studio && isArcWindowOpen(p);
+      if (handle && p.slug && (p.published || p.launch_public || betaOpen || arcOpen)) {
+        shownOn.push({ label: "Launch page", href: bookPath(handle, p.slug) });
+      }
+      if (betaOpen) shownOn.push({ label: "Beta page", href: `/beta/book/${p.id}` });
+      if (arcOpen) shownOn.push({ label: "ARC page", href: `/arc/book/${p.id}` });
       const aiUsedAt = [p.ai_used_at, firstJob.get(p.id)]
         .filter(Boolean)
         .sort()[0] as string | undefined;

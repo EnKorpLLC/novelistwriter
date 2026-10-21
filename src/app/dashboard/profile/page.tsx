@@ -9,10 +9,19 @@ import {
   type PublicLinks,
 } from "@/lib/public-profile";
 import { AiActionList, TrustBadges } from "@/components/TrustBadges";
+import { SITE_THEMES, type SiteThemeId } from "@/lib/site-themes";
 
 export default function PublicProfilePage() {
-  const [userId, setUserId] = useState<string | null>(null);
+  const [savedHandle, setSavedHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [handle, setHandle] = useState("");
+  const [bio, setBio] = useState("");
+  const [theme, setTheme] = useState<SiteThemeId>("paper");
+  const [featuredProjectId, setFeaturedProjectId] = useState("");
+  const [projects, setProjects] = useState<{ id: string; title: string }[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
   const [fields, setFields] = useState<Partial<Record<PublicLinkId, string>>>({});
   const [extra, setExtra] = useState<LabeledLink[]>([]);
   const [busy, setBusy] = useState(false);
@@ -29,8 +38,15 @@ export default function PublicProfilePage() {
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Could not load");
-        setUserId(data.userId);
         setDisplayName(data.displayName || "");
+        setHandle(data.handle || "");
+        setSavedHandle(data.handle || "");
+        setBio(data.bio || "");
+        setTheme(data.theme || "paper");
+        setFeaturedProjectId(data.featuredProjectId || "");
+        setProjects(data.projects || []);
+        setAvatarUrl(data.avatarUrl || null);
+        setBannerUrl(data.bannerUrl || null);
         apply(data.links || {});
       })
       .catch((err) => setNote(err instanceof Error ? err.message : "Could not load"));
@@ -44,18 +60,54 @@ export default function PublicProfilePage() {
       const res = await fetch("/api/profile/public", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, links: { ...fields, extra } }),
+        body: JSON.stringify({
+          displayName,
+          handle,
+          bio,
+          theme,
+          featuredProjectId: featuredProjectId || null,
+          links: { ...fields, extra },
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save");
       apply(data.links || {});
-      setNote("Saved. These links show on your book pages and author page.");
+      if (data.handle) setSavedHandle(data.handle);
+      setNote("Saved. Your author site and book pages are updated.");
     } catch (err) {
       setNote(err instanceof Error ? err.message : "Could not save");
     } finally {
       setBusy(false);
     }
   }
+
+  async function upload(kind: "avatar" | "banner", file: File | null) {
+    if (!file) return;
+    setUploading(kind);
+    setNote(null);
+    try {
+      const form = new FormData();
+      form.set("kind", kind);
+      form.set("file", file);
+      const res = await fetch("/api/profile/images", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      if (kind === "avatar") setAvatarUrl(data.url);
+      else setBannerUrl(data.url);
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function removeImage(kind: "avatar" | "banner") {
+    await fetch(`/api/profile/images?kind=${kind}`, { method: "DELETE" });
+    if (kind === "avatar") setAvatarUrl(null);
+    else setBannerUrl(null);
+  }
+
+  const sitePath = savedHandle ? `/a/${savedHandle}` : null;
 
   return (
     <div className="mx-auto max-w-lg px-6 py-10">
@@ -64,18 +116,23 @@ export default function PublicProfilePage() {
       </Link>
       <h1 className="font-display mt-6 text-3xl">Public profile</h1>
       <p className="font-ui mt-2 text-sm text-muted">
-        Your website and social links in one place. They appear on your beta and ARC book pages,
-        your published books, and your author page.
+        Your author site: photo, bio, links, and every book you&apos;ve made public. The same links
+        appear on your beta, ARC, and launch pages.
       </p>
-      {userId && (
-        <a
-          href={`/authors/${userId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-ui mt-4 inline-block border border-accent px-4 py-2 text-sm text-accent hover:bg-accent hover:text-paper"
-        >
-          See what visitors see →
-        </a>
+      {sitePath && (
+        <div className="font-ui mt-4 flex flex-wrap gap-3">
+          <a
+            href={`${sitePath}?preview=visitor`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block border border-accent px-4 py-2 text-sm text-accent hover:bg-accent hover:text-paper"
+          >
+            See what visitors see →
+          </a>
+          <a href={sitePath} target="_blank" rel="noopener noreferrer" className="self-center text-sm text-accent underline">
+            Open my site and share tools
+          </a>
+        </div>
       )}
 
       <form onSubmit={(e) => void save(e)} className="font-ui mt-8 space-y-4">
@@ -86,6 +143,104 @@ export default function PublicProfilePage() {
             onChange={(e) => setDisplayName(e.target.value)}
             className="mt-1 w-full border border-line bg-paper px-3 py-2"
           />
+        </label>
+        <label className="block text-sm">
+          Handle
+          <span className="mt-1 flex items-center border border-line bg-paper">
+            <span className="px-2 text-xs text-muted">novelistwriter.com/a/</span>
+            <input
+              value={handle}
+              onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+              className="min-w-0 flex-1 bg-transparent px-1 py-2"
+            />
+          </span>
+          {savedHandle && handle !== savedHandle && (
+            <span className="mt-1 block text-xs text-muted">
+              Changing it breaks links you&apos;ve already shared with the old handle.
+            </span>
+          )}
+        </label>
+        <label className="block text-sm">
+          Bio
+          <textarea
+            rows={5}
+            maxLength={2000}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="A few lines about you and what you write"
+            className="mt-1 w-full border border-line bg-paper px-3 py-2"
+          />
+        </label>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(
+            [
+              ["avatar", "Author photo", avatarUrl],
+              ["banner", "Banner image", bannerUrl],
+            ] as const
+          ).map(([kind, label, url]) => (
+            <div key={kind} className="text-sm">
+              <p>{label}</p>
+              {url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={url}
+                  alt=""
+                  className={`mt-1 border border-line object-cover ${kind === "avatar" ? "h-20 w-20 rounded-full" : "h-20 w-full"}`}
+                />
+              )}
+              <div className="mt-1 flex items-center gap-3 text-xs">
+                <label className="cursor-pointer text-accent underline">
+                  {uploading === kind ? "Uploading…" : url ? "Replace" : "Upload"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => void upload(kind, e.target.files?.[0] || null)}
+                  />
+                </label>
+                {url && (
+                  <button type="button" className="text-danger hover:underline" onClick={() => void removeImage(kind)}>
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <fieldset className="text-sm">
+          <legend>Site theme</legend>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {(Object.keys(SITE_THEMES) as SiteThemeId[]).map((id) => (
+              <label
+                key={id}
+                className={`flex cursor-pointer items-center gap-2 border px-3 py-1.5 ${theme === id ? "border-accent" : "border-line"}`}
+              >
+                <input type="radio" name="theme" checked={theme === id} onChange={() => setTheme(id)} />
+                {SITE_THEMES[id].label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <label className="block text-sm">
+          Featured book
+          <select
+            value={featuredProjectId}
+            onChange={(e) => setFeaturedProjectId(e.target.value)}
+            className="mt-1 block w-full border border-line bg-paper px-3 py-2"
+          >
+            <option value="">None</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-muted">
+            Shown at the top of your site once its launch page is public (Launch tab).
+          </span>
         </label>
         {PUBLIC_LINK_FIELDS.map((f) => (
           <label key={f.id} className="block text-sm">
@@ -278,7 +433,7 @@ function BadgeOverview() {
                         ))}
                       </>
                     ) : (
-                      "Not public yet. Badges appear once the book is published or open for beta or ARC readers."
+                      "Not public yet. Badges appear once its launch page is public (Launch tab), or while beta or ARC reading is open."
                     )}
                   </p>
                 </li>

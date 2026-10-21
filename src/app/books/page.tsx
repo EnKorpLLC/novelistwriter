@@ -51,7 +51,7 @@ export default async function PublishedBooksPage({
           <ul className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4">
             {shown.map((b) => (
               <li key={b.id}>
-                <Link href={`/books/${b.id}`} className="group block">
+                <Link href={b.href} className="group block">
                   <div className="aspect-[2/3] overflow-hidden border border-line bg-paper-deep">
                     {b.coverUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element

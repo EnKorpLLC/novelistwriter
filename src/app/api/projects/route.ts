@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { canCreateProject } from "@/lib/credits";
 import { DEFAULT_MATTER } from "@/lib/matter";
+import { createServiceClient } from "@/lib/supabase/admin";
+import { ensureSlug } from "@/lib/public-site";
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -48,6 +50,7 @@ export async function POST(req: Request) {
     user_id: user.id,
   }));
   await supabase.from("matter_blocks").insert(matterRows);
+  await ensureSlug(createServiceClient(), project);
 
   return NextResponse.json({ id: project.id });
 }
