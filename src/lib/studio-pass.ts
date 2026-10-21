@@ -81,6 +81,50 @@ export async function grantPassDays(
   return credited;
 }
 
+/** Most an admin can gift in one go; gifts skip the 28-day earning cap. */
+export const MAX_GIFT_DAYS = 90;
+
+/**
+ * Admin gift of Studio days (never AI credits). Lands in the bank, or starts right away.
+ * One ledger key per gift batch and person, so a retried batch never pays twice.
+ */
+export async function giftPassDays(
+  admin: SupabaseClient,
+  opts: { userId: string; days: number; batchId: string; startNow: boolean; note?: string | null }
+): Promise<boolean> {
+  const days = Math.max(1, Math.min(MAX_GIFT_DAYS, Math.round(opts.days)));
+  const { error } = await admin.from("studio_pass_ledger").insert({
+    user_id: opts.userId,
+    days,
+    credited_days: days,
+    reason: "admin_gift",
+    ref_key: `gift:${opts.batchId}:${opts.userId}`,
+    meta: opts.note ? { note: opts.note } : {},
+  });
+  if (error) return false;
+
+  const state = await getPassState(admin, opts.userId);
+  await admin
+    .from("credit_balances")
+    .update({ pass_bank_days: state.bankDays + days, updated_at: new Date().toISOString() })
+    .eq("user_id", opts.userId);
+  // Paid Studio subscribers already have Studio; their gift waits in the bank
+  if (opts.startNow && !state.paidStudio) await startPass(admin, opts.userId);
+
+  await createNotification(admin, {
+    userId: opts.userId,
+    type: "studio_pass",
+    title: `You've been gifted ${days} Studio day${days === 1 ? "" : "s"}`,
+    body:
+      opts.note ||
+      (opts.startNow && !state.paidStudio
+        ? "Your Studio pass is running now: beta desk, ARC desk, and audience lists."
+        : "They're in your bank. Start them whenever your next book is ready."),
+    href: "/dashboard/share",
+  });
+  return true;
+}
+
 /** Turn every banked day into a running pass, added after any time already running. */
 export async function startPass(admin: SupabaseClient, userId: string): Promise<PassState> {
   const state = await getPassState(admin, userId);

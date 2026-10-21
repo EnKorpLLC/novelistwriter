@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "@/components/SignOutButton";
 import { AdminModeration } from "./AdminModeration";
+import { GiftForm } from "./GiftForm";
 
 type Message = {
   id: string;
@@ -24,6 +25,8 @@ type AdminUser = {
   isBetaReader: boolean;
   isPlatformAdmin: boolean;
   tier: string;
+  passBankDays: number;
+  passActiveUntil: string | null;
   createdAt: string;
   lastSignInAt: string | null;
 };
@@ -32,6 +35,7 @@ const TABS = [
   { id: "messages", label: "Messages" },
   { id: "users", label: "Users" },
   { id: "moderation", label: "Moderation" },
+  { id: "gifts", label: "Studio days" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -53,6 +57,7 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [userBusy, setUserBusy] = useState<string | null>(null);
   const [tempShown, setTempShown] = useState<{ email: string; password: string } | null>(null);
+  const [giftUserId, setGiftUserId] = useState<string | null>(null);
 
   const loadMessages = useCallback(async () => {
     const res = await fetch(`/api/admin/messages?status=${filter}`);
@@ -311,6 +316,10 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                           .join(" · ")}{" "}
                         · {u.tier} · joined {when(u.createdAt)} · last sign-in {when(u.lastSignInAt)}
                       </p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        Studio days: {u.passBankDays} banked
+                        {u.passActiveUntil ? ` · pass running until ${when(u.passActiveUntil)}` : ""}
+                      </p>
                     </div>
                     <div className="flex flex-wrap gap-3 text-xs">
                       <button
@@ -330,8 +339,27 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                       >
                         {userBusy === `${u.id}:temp_password` ? "Setting…" : "Set temporary password"}
                       </button>
+                      <button
+                        type="button"
+                        className="text-accent hover:underline"
+                        onClick={() => setGiftUserId(giftUserId === u.id ? null : u.id)}
+                      >
+                        {giftUserId === u.id ? "Close gift" : "Gift Studio days"}
+                      </button>
                     </div>
                   </div>
+                  {giftUserId === u.id && (
+                    <div className="mt-3 border-t border-line pt-3">
+                      <GiftForm
+                        target={{ userId: u.id, label: u.email || "this user" }}
+                        onDone={(msg) => {
+                          setNote(msg);
+                          setGiftUserId(null);
+                          void searchUsers();
+                        }}
+                      />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -339,6 +367,26 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
         )}
 
         {tab === "moderation" && <AdminModeration onNote={setNote} />}
+
+        {tab === "gifts" && (
+          <section className="mt-6 max-w-xl space-y-4">
+            <div>
+              <h2 className="font-display text-xl">Gift Studio days to every author</h2>
+              <p className="mt-1 text-sm text-muted">
+                Days unlock Studio&apos;s beta desk, ARC desk, audience lists, and unlimited projects.
+                Gifts never include AI credits, and they can go past the 28-day earning cap (up to 90
+                at a time). Everyone gets an in-app notice; bulk gifts don&apos;t email, so you stay
+                under Gmail&apos;s daily sending limit.
+              </p>
+              <p className="mt-2 text-xs text-muted">
+                To gift one person, search them on the Users tab and use Gift Studio days.
+              </p>
+            </div>
+            <div className="border border-line p-4">
+              <GiftForm target="all" onDone={setNote} />
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

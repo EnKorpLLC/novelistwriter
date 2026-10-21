@@ -23,6 +23,7 @@ const REASON_LABEL: Record<string, string> = {
   reader_accepted_elsewhere: "A reader you brought joined another author's book",
   pass_started: "Started your Studio pass",
   returned_on_subscribe: "Unused pass days returned when you subscribed",
+  admin_gift: "Gift from Novelist Writer",
 };
 
 const RULES = [

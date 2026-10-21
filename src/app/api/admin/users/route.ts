@@ -31,9 +31,18 @@ export async function GET(req: Request) {
 
   const ids = (profiles || []).map((p) => p.id);
   const { data: tiers } = ids.length
-    ? await auth.admin.from("credit_balances").select("user_id, subscription_tier").in("user_id", ids)
-    : { data: [] as { user_id: string; subscription_tier: string }[] };
+    ? await auth.admin.from("credit_balances").select("*").in("user_id", ids)
+    : { data: [] as { user_id: string; subscription_tier: string; pass_bank_days?: number; pass_active_until?: string | null }[] };
   const tierById = new Map((tiers || []).map((t) => [t.user_id, t.subscription_tier]));
+  const passById = new Map(
+    (tiers || []).map((t) => [
+      t.user_id,
+      {
+        bankDays: Number(t.pass_bank_days) || 0,
+        activeUntil: t.pass_active_until && Date.parse(t.pass_active_until) > Date.now() ? t.pass_active_until : null,
+      },
+    ])
+  );
 
   const users = await Promise.all(
     (profiles || []).map(async (p) => {
@@ -46,6 +55,8 @@ export async function GET(req: Request) {
         isBetaReader: Boolean(p.is_beta_reader),
         isPlatformAdmin: Boolean(p.is_platform_admin),
         tier: tierById.get(p.id) || "free",
+        passBankDays: passById.get(p.id)?.bankDays || 0,
+        passActiveUntil: passById.get(p.id)?.activeUntil || null,
         createdAt: p.created_at,
         lastSignInAt: data?.user?.last_sign_in_at || null,
       };
