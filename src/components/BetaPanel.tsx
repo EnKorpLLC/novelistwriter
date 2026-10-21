@@ -11,6 +11,7 @@ import {
 } from "@/lib/beta-access";
 import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/beta-platform";
 import { ShareKit } from "@/components/ShareKit";
+import { ReaderInsights } from "@/components/ReaderInsights";
 
 type ChapterProgress = {
   chapterId: string;
@@ -1108,6 +1109,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
 
           {studioAccess && (
           <>
+          {!loading && <ReaderInsights projectId={projectId} phase="beta" />}
+
           <section className="font-ui border border-line p-4">
             <button
               type="button"

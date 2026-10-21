@@ -11,6 +11,7 @@ import { isSubscribed, joinAuthorAudience } from "@/lib/audience";
 import { trustBadgesForBook } from "@/lib/trust-badges";
 import { inReaderGrace, pauseForLostStudio } from "@/lib/studio-access";
 import { recordReadingDay, rewardReaderJoin } from "@/lib/pass-rewards";
+import { recordBookDay } from "@/lib/reader-insights";
 import {
   isArcDeadlinePassed,
   isArcWindowOpen,
@@ -206,6 +207,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
     action?: "request" | "progress" | "finish" | "markPosted" | "saveAddress";
     displayName?: string;
     chapterId?: string;
+    percent?: number;
     review?: string;
     site?: string;
     posted?: boolean;
@@ -296,10 +298,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
   // progress
   if (!readable) return NextResponse.json({ error: "The ARC window has ended." }, { status: 403 });
   if (!body.chapterId) return NextResponse.json({ error: "chapterId required" }, { status: 400 });
+  const { data: chapter } = await admin
+    .from("chapters")
+    .select("id")
+    .eq("id", body.chapterId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!chapter) return NextResponse.json({ error: "Unknown chapter" }, { status: 400 });
   await admin
     .from("arc_invites")
     .update({ current_chapter_id: body.chapterId, last_read_at: new Date().toISOString() })
     .eq("id", invite.id);
+  const sent = Math.max(0, Math.min(100, Math.round(Number(body.percent) || 0)));
+  const { data: existing, error: progressError } = await admin
+    .from("arc_reading_progress")
+    .select("percent")
+    .eq("invite_id", invite.id)
+    .eq("chapter_id", body.chapterId)
+    .maybeSingle();
+  // Skipped quietly until migration_reader_insights.sql has run
+  if (!progressError) {
+    await admin.from("arc_reading_progress").upsert(
+      {
+        invite_id: invite.id,
+        project_id: projectId,
+        chapter_id: body.chapterId,
+        percent: Math.max(sent, Number(existing?.percent) || 0),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "invite_id,chapter_id" }
+    );
+  }
   await recordReadingDay(admin, user.id);
+  await recordBookDay(admin, { phase: "arc", inviteId: invite.id, projectId });
   return NextResponse.json({ ok: true });
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { LabeledLink } from "@/lib/public-profile";
 import { formatMailingAddress, reviewSiteKey, type MailingAddress } from "@/lib/arc";
 import { ShareKit } from "@/components/ShareKit";
+import { ReaderInsights } from "@/components/ReaderInsights";
 
 type ArcInvite = {
   id: string;
@@ -182,6 +183,8 @@ export function ArcPanel({ projectId }: { projectId: string }) {
           </div>
 
           {note && <p className="text-sm text-ink">{note}</p>}
+
+          <ReaderInsights projectId={projectId} phase="arc" />
 
           <section className="border border-line p-4">
             <h3 className="font-display text-lg">

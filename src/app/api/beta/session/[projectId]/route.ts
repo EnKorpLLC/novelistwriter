@@ -10,6 +10,7 @@ import {
 import { linkInvitesForEmail } from "@/lib/beta-platform";
 import { joinAuthorAudience } from "@/lib/audience";
 import { recordReadingDay, rewardReaderJoin } from "@/lib/pass-rewards";
+import { recordBookDay } from "@/lib/reader-insights";
 import {
   enforceBetaAccessGates,
   findReaderInvite,
@@ -249,7 +250,15 @@ export async function POST(
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const percent = Math.max(0, Math.min(100, Math.round(Number(body.percent) || 0)));
+  const sent = Math.max(0, Math.min(100, Math.round(Number(body.percent) || 0)));
+  const { data: existing } = await admin
+    .from("beta_reading_progress")
+    .select("percent")
+    .eq("invite_id", invite!.id)
+    .eq("chapter_id", body.chapterId)
+    .maybeSingle();
+  // Rereading the top of a chapter shouldn't lower how far they got
+  const percent = Math.max(sent, Number(existing?.percent) || 0);
   const { error } = await admin.from("beta_reading_progress").upsert(
     {
       invite_id: invite!.id,
@@ -270,6 +279,7 @@ export async function POST(
   if (invite!.status === "pending") inviteUpdate.status = "accepted";
   await admin.from("beta_invites").update(inviteUpdate).eq("id", invite!.id);
   await recordReadingDay(admin, user.id);
+  await recordBookDay(admin, { phase: "beta", inviteId: invite!.id, projectId });
 
   return NextResponse.json({ ok: true, percent });
 }

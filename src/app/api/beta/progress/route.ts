@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { enforceBetaAccessGates } from "@/lib/beta-server";
+import { recordBookDay } from "@/lib/reader-insights";
 
 async function loadInvite(token: string, projectId: string) {
   const admin = createServiceClient();
@@ -110,6 +111,7 @@ export async function POST(req: Request) {
   }
 
   await admin.from("beta_invites").update(inviteUpdate).eq("id", invite.id);
+  await recordBookDay(admin, { phase: "beta", inviteId: invite.id, projectId: body.projectId });
 
   return NextResponse.json({ ok: true, percent });
 }

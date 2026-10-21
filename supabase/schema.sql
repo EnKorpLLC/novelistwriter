@@ -408,6 +408,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- projects.reader_grace_until and projects.locked_at
 -- See migration_writing_record.sql for: projects.record_public
 -- See migration_site_metrics.sql for: site_page_views, profiles.signup_source
+-- See migration_reader_insights.sql for: reader_book_days, arc_reading_progress
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
 -- Optional private bucket `manuscripts` for raw uploads if needed later

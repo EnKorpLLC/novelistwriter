@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthorConnect, AuthorLinks } from "@/components/AuthorConnect";
 import type { LabeledLink } from "@/lib/public-profile";
 import type { MailingAddress } from "@/lib/arc";
@@ -75,6 +75,8 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
   const [savedAddress, setSavedAddress] = useState<MailingAddress | null>(null);
   const [addressOpen, setAddressOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const articleRef = useRef<HTMLElement | null>(null);
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,8 +123,43 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
   function goToChapter(id: string) {
     setActive(id);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    void post({ action: "progress", chapterId: id }).catch(() => null);
   }
+
+  const reading = data?.access === "active";
+  useEffect(() => {
+    if (!reading || !active) return;
+    let lastSent = -1;
+    const send = (pct: number) => {
+      if (pct <= lastSent || (pct - lastSent < 3 && pct < 100)) return;
+      lastSent = pct;
+      void fetch(`/api/arc/session/${projectId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "progress", chapterId: active, percent: pct }),
+      }).catch(() => null);
+    };
+    send(1);
+
+    function measure() {
+      const el = articleRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const total = Math.max(1, rect.height);
+      const seen = Math.min(total, Math.max(0, (window.innerHeight || 1) - rect.top));
+      const pct = Math.round((seen / total) * 100);
+      if (progressTimer.current) clearTimeout(progressTimer.current);
+      progressTimer.current = setTimeout(() => send(pct), 400);
+    }
+
+    measure();
+    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+      if (progressTimer.current) clearTimeout(progressTimer.current);
+    };
+  }, [reading, active, projectId]);
 
   async function requestCopy(e: React.FormEvent) {
     e.preventDefault();
@@ -475,6 +512,7 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
           )}
           <h2 className="font-display mt-6 text-2xl">{chapter?.title || "Chapter"}</h2>
           <article
+            ref={articleRef}
             className="manuscript-prose mt-4 max-w-none"
             dangerouslySetInnerHTML={{ __html: chapter?.content_html || "<p>Empty</p>" }}
           />
