@@ -10,8 +10,11 @@ export function PublicHeader() {
         <Link href="/books" className="text-muted hover:text-ink">
           Published books
         </Link>
-        <Link href="/beta/dashboard" className="text-muted hover:text-ink">
-          Readers
+        <Link href="/authors" className="text-muted hover:text-ink">
+          For authors
+        </Link>
+        <Link href="/readers" className="text-muted hover:text-ink">
+          For readers
         </Link>
         <Link href="/login" className="text-muted hover:text-ink">
           Log in

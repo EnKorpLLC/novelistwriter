@@ -407,6 +407,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- See migration_rewards.sql for: Studio pass bank and ledger, reader_activity_days,
 -- projects.reader_grace_until and projects.locked_at
 -- See migration_writing_record.sql for: projects.record_public
+-- See migration_site_metrics.sql for: site_page_views, profiles.signup_source
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
 -- Optional private bucket `manuscripts` for raw uploads if needed later

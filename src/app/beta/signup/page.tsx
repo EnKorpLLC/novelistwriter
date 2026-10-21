@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { rememberSide } from "@/lib/beta-platform";
 import { ensureAccountForEmail, getSessionEmail } from "@/lib/beta-auth-switch";
 import { EmailConsentCheckbox } from "@/components/EmailOptInPrompt";
+import { readFirstTouch } from "@/lib/first-touch";
 
 export default function BetaSignupPage() {
   const [email, setEmail] = useState("");
@@ -69,6 +70,7 @@ export default function BetaSignupPage() {
           displayName: name,
           role: "beta_reader",
           emailNotifications,
+          source: readFirstTouch(),
         }),
       });
       const createData = await createRes.json();

@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     displayName?: string;
     role?: "author" | "beta_reader";
     emailNotifications?: boolean;
+    source?: Record<string, unknown>;
   };
 
   const email = String(body.email || "")
@@ -51,6 +52,25 @@ export async function POST(req: Request) {
   }
 
   // The profile row is created by the auth trigger, so it exists by now
+  if (data.user?.id && body.source && typeof body.source === "object") {
+    const pick = (k: string, max = 120) => {
+      const v = String((body.source as Record<string, unknown>)[k] || "").trim().slice(0, max);
+      return v || null;
+    };
+    await admin
+      .from("profiles")
+      .update({
+        signup_source: {
+          utm_source: pick("utm_source"),
+          utm_medium: pick("utm_medium"),
+          utm_campaign: pick("utm_campaign"),
+          referrer_host: pick("referrer_host"),
+          landing_path: pick("landing_path"),
+        },
+      })
+      .eq("id", data.user.id);
+  }
+
   if (body.emailNotifications && data.user?.id) {
     const now = new Date().toISOString();
     const { error: consentErr } = await admin

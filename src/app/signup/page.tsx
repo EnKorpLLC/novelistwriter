@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { EmailConsentCheckbox } from "@/components/EmailOptInPrompt";
+import { readFirstTouch } from "@/lib/first-touch";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -48,6 +49,7 @@ export default function SignupPage() {
           displayName: name,
           role: "author",
           emailNotifications,
+          source: readFirstTouch(),
         }),
       });
       const createData = await createRes.json();

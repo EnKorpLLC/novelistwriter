@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "@/components/SignOutButton";
 import { AdminModeration } from "./AdminModeration";
 import { GiftForm } from "./GiftForm";
+import { AdminMetrics } from "./AdminMetrics";
 
 type Message = {
   id: string;
@@ -32,6 +33,7 @@ type AdminUser = {
 };
 
 const TABS = [
+  { id: "metrics", label: "Metrics" },
   { id: "messages", label: "Messages" },
   { id: "users", label: "Users" },
   { id: "moderation", label: "Moderation" },
@@ -45,7 +47,7 @@ function when(iso: string | null | undefined) {
 }
 
 export default function AdminClient({ emailReady }: { emailReady: boolean }) {
-  const [tab, setTab] = useState<TabId>("messages");
+  const [tab, setTab] = useState<TabId>("metrics");
   const [note, setNote] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<"open" | "archived">("open");
@@ -365,6 +367,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
             </ul>
           </section>
         )}
+
+        {tab === "metrics" && <AdminMetrics onNote={setNote} />}
 
         {tab === "moderation" && <AdminModeration onNote={setNote} />}
 

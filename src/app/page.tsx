@@ -52,14 +52,17 @@ export default function HomePage() {
           <Link href="/books" className="text-muted hover:text-ink">
             Published books
           </Link>
+          <Link href="/authors" className="text-muted hover:text-ink">
+            For authors
+          </Link>
+          <Link href="/readers" className="text-muted hover:text-ink">
+            For readers
+          </Link>
           <Link href="/pricing" className="text-muted hover:text-ink">
             Pricing
           </Link>
           <Link href="/login" className="text-muted hover:text-ink">
             Log in
-          </Link>
-          <Link href="/beta/signup" className="text-muted hover:text-ink">
-            Readers
           </Link>
           <Link
             href="/signup"
@@ -268,6 +271,12 @@ export default function HomePage() {
           <nav className="flex flex-wrap gap-4">
             <Link href="/books" className="hover:text-ink">
               Published books
+            </Link>
+            <Link href="/authors" className="hover:text-ink">
+              For authors
+            </Link>
+            <Link href="/readers" className="hover:text-ink">
+              For readers
             </Link>
             <Link href="/pricing" className="hover:text-ink">
               Pricing

@@ -57,9 +57,13 @@ export default function PricingPage() {
           need them.
         </p>
         <p className="font-ui mt-4 max-w-2xl text-sm text-muted">
-          Curious how beta and ARC reading work? See the{" "}
-          <Link href="/#beta" className="text-accent underline-offset-2 hover:underline">
-            Studio tour on the homepage
+          Want the full picture? See{" "}
+          <Link href="/authors" className="text-accent underline-offset-2 hover:underline">
+            what authors get on each plan
+          </Link>{" "}
+          and{" "}
+          <Link href="/readers" className="text-accent underline-offset-2 hover:underline">
+            what readers get (free)
           </Link>
           .
         </p>
