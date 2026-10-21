@@ -8,6 +8,7 @@ import {
   type PublicLinkId,
   type PublicLinks,
 } from "@/lib/public-profile";
+import { TrustBadges } from "@/components/TrustBadges";
 
 export default function PublicProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -65,15 +66,17 @@ export default function PublicProfilePage() {
       <p className="font-ui mt-2 text-sm text-muted">
         Your website and social links in one place. They appear on your beta and ARC book pages,
         your published books, and your author page.
-        {userId && (
-          <>
-            {" "}
-            <Link href={`/authors/${userId}`} className="text-accent underline">
-              View author page
-            </Link>
-          </>
-        )}
       </p>
+      {userId && (
+        <a
+          href={`/authors/${userId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-ui mt-4 inline-block border border-accent px-4 py-2 text-sm text-accent hover:bg-accent hover:text-paper"
+        >
+          See what visitors see →
+        </a>
+      )}
 
       <form onSubmit={(e) => void save(e)} className="font-ui mt-8 space-y-4">
         <label className="block text-sm">
@@ -141,6 +144,100 @@ export default function PublicProfilePage() {
         </button>
         {note && <p className="text-sm text-muted">{note}</p>}
       </form>
+
+      <BadgeOverview />
     </div>
+  );
+}
+
+type BadgeBook = {
+  projectId: string;
+  title: string;
+  noAiOnBook: boolean;
+  aiUsedAt: string | null;
+  shownOn: { label: string; href: string }[];
+};
+
+function BadgeOverview() {
+  const [data, setData] = useState<{ aiOffSince: string | null; books: BadgeBook[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/profile/badges")
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) throw new Error(json.error || "Could not load badges");
+        setData(json);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load badges"));
+  }, []);
+
+  return (
+    <section className="font-ui mt-12">
+      <h2 className="font-display text-2xl">Your badges</h2>
+      <p className="mt-1 text-sm text-muted">
+        What visitors see next to your name and on each book.
+      </p>
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      {!data && !error && <p className="mt-3 text-sm text-muted">Loading…</p>}
+      {data && (
+        <>
+          <div className="mt-4 border border-line px-4 py-3 text-sm">
+            <p className="text-[10px] uppercase tracking-wide text-muted">On your author page</p>
+            {data.aiOffSince ? (
+              <div className="mt-2">
+                <TrustBadges aiOffSince={data.aiOffSince} />
+              </div>
+            ) : (
+              <p className="mt-1 text-muted">
+                No account badge. Turn off all AI tools in{" "}
+                <Link href="/settings" className="text-accent underline">
+                  Settings
+                </Link>{" "}
+                to show &ldquo;AI tools off.&rdquo;
+              </p>
+            )}
+          </div>
+          {data.books.length === 0 ? (
+            <p className="mt-4 text-sm text-muted">No books yet.</p>
+          ) : (
+            <ul className="mt-4 space-y-2">
+              {data.books.map((b) => (
+                <li key={b.projectId} className="border border-line px-4 py-3 text-sm">
+                  <p className="text-ink">{b.title}</p>
+                  <div className="mt-2">
+                    {b.noAiOnBook ? (
+                      <TrustBadges noAiOnBook />
+                    ) : (
+                      <p className="text-xs text-muted">
+                        No &ldquo;No AI used&rdquo; badge: AI was run on this book
+                        {b.aiUsedAt ? ` (first on ${new Date(b.aiUsedAt).toLocaleDateString()})` : ""}.
+                      </p>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs text-muted">
+                    {b.shownOn.length ? (
+                      <>
+                        Visible on:{" "}
+                        {b.shownOn.map((s, i) => (
+                          <span key={s.href}>
+                            {i > 0 ? ", " : ""}
+                            <a href={s.href} target="_blank" rel="noopener noreferrer" className="text-accent underline">
+                              {s.label}
+                            </a>
+                          </span>
+                        ))}
+                      </>
+                    ) : (
+                      "Not public yet. Badges appear once the book is published or open for beta or ARC readers."
+                    )}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
   );
 }
