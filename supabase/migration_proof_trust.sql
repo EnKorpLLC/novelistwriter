@@ -7,6 +7,9 @@ create table if not exists public.app_migrations (
   ran_at timestamptz not null default now()
 );
 
+-- Internal bookkeeping only: no policies, so app users can't read or write it
+alter table public.app_migrations enable row level security;
+
 -- Writing sessions captured by the editor (typed vs pasted vs deleted characters)
 create table if not exists public.writing_sessions (
   id uuid primary key default gen_random_uuid(),
