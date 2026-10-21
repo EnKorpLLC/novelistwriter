@@ -10,6 +10,7 @@ import {
 } from "@/lib/public-profile";
 import { AiActionList, TrustBadges } from "@/components/TrustBadges";
 import { SITE_THEMES, type SiteThemeId } from "@/lib/site-themes";
+import { RecordBadge } from "@/components/WritingRecordView";
 
 export default function PublicProfilePage() {
   const [savedHandle, setSavedHandle] = useState("");
@@ -312,6 +313,9 @@ type BadgeBook = {
   aiUsedAt: string | null;
   aiActions: { label: string; count: number }[];
   aiDisclosurePublic: boolean;
+  recordBadge: "written_here" | "before_records" | null;
+  recordNeeded: string[];
+  recordPublic: boolean;
   shownOn: { label: string; href: string }[];
 };
 
@@ -391,6 +395,20 @@ function BadgeOverview() {
               {data.books.map((b) => (
                 <li key={b.projectId} className="border border-line px-4 py-3 text-sm">
                   <p className="text-ink">{b.title}</p>
+                  <div className="mt-2">
+                    {b.recordBadge ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <RecordBadge badge={b.recordBadge} />
+                        <span className="text-xs text-muted">
+                          {b.recordPublic ? "Shown on the launch page" : "Hidden until you publish the record (Launch tab)"}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted">
+                        &ldquo;Written in Novelist Writer&rdquo; still needs: {b.recordNeeded.join("; ")}.
+                      </p>
+                    )}
+                  </div>
                   <div className="mt-2">
                     {b.noAiOnBook ? (
                       <TrustBadges noAiOnBook />

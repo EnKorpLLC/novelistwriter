@@ -15,6 +15,8 @@ import { GuestListSignup } from "@/components/GuestListSignup";
 import { OwnerBar, PreviewBar } from "@/components/OwnerBar";
 import { VisitorShareButton } from "@/components/ShareKit";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
+import { RecordBadge } from "@/components/WritingRecordView";
+import { computeWritingRecord } from "@/lib/writing-record";
 
 export const dynamic = "force-dynamic";
 
@@ -61,11 +63,14 @@ export default async function LaunchPage({
   } = await supabase.auth.getUser();
   const isOwner = user?.id === author.userId;
   const previewing = isOwner && preview === "visitor";
-  const [trust, studio] = await Promise.all([
+  const [trust, studio, { data: recordFlag }] = await Promise.all([
     trustBadgesForBook(admin, author.userId, book.id),
     userHasStudio(author.userId),
+    admin.from("projects").select("record_public").eq("id", book.id).maybeSingle(),
   ]);
   const path = bookPath(author.handle, book.slug);
+  const recordPublic = Boolean(recordFlag?.record_public);
+  const record = recordPublic ? await computeWritingRecord(admin, book.id) : null;
 
   const stageLine =
     book.stage === "published"
@@ -140,6 +145,14 @@ export default async function LaunchPage({
               </Link>{" "}
               · {book.genre}
             </p>
+            {record && (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <RecordBadge badge={record.badge} href={`${path}/record`} />
+                <Link href={`${path}/record`} className="font-ui text-xs text-accent underline">
+                  See how it was written
+                </Link>
+              </div>
+            )}
             <TrustBadges {...trust} className="mt-3" />
 
             {book.tropes.length > 0 && (

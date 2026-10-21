@@ -7,6 +7,7 @@ import { isArcWindowOpen } from "@/lib/arc";
 import { userHasStudio } from "@/lib/credits";
 import { ensureHandle } from "@/lib/public-site";
 import { bookPath } from "@/lib/handles";
+import { computeWritingRecord } from "@/lib/writing-record";
 
 /** The author's own badge overview: account badge plus each book's badge and where it's public. */
 export async function GET() {
@@ -52,11 +53,18 @@ export async function GET() {
   ]);
   const firstJob = new Map<string, string>();
   for (const j of jobs || []) if (!firstJob.has(j.project_id)) firstJob.set(j.project_id, j.created_at);
+  const [records, { data: recordFlags }] = await Promise.all([
+    Promise.all(list.map((p) => computeWritingRecord(admin, p.id))),
+    ids.length
+      ? admin.from("projects").select("id, record_public").in("id", ids)
+      : Promise.resolve({ data: [] as { id: string; record_public: boolean }[] }),
+  ]);
+  const recordPublic = new Map((recordFlags || []).map((r) => [r.id, Boolean(r.record_public)]));
 
   return NextResponse.json({
     userId: user.id,
     aiOffSince,
-    books: list.map((p) => {
+    books: list.map((p, index) => {
       const shownOn: { label: string; href: string }[] = [];
       const betaOpen = studio && Boolean(p.beta_ready);
       const arcOpen = studio && isArcWindowOpen(p);
@@ -75,6 +83,9 @@ export async function GET() {
         aiUsedAt: aiUsedAt || null,
         aiActions: actions.get(p.id) || [],
         aiDisclosurePublic: Boolean(disclosureById.get(p.id)?.ai_disclosure_public),
+        recordBadge: records[index].badge,
+        recordNeeded: records[index].needed,
+        recordPublic: recordPublic.get(p.id) || false,
         shownOn,
       };
     }),

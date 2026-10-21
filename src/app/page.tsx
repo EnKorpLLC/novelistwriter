@@ -117,8 +117,9 @@ export default function HomePage() {
           <h2 className="font-display mt-2 text-3xl text-ink">Your writing history is your proof</h2>
           <p className="mt-3 max-w-2xl text-muted">
             Readers are asking whether a person really wrote the book. Novelist Writer keeps a record
-            of how yours came together, session by session, from the day you start writing here. Soon
-            you&apos;ll be able to publish that record right next to your book.
+            of how yours came together, session by session, from the day you start writing here, and
+            you can publish it right next to your book with a &ldquo;Written in Novelist Writer&rdquo;
+            badge.
           </p>
           <ul className="mt-10 grid gap-8 md:grid-cols-2">
             {PROOF_POINTS.map((item, i) => (

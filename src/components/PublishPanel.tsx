@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MAX_TROPES, type BuyLink } from "@/lib/arc";
 import { ShareKit } from "@/components/ShareKit";
+import { RecordBadge, WritingRecordView, type WritingRecordData } from "@/components/WritingRecordView";
 
 type LaunchState = {
   title: string;
@@ -24,6 +25,76 @@ type LaunchState = {
 };
 
 const SUGGESTED_STORES = ["Amazon", "Kindle", "Barnes & Noble", "Apple Books", "Kobo", "Bookshop.org"];
+
+function WritingRecordSection({ projectId, launchPath }: { projectId: string; launchPath: string | null }) {
+  const [record, setRecord] = useState<WritingRecordData | null>(null);
+  const [isPublic, setIsPublic] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetch(`/api/projects/${projectId}/record`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setRecord(d.record);
+        setIsPublic(Boolean(d.recordPublic));
+      });
+  }, [projectId]);
+
+  async function toggle(next: boolean) {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/record`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not save");
+      setIsPublic(next);
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!record) return null;
+  return (
+    <section className="border border-line p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="font-display text-lg">Writing record</h3>
+        <RecordBadge badge={record.badge} />
+      </div>
+      <p className="mt-1 text-sm text-muted">
+        Proof of how this book was written in Novelist Writer. Numbers only; your text is never shown.
+      </p>
+      <label className="mt-3 flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={isPublic}
+          disabled={busy}
+          onChange={(e) => void toggle(e.target.checked)}
+        />
+        <span>
+          Show the writing record on the launch page
+          {launchPath && isPublic && (
+            <a href={`${launchPath}/record`} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs text-accent underline">
+              View it
+            </a>
+          )}
+        </span>
+      </label>
+      {note && <p className="mt-2 text-sm text-danger">{note}</p>}
+      <div className="mt-4">
+        <WritingRecordView record={record} showNeeded />
+      </div>
+    </section>
+  );
+}
 
 /** The Launch tab: the book's public launch page, its stage, and where to buy or preorder. */
 export function PublishPanel({ projectId }: { projectId: string }) {
@@ -317,6 +388,8 @@ export function PublishPanel({ projectId }: { projectId: string }) {
               )}
             </div>
           </section>
+
+          <WritingRecordSection projectId={projectId} launchPath={state.launchPath} />
 
           {state.launchVisible && state.launchPath && (
             <section className="border border-line p-4">
