@@ -60,6 +60,12 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   const [userBusy, setUserBusy] = useState<string | null>(null);
   const [tempShown, setTempShown] = useState<{ email: string; password: string } | null>(null);
   const [giftUserId, setGiftUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<"author" | "reader">("author");
+  const [userPage, setUserPage] = useState(1);
+  const [userPageSize, setUserPageSize] = useState(10);
+  const [userTotal, setUserTotal] = useState(0);
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [usersLoading, setUsersLoading] = useState(false);
 
   const loadMessages = useCallback(async () => {
     const res = await fetch(`/api/admin/messages?status=${filter}`);
@@ -91,18 +97,38 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
     if (next && m.status === "new") await setMessageStatus(m.id, "read");
   }
 
-  async function searchUsers(e?: React.FormEvent) {
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const params = new URLSearchParams({
+        role: userRole,
+        page: String(userPage),
+        pageSize: String(userPageSize),
+      });
+      if (appliedQuery) params.set("email", appliedQuery);
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not load accounts");
+        return;
+      }
+      setUsers(data.users || []);
+      setUserTotal(data.total || 0);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [userRole, userPage, userPageSize, appliedQuery]);
+
+  useEffect(() => {
+    if (tab === "users") void loadUsers();
+  }, [tab, loadUsers]);
+
+  function searchUsers(e?: React.FormEvent) {
     e?.preventDefault();
     setNote(null);
     setTempShown(null);
-    const res = await fetch(`/api/admin/users?email=${encodeURIComponent(query.trim())}`);
-    const data = await res.json();
-    if (!res.ok) {
-      setNote(data.error || "Search failed");
-      return;
-    }
-    setUsers(data.users || []);
-    if (!(data.users || []).length) setNote("No accounts match that email.");
+    setUserPage(1);
+    setAppliedQuery(query.trim());
   }
 
   async function userAction(u: AdminUser, action: "send_reset" | "temp_password") {
@@ -238,8 +264,9 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                               className="text-accent hover:underline"
                               onClick={() => {
                                 setQuery(m.email);
+                                setAppliedQuery(m.email);
+                                setUserPage(1);
                                 setTab("users");
-                                setUsers([]);
                               }}
                             >
                               Look up account
@@ -274,17 +301,72 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
 
         {tab === "users" && (
           <section className="mt-6">
-            <form onSubmit={(e) => void searchUsers(e)} className="flex flex-wrap gap-2">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+              <div className="flex gap-3">
+                {(["author", "reader"] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className={userRole === r ? "text-ink underline" : "text-muted hover:text-ink"}
+                    onClick={() => {
+                      setUserRole(r);
+                      setUserPage(1);
+                      setGiftUserId(null);
+                    }}
+                  >
+                    {r === "author" ? "Authors" : "Readers"}
+                  </button>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 text-xs text-muted">
+                Per page
+                <select
+                  value={userPageSize}
+                  onChange={(e) => {
+                    setUserPageSize(Number(e.target.value));
+                    setUserPage(1);
+                  }}
+                  className="border border-line bg-paper px-2 py-1 text-sm text-ink"
+                >
+                  {[10, 25, 50].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <form onSubmit={(e) => searchUsers(e)} className="flex flex-wrap gap-2">
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Email or part of one"
+                placeholder="Filter by email or name"
                 className="min-w-[16rem] flex-1 border border-line bg-paper px-3 py-2 text-sm"
               />
               <button type="submit" className="bg-accent px-4 py-2 text-sm text-paper">
                 Search
               </button>
+              {appliedQuery && (
+                <button
+                  type="button"
+                  className="text-sm text-muted hover:underline"
+                  onClick={() => {
+                    setQuery("");
+                    setAppliedQuery("");
+                    setUserPage(1);
+                  }}
+                >
+                  Clear
+                </button>
+              )}
             </form>
+            <p className="mt-3 text-sm text-muted">
+              {usersLoading
+                ? "Loading…"
+                : userTotal
+                  ? `Showing ${(userPage - 1) * userPageSize + 1}–${Math.min(userTotal, userPage * userPageSize)} of ${userTotal} ${userRole === "author" ? "authors" : "readers"}${appliedQuery ? ` matching “${appliedQuery}”` : ""}`
+                  : `No ${userRole === "author" ? "authors" : "readers"}${appliedQuery ? ` match “${appliedQuery}”` : " yet"}.`}
+            </p>
 
             {tempShown && (
               <div className="mt-4 border border-accent px-4 py-3 text-sm">
@@ -357,7 +439,7 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                         onDone={(msg) => {
                           setNote(msg);
                           setGiftUserId(null);
-                          void searchUsers();
+                          void loadUsers();
                         }}
                       />
                     </div>
@@ -365,6 +447,42 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                 </li>
               ))}
             </ul>
+
+            {userTotal > userPageSize && (
+              <nav className="mt-4 flex flex-wrap items-center gap-3 text-sm" aria-label="Pages">
+                <button
+                  type="button"
+                  disabled={userPage <= 1 || usersLoading}
+                  className="border border-line px-3 py-1 disabled:opacity-40"
+                  onClick={() => setUserPage((p) => p - 1)}
+                >
+                  ← Previous
+                </button>
+                <label className="flex items-center gap-2 text-muted">
+                  Page
+                  <select
+                    value={userPage}
+                    onChange={(e) => setUserPage(Number(e.target.value))}
+                    className="border border-line bg-paper px-2 py-1 text-ink"
+                  >
+                    {Array.from({ length: Math.ceil(userTotal / userPageSize) }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                  of {Math.ceil(userTotal / userPageSize)}
+                </label>
+                <button
+                  type="button"
+                  disabled={userPage >= Math.ceil(userTotal / userPageSize) || usersLoading}
+                  className="border border-line px-3 py-1 disabled:opacity-40"
+                  onClick={() => setUserPage((p) => p + 1)}
+                >
+                  Next →
+                </button>
+              </nav>
+            )}
           </section>
         )}
 

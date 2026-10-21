@@ -3,6 +3,8 @@ import { randomBytes } from "crypto";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { sendPasswordResetEmail } from "@/lib/password-reset";
 
+const PAGE_SIZES = [10, 25, 50];
+
 function tempPassword() {
   // No look-alike characters so it can be read over the phone or typed from a screenshot
   const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -14,19 +16,27 @@ export async function GET(req: Request) {
   const auth = await requirePlatformAdmin();
   if (!auth.ok) return auth.response;
 
-  const email = String(new URL(req.url).searchParams.get("email") || "")
+  const url = new URL(req.url);
+  const email = String(url.searchParams.get("email") || "")
     .trim()
-    .toLowerCase();
-  if (email.length < 3) {
-    return NextResponse.json({ error: "Type at least 3 characters of an email" }, { status: 400 });
-  }
+    .toLowerCase()
+    .replace(/[%_,()]/g, "");
+  const role = url.searchParams.get("role") === "reader" ? "reader" : "author";
+  const pageSize = PAGE_SIZES.includes(Number(url.searchParams.get("pageSize")))
+    ? Number(url.searchParams.get("pageSize"))
+    : 10;
+  const page = Math.max(1, Math.floor(Number(url.searchParams.get("page")) || 1));
+  const offset = (page - 1) * pageSize;
 
-  const { data: profiles, error } = await auth.admin
+  // Authors: every account with the author role. Readers: every account with the reader role
+  // (people with both appear in both lists).
+  let q = auth.admin
     .from("profiles")
-    .select("id, email, display_name, is_author, is_beta_reader, is_platform_admin, created_at")
-    .ilike("email", `%${email.replace(/[%_]/g, "")}%`)
-    .order("email")
-    .limit(20);
+    .select("id, email, display_name, is_author, is_beta_reader, is_platform_admin, created_at", { count: "exact" })
+    .order("created_at", { ascending: false });
+  q = role === "reader" ? q.eq("is_beta_reader", true) : q.neq("is_author", false);
+  if (email) q = q.or(`email.ilike.%${email}%,display_name.ilike.%${email}%`);
+  const { data: profiles, count, error } = await q.range(offset, offset + pageSize - 1);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const ids = (profiles || []).map((p) => p.id);
@@ -63,7 +73,7 @@ export async function GET(req: Request) {
     })
   );
 
-  return NextResponse.json({ users });
+  return NextResponse.json({ users, total: count || 0, page, pageSize, role });
 }
 
 export async function POST(req: Request) {
