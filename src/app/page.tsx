@@ -6,7 +6,7 @@ const AI_ACTIONS = Object.values(JOB_META);
 const PROOF_POINTS = [
   {
     t: "Typed here, not pasted",
-    d: "The editor keeps a private count of what you typed, what you pasted, and what you imported. Never your words, just the shape of how they got there.",
+    d: "The editor keeps a private count of what you typed, what you pasted, and what you imported. Never your words, just the process of how they got there.",
   },
   {
     t: "Every session, every day",
