@@ -4,7 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { grantPassDays } from "@/lib/studio-pass";
 import { REFERRAL_COOKIE, isValidReferralCode } from "@/lib/referral-shared";
 
-const VISITORS_PER_DAY_REWARD = 20;
+const VISITORS_PER_DAY_REWARD = 10;
+const MAX_VISIT_DAYS_PER_DAY = 2;
 const MAX_JOIN_DAYS_PER_DAY = 3;
 const MAX_DAYS_PER_READER = 8;
 /** About 1,000 words of typing */
@@ -23,7 +24,7 @@ export async function referrerFromCookie(admin: SupabaseClient): Promise<string 
   return data?.id || null;
 }
 
-/** 1 day once 20 unique visitors arrive through your link in a day (at most 1 day per day). */
+/** 1 day for every 10 unique visitors through your links in a day, up to 2 days per day. */
 export async function rewardVisitsToday(admin: SupabaseClient, referrerId: string) {
   const day = today();
   const { count } = await admin
@@ -31,14 +32,17 @@ export async function rewardVisitsToday(admin: SupabaseClient, referrerId: strin
     .select("id", { count: "exact", head: true })
     .eq("referrer_user_id", referrerId)
     .eq("day", day);
-  if ((count || 0) < VISITORS_PER_DAY_REWARD) return;
-  await grantPassDays(admin, {
-    userId: referrerId,
-    days: 1,
-    reason: "visits",
-    refKey: `visits:${referrerId}:${day}`,
-    notify: `${VISITORS_PER_DAY_REWARD} people visited through your link today.`,
-  });
+  const earned = Math.min(MAX_VISIT_DAYS_PER_DAY, Math.floor((count || 0) / VISITORS_PER_DAY_REWARD));
+  // One ledger key per 10-visitor step, so each step pays exactly once
+  for (let step = 1; step <= earned; step++) {
+    await grantPassDays(admin, {
+      userId: referrerId,
+      days: 1,
+      reason: "visits",
+      refKey: `visits:${referrerId}:${day}:${step}`,
+      notify: `${step * VISITORS_PER_DAY_REWARD} people visited through your links today.`,
+    });
+  }
 }
 
 /** Days a referrer has already earned from one reader, across every reward type. */

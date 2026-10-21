@@ -16,7 +16,7 @@ type PassData = {
 };
 
 const REASON_LABEL: Record<string, string> = {
-  visits: "20 visitors through your link in a day",
+  visits: "10 visitors through your links in a day",
   reader_join: "A reader you sent opened a manuscript",
   author_signup: "An author you invited wrote 1,000 words",
   reader_regular: "A reader you brought keeps coming back",
@@ -26,7 +26,7 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 const RULES = [
-  ["1 day", "for every 20 different people who visit through your links in a day (up to 1 day a day)"],
+  ["1 day", "for every 10 different people who visit through your links in a day (up to 2 days a day)"],
   ["1 day", "each time a reader you sent opens a beta or ARC manuscript (up to 3 a day)"],
   ["7 days", "when an author who signed up through your link writes their first 1,000 words"],
   ["2 days", "when a reader who joined through your link reads on 5 different days in their first 60 days"],
