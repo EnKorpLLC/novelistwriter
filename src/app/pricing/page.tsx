@@ -52,6 +52,11 @@ export default function PricingPage() {
         </div>
 
         <p className="font-ui mt-8 max-w-2xl text-sm text-muted">
+          Not ready to pay for Studio? Earn free Studio days (no AI credits) by sharing your books and
+          bringing readers and writers to Novelist Writer. Bank up to 28 days and start them when you
+          need them.
+        </p>
+        <p className="font-ui mt-4 max-w-2xl text-sm text-muted">
           Curious how beta and ARC reading work? See the{" "}
           <Link href="/#beta" className="text-accent underline-offset-2 hover:underline">
             Studio tour on the homepage

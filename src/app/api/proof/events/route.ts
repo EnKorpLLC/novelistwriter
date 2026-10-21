@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { rewardAuthorSignup } from "@/lib/pass-rewards";
 
 /** Typing faster than this for a whole session isn't human (about 300 words per minute). */
 const MAX_TYPED_CHARS_PER_MINUTE = 1500;
@@ -81,5 +82,6 @@ export async function POST(req: Request) {
       : error.message;
     return NextResponse.json({ error: hint }, { status: 500 });
   }
+  await rewardAuthorSignup(admin, user.id);
   return NextResponse.json({ ok: true });
 }

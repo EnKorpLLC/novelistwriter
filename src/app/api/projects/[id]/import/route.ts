@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { projectLockedMessage } from "@/lib/studio-access";
 import mammoth from "mammoth";
 import { parseNovelist2DocxText, plainToMatterHtml } from "@/lib/novelist2-docx";
 
@@ -50,6 +51,8 @@ export async function POST(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const lockMsg = await projectLockedMessage(supabase, projectId);
+  if (lockMsg) return NextResponse.json({ error: lockMsg, code: "project_locked" }, { status: 423 });
 
   const form = await req.formData();
   const file = form.get("file") as File | null;

@@ -13,6 +13,9 @@ import { normalizeRoles, linkInvitesForEmail } from "@/lib/beta-platform";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { isPlatformAdminEmail } from "@/lib/platform-admin";
 import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
+import { PassNotice } from "@/components/PassNotice";
+import { reconcileAuthorAccess } from "@/lib/studio-access";
+import { passNoticeFor } from "@/lib/pass-notice";
 
 function formatWords(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
@@ -62,6 +65,10 @@ export default async function DashboardPage() {
   } catch {
     /* ignore */
   }
+
+  const serviceAdmin = createServiceClient();
+  const access = await reconcileAuthorAccess(serviceAdmin, user.id);
+  const passNotice = await passNoticeFor(serviceAdmin, user.id, access.locked);
 
   const [{ data: projects }, { data: credits }, { data: profile }, { data: chapterRows }] =
     await Promise.all([
@@ -121,6 +128,9 @@ export default async function DashboardPage() {
           <Link href="/dashboard/audience" className="text-muted hover:text-ink">
             Audience
           </Link>
+          <Link href="/dashboard/share" className="text-muted hover:text-ink">
+            Share &amp; earn
+          </Link>
           <Link href="/dashboard/profile" className="text-muted hover:text-ink">
             Public profile
           </Link>
@@ -140,6 +150,11 @@ export default async function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10">
+        {passNotice && (
+          <div className="mb-8">
+            <PassNotice notice={passNotice} />
+          </div>
+        )}
         {profile?.email_notifications === false && !profile.email_prompt_dismissed_at && (
           <div className="mb-8">
             <EmailOptInPrompt audience="author" />
@@ -188,7 +203,14 @@ export default async function DashboardPage() {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <h2 className="font-display text-xl">{p.title}</h2>
+                    <h2 className="font-display text-xl">
+                      {p.title}
+                      {p.locked_at && (
+                        <span className="font-ui ml-2 align-middle text-[10px] uppercase tracking-wide text-muted">
+                          Locked · export only
+                        </span>
+                      )}
+                    </h2>
                     <p className="text-sm text-muted">
                       {s.chapters} {s.chapters === 1 ? "chapter" : "chapters"} ·{" "}
                       {formatWords(s.words)} words

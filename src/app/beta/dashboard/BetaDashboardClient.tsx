@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SignOutButton } from "@/components/SignOutButton";
 import { DashboardRoleNav } from "@/components/DashboardRoleNav";
 import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
+import { ClaimReferral } from "@/components/ClaimReferral";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
 
 type ShelfBook = {
@@ -440,6 +441,7 @@ export default function BetaDashboardClient() {
 
   return (
     <div className="min-h-screen">
+      <ClaimReferral />
       <header className="font-ui flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4">
         <Link href="/beta/dashboard" className="font-display text-xl">
           Novelist Writer · Reader

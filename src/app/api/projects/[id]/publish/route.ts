@@ -5,6 +5,7 @@ import { isArcWindowOpen, normalizeBuyLinks, normalizeTropes } from "@/lib/arc";
 import { bookPath, slugProblem, slugify } from "@/lib/handles";
 import { ensureHandle, ensureSlug } from "@/lib/public-site";
 import { userHasStudio } from "@/lib/credits";
+import { projectLockedMessage } from "@/lib/studio-access";
 
 const FIELDS =
   "id, user_id, title, slug, genre, blurb, tagline, release_date, launch_public, published, published_at, tropes, buy_links, beta_ready, arc_open, arc_deadline";
@@ -87,6 +88,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const auth = await load(id);
   if ("error" in auth) return auth.error;
   const { supabase, user, project } = auth;
+  const lockMsg = await projectLockedMessage(supabase, id);
+  if (lockMsg) return NextResponse.json({ error: lockMsg, code: "project_locked" }, { status: 423 });
 
   const body = (await req.json()) as {
     action?: string;

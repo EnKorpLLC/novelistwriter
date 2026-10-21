@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
+import { projectLockedMessage } from "@/lib/studio-access";
 
 export async function PATCH(
   req: Request,
@@ -34,11 +35,13 @@ export async function PATCH(
 
   const { data: before } = await supabase
     .from("chapters")
-    .select("word_count")
+    .select("word_count, project_id")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const lockMsg = await projectLockedMessage(supabase, before.project_id);
+  if (lockMsg) return NextResponse.json({ error: lockMsg, code: "project_locked" }, { status: 423 });
 
   const { data, error } = await supabase
     .from("chapters")

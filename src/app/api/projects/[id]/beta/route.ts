@@ -20,6 +20,8 @@ import {
   notifyFollowersOfOpening,
 } from "@/lib/audience";
 import { canRemind } from "@/lib/arc";
+import { pauseForLostStudio, projectLockedMessage } from "@/lib/studio-access";
+import { rewardAcceptedElsewhere } from "@/lib/pass-rewards";
 import { emailConfigured, renderEmail, sendEmail } from "@/lib/email";
 import { emailConsentByEmail, emailConsentFor } from "@/lib/notifications";
 
@@ -159,19 +161,9 @@ export async function GET(
 
   const studioAccess = await userHasStudio(user.id);
   if (!studioAccess) {
-    // Drop from public catalog if a free/pro account had marked ready
+    // Drop from the catalog right away; current readers get the 7-day grace window
     if (project.beta_ready) {
-      await supabase
-        .from("projects")
-        .update({ beta_ready: false, updated_at: new Date().toISOString() })
-        .eq("id", projectId)
-        .eq("user_id", user.id);
-      try {
-        const admin = createServiceClient();
-        await revokeProjectBetaAccess(admin, projectId);
-      } catch {
-        /* non-fatal */
-      }
+      await pauseForLostStudio(createServiceClient(), [projectId]);
     }
     return NextResponse.json({
       studioAccess: false,
@@ -588,6 +580,8 @@ export async function POST(
   const { supabase, user, project } = auth;
 
   if (!(await userHasStudio(user.id))) return studioRequiredResponse();
+  const lockMsg = await projectLockedMessage(supabase, projectId);
+  if (lockMsg) return NextResponse.json({ error: lockMsg, code: "project_locked" }, { status: 423 });
 
   const body = await req.json();
 
@@ -852,12 +846,14 @@ export async function POST(
     if ("error" in restored) {
       return NextResponse.json({ error: migrationHint(restored.error) }, { status: 500 });
     }
-    await joinAuthorAudience(createServiceClient(), {
+    const restoreAdmin = createServiceClient();
+    await joinAuthorAudience(restoreAdmin, {
       authorUserId: user.id,
       email,
       displayName,
       source: "beta",
     });
+    await rewardAcceptedElsewhere(restoreAdmin, { readerEmail: email, bookAuthorId: user.id });
 
     return NextResponse.json({
       ok: true,
@@ -906,12 +902,14 @@ export async function POST(
       error: "That email is already on the list.",
     });
   }
-  await joinAuthorAudience(createServiceClient(), {
+  const inviteAdmin = createServiceClient();
+  await joinAuthorAudience(inviteAdmin, {
     authorUserId: user.id,
     email: trimmed,
     displayName,
     source: "beta",
   });
+  await rewardAcceptedElsewhere(inviteAdmin, { readerEmail: trimmed, bookAuthorId: user.id });
 
   return NextResponse.json({
     invite: restored.invite,
@@ -930,6 +928,8 @@ export async function PATCH(
   const { supabase, user } = auth;
 
   if (!(await userHasStudio(user.id))) return studioRequiredResponse();
+  const lockMsg = await projectLockedMessage(supabase, projectId);
+  if (lockMsg) return NextResponse.json({ error: lockMsg, code: "project_locked" }, { status: 423 });
 
   const body = (await req.json()) as {
     inviteId?: string;
@@ -1036,12 +1036,14 @@ export async function PATCH(
     }
   }
   if (action === "approve") {
-    await joinAuthorAudience(createServiceClient(), {
+    const admin = createServiceClient();
+    await joinAuthorAudience(admin, {
       authorUserId: user.id,
       email: data.email,
       displayName: data.display_name,
       source: "beta",
     });
+    await rewardAcceptedElsewhere(admin, { readerEmail: data.email, bookAuthorId: user.id });
   }
 
   return NextResponse.json({

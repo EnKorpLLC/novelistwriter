@@ -20,6 +20,8 @@ import {
 } from "@/lib/arc";
 import { emailConfigured, renderEmail, sendEmail } from "@/lib/email";
 import { emailConsentByEmail, emailConsentFor } from "@/lib/notifications";
+import { projectLockedMessage } from "@/lib/studio-access";
+import { rewardAcceptedElsewhere } from "@/lib/pass-rewards";
 
 const ARC_PROJECT_FIELDS =
   "id, title, user_id, arc_open, arc_deadline, arc_collect_address, arc_review_links";
@@ -133,6 +135,11 @@ async function sendArcAccessNotice(
     readerUserId: readerId,
     source: "arc",
   });
+  await rewardAcceptedElsewhere(admin, {
+    readerUserId: readerId,
+    readerEmail: invite.email,
+    bookAuthorId: project.user_id,
+  });
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -204,6 +211,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("error" in auth) return auth.error;
   const { user, project } = auth;
   if (!(await userHasStudio(user.id))) return studioRequired();
+  const lockMsg = await projectLockedMessage(createServiceClient(), projectId);
+  if (lockMsg) return NextResponse.json({ error: lockMsg, code: "project_locked" }, { status: 423 });
 
   const body = (await req.json()) as {
     action?: string;

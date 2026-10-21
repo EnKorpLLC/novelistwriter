@@ -9,7 +9,8 @@ import {
   normalizeRoles,
 } from "@/lib/beta-platform";
 import { computeReaderStats } from "@/lib/beta-social";
-import { revokeProjectBetaAccess } from "@/lib/beta-server";
+import { rowHasStudio } from "@/lib/credits";
+import { pauseForLostStudio } from "@/lib/studio-access";
 import { catalogLabelsForProject } from "@/lib/book-keywords";
 import { isArcWindowOpen } from "@/lib/arc";
 
@@ -91,26 +92,17 @@ export async function GET() {
       ? admin.from("profiles").select("id, display_name").in("id", authorIds)
       : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
     authorIds.length
-      ? admin.from("credit_balances").select("user_id, subscription_tier").in("user_id", authorIds)
+      ? admin.from("credit_balances").select("*").in("user_id", authorIds)
       : Promise.resolve({ data: [] as { user_id: string; subscription_tier: string | null }[] }),
   ]);
   const authorName = new Map((authors || []).map((a) => [a.id, a.display_name]));
   const studioAuthors = new Set(
-    (authorTiers || [])
-      .filter((t) => t.subscription_tier === "studio")
-      .map((t) => t.user_id)
+    (authorTiers || []).filter((t) => rowHasStudio(t)).map((t) => t.user_id)
   );
 
-  // Drop non-Studio listings that slipped into beta_ready (e.g. free-plan authors)
+  // Authors who lost Studio: pull the book from the catalog now; current readers get 7 days
   const nonStudioReady = (readyProjects || []).filter((p) => !studioAuthors.has(p.user_id));
-  if (nonStudioReady.length) {
-    const ids = nonStudioReady.map((p) => p.id);
-    await admin
-      .from("projects")
-      .update({ beta_ready: false, updated_at: new Date().toISOString() })
-      .in("id", ids);
-    await Promise.all(ids.map((id) => revokeProjectBetaAccess(admin, id)));
-  }
+  await pauseForLostStudio(admin, nonStudioReady.map((p) => p.id));
 
   const shelf = invites
     .filter((i) => isActiveReaderStatus(i.status) || i.finished_at)
@@ -208,12 +200,12 @@ export async function GET() {
       ? admin.from("profiles").select("id, display_name").in("id", unknownAuthors)
       : Promise.resolve({ data: [] as { id: string; display_name: string | null }[] }),
     unknownTiers.length
-      ? admin.from("credit_balances").select("user_id, subscription_tier").in("user_id", unknownTiers)
+      ? admin.from("credit_balances").select("*").in("user_id", unknownTiers)
       : Promise.resolve({ data: [] as { user_id: string; subscription_tier: string | null }[] }),
   ]);
   for (const a of moreNames || []) authorName.set(a.id, a.display_name);
   for (const t of moreTiers || []) {
-    if (t.subscription_tier === "studio") studioAuthors.add(t.user_id);
+    if (rowHasStudio(t)) studioAuthors.add(t.user_id);
   }
   const myArcStatus = new Map(
     (arcRows || []).map((r) => [r.project_id, { status: r.status, finishedAt: r.finished_at }])

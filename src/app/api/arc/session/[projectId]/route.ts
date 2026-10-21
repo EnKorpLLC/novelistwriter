@@ -9,6 +9,8 @@ import { sanitizeDisplayName } from "@/lib/beta-access";
 import { normalizePublicLinks, publicLinkList } from "@/lib/public-profile";
 import { isSubscribed, joinAuthorAudience } from "@/lib/audience";
 import { trustBadgesForBook } from "@/lib/trust-badges";
+import { inReaderGrace, pauseForLostStudio } from "@/lib/studio-access";
+import { recordReadingDay, rewardReaderJoin } from "@/lib/pass-rewards";
 import {
   isArcDeadlinePassed,
   isArcWindowOpen,
@@ -42,6 +44,14 @@ async function loadProject(admin: SupabaseClient, projectId: string) {
     .eq("id", projectId)
     .maybeSingle();
   return data;
+}
+
+/** Author lost Studio: start (or read) the 7-day window for current ARC readers. */
+async function arcGraceActive(admin: SupabaseClient, project: { id: string; arc_open?: boolean | null }) {
+  if (!project.arc_open) return false;
+  await pauseForLostStudio(admin, [project.id]);
+  const { data } = await admin.from("projects").select("reader_grace_until").eq("id", project.id).maybeSingle();
+  return inReaderGrace(data);
 }
 
 async function findArcInvite(
@@ -83,7 +93,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
   } = await supabase.auth.getUser();
 
   const authorStudio = await userHasStudio(project.user_id);
+  // Requests need the author on Studio; current readers also get the 7-day grace after it ends
   const windowOpen = authorStudio && isArcWindowOpen(project);
+  const readable = isArcWindowOpen(project) && (authorStudio || (await arcGraceActive(admin, project)));
   const { data: author } = await admin
     .from("profiles")
     .select("display_name, public_links")
@@ -143,6 +155,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     readerUserId: user.id,
     source: "arc",
   });
+  if (readable) await rewardReaderJoin(admin, { readerId: user.id, projectId, kind: "arc" });
 
   const reader = {
     inviteId: invite.id,
@@ -158,7 +171,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     mailingAddress: normalizeMailingAddress(invite.mailing_address),
   };
 
-  if (!windowOpen) {
+  if (!readable) {
     return NextResponse.json({ ...withUser, ...reader, access: "ended" });
   }
 
@@ -202,7 +215,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
   const admin = createServiceClient();
   const project = await loadProject(admin, projectId);
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const windowOpen = (await userHasStudio(project.user_id)) && isArcWindowOpen(project);
+  const authorStudio = await userHasStudio(project.user_id);
+  const windowOpen = authorStudio && isArcWindowOpen(project);
+  const readable = isArcWindowOpen(project) && (authorStudio || (await arcGraceActive(admin, project)));
   const invite = await findArcInvite(admin, projectId, user);
 
   if (body.action === "request") {
@@ -279,11 +294,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
   }
 
   // progress
-  if (!windowOpen) return NextResponse.json({ error: "The ARC window has ended." }, { status: 403 });
+  if (!readable) return NextResponse.json({ error: "The ARC window has ended." }, { status: 403 });
   if (!body.chapterId) return NextResponse.json({ error: "chapterId required" }, { status: 400 });
   await admin
     .from("arc_invites")
     .update({ current_chapter_id: body.chapterId, last_read_at: new Date().toISOString() })
     .eq("id", invite.id);
+  await recordReadingDay(admin, user.id);
   return NextResponse.json({ ok: true });
 }

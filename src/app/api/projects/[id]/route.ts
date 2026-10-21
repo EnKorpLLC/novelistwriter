@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { projectLockedMessage } from "@/lib/studio-access";
 
 export async function PATCH(
   req: Request,
@@ -11,6 +12,8 @@ export async function PATCH(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const lockMsg = await projectLockedMessage(supabase, id);
+  if (lockMsg) return NextResponse.json({ error: lockMsg, code: "project_locked" }, { status: 423 });
 
   const body = await req.json();
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };

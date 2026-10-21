@@ -41,7 +41,8 @@ export type NotificationType =
   | "reading_reminder"
   | "author_new_arc"
   | "arc_invite"
-  | "arc_deadline";
+  | "arc_deadline"
+  | "studio_pass";
 
 export async function createNotification(
   admin: SupabaseClient,

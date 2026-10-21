@@ -17,6 +17,7 @@ import {
   type AiScope,
 } from "@/lib/ai/pricing";
 import { buildBookManuscript } from "@/lib/ai/manuscript";
+import { projectLockedMessage } from "@/lib/studio-access";
 import {
   estimateBibleExtractCost,
   planBibleExtract,
@@ -128,6 +129,8 @@ export async function POST(req: Request) {
     .select("ai_disabled")
     .eq("id", user.id)
     .maybeSingle();
+  const lockMsg = await projectLockedMessage(supabase, projectId);
+  if (lockMsg) return NextResponse.json({ error: lockMsg, code: "project_locked" }, { status: 423 });
   if (aiSwitch?.ai_disabled) {
     return NextResponse.json(
       { error: "AI tools are turned off for your account. Turn them back on in Settings.", code: "ai_disabled" },

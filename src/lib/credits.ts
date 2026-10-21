@@ -16,10 +16,24 @@ export async function getCreditBalance(userId: string): Promise<CreditBalance | 
   return data as CreditBalance | null;
 }
 
-/** Author beta desk (invites, ready flag, share) is Studio-only. */
+/** True for a credit_balances row on paid Studio or a running pass (select "*" so it works before the pass migration). */
+export function rowHasStudio(row: { subscription_tier?: string | null; pass_active_until?: string | null } | null) {
+  if (!row) return false;
+  return row.subscription_tier === "studio" || Boolean(row.pass_active_until && Date.parse(row.pass_active_until) > Date.now());
+}
+
+function passRunning(bal: CreditBalance | null): boolean {
+  const until = (bal as (CreditBalance & { pass_active_until?: string | null }) | null)?.pass_active_until;
+  return Boolean(until && Date.parse(until) > Date.now());
+}
+
+/**
+ * Studio's reader tools (beta, ARC, audience, catalog): a paid Studio subscription or a
+ * running Studio pass. AI credits, BYOK, and priority AI check the subscription tier directly.
+ */
 export async function userHasStudio(userId: string): Promise<boolean> {
   const bal = await getCreditBalance(userId);
-  return bal?.subscription_tier === "studio";
+  return bal?.subscription_tier === "studio" || passRunning(bal);
 }
 
 /** Debit credits: monthly allowance first, then purchased balance, then free taste for cheap jobs */
@@ -164,7 +178,7 @@ export async function canCreateProject(userId: string): Promise<{
   const admin = createServiceClient();
   const [{ count }, { data: bal }, { count: unlockCount }] = await Promise.all([
     admin.from("projects").select("*", { count: "exact", head: true }).eq("user_id", userId),
-    admin.from("credit_balances").select("subscription_tier").eq("user_id", userId).maybeSingle(),
+    admin.from("credit_balances").select("*").eq("user_id", userId).maybeSingle(),
     admin.from("project_unlocks").select("*", { count: "exact", head: true }).eq("user_id", userId),
   ]);
 
@@ -172,7 +186,7 @@ export async function canCreateProject(userId: string): Promise<{
   const unlocks = unlockCount ?? 0;
   const tier = bal?.subscription_tier ?? "free";
 
-  if (tier === "pro" || tier === "studio") {
+  if (tier === "pro" || tier === "studio" || passRunning(bal as CreditBalance | null)) {
     return { allowed: true, reason: "ok", projectCount, tier, unlocks };
   }
   // Free: 1 project + one slot per purchased unlock

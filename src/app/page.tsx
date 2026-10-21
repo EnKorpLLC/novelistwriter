@@ -228,6 +228,22 @@ export default function HomePage() {
           </div>
         </section>
 
+        <section id="earn" className="mx-auto max-w-5xl scroll-mt-24 px-6 py-20 md:px-10">
+          <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Share &amp; earn</p>
+          <h2 className="font-display mt-2 text-3xl text-ink">Bring readers, earn Studio for free</h2>
+          <p className="mt-3 max-w-2xl text-muted">
+            Every link you share carries your name. When people visit, readers join your beta or ARC,
+            or a writer you invited gets going, you earn free days of Studio&apos;s beta desk, ARC desk,
+            and audience lists. Bank up to four weeks and start them when your next book is ready.
+          </p>
+          <Link
+            href="/signup"
+            className="font-ui mt-8 inline-block rounded-sm border border-ink/20 px-6 py-3 text-ink transition hover:border-accent hover:text-accent"
+          >
+            Start writing free
+          </Link>
+        </section>
+
         <section className="border-y border-line bg-paper-deep/50 px-6 py-16 md:px-10">
           <div className="mx-auto max-w-5xl">
             <h2 className="font-display text-3xl">Your book stays yours</h2>

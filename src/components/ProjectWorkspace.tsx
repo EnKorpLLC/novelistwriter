@@ -43,6 +43,8 @@ type Props = {
   initialTab?: WorkspaceTab;
   /** Author turned off all AI tools in Settings */
   aiDisabled?: boolean;
+  /** Account notice shown above the workspace (e.g. Studio pass ending) */
+  notice?: React.ReactNode;
 };
 
 function chapterStorageKey(projectId: string) {
@@ -75,6 +77,7 @@ export function ProjectWorkspace({
   initialChapterId,
   initialTab,
   aiDisabled = false,
+  notice,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -371,6 +374,7 @@ export function ProjectWorkspace({
 
   return (
     <div className={`flex h-dvh max-h-dvh flex-col overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
+      {!focusMode && notice && <div className="shrink-0">{notice}</div>}
       {!focusMode && (
         <header className="font-ui flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">

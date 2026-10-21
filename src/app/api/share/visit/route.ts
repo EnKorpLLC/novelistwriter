@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { isValidReferralCode } from "@/lib/referral-shared";
+import { rewardVisitsToday } from "@/lib/pass-rewards";
 
 const VISITOR_COOKIE = "nw_vid";
 const BOT_UA = /bot|crawl|spider|slurp|preview|facebookexternalhit|embedly|headless|lighthouse|curl|wget/i;
@@ -65,5 +66,6 @@ export async function POST(req: Request) {
     },
     { onConflict: "referrer_user_id,visitor_hash,day", ignoreDuplicates: true }
   );
+  await rewardVisitsToday(admin, referrer.id);
   return res;
 }

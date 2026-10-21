@@ -3,6 +3,12 @@ import { redirect, notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { isWorkspaceTab } from "@/lib/workspace-tabs";
+import { createServiceClient } from "@/lib/supabase/admin";
+import { reconcileAuthorAccess } from "@/lib/studio-access";
+import { getPassState } from "@/lib/studio-pass";
+import { LockedProject } from "@/components/LockedProject";
+import { PassNotice } from "@/components/PassNotice";
+import { passNoticeFor } from "@/lib/pass-notice";
 import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
 
 export default async function ProjectPage({
@@ -20,6 +26,10 @@ export default async function ProjectPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const admin = createServiceClient();
+  const access = await reconcileAuthorAccess(admin, user.id);
+  const passNotice = await passNoticeFor(admin, user.id, access.locked);
+
   const { data: project } = await supabase
     .from("projects")
     .select("*")
@@ -27,6 +37,10 @@ export default async function ProjectPage({
     .eq("user_id", user.id)
     .maybeSingle();
   if (!project) notFound();
+  if (project.locked_at) {
+    const pass = await getPassState(admin, user.id);
+    return <LockedProject projectId={project.id} title={project.title} bankDays={pass.bankDays} />;
+  }
 
   const jar = await cookies();
   const tzRaw = jar.get(TIMEZONE_COOKIE)?.value;
@@ -98,6 +112,7 @@ export default async function ProjectPage({
       initialChapterId={initialChapterId}
       initialTab={initialTab}
       aiDisabled={Boolean(aiSwitch?.ai_disabled)}
+      notice={passNotice?.kind === "expiring" ? <PassNotice notice={passNotice} compact /> : null}
     />
   );
 }

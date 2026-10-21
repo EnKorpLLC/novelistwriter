@@ -12,6 +12,8 @@ export {
   isValidReferralCode,
 } from "@/lib/referral-shared";
 
+const NEW_ACCOUNT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
 function makeCode(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
 }
@@ -79,11 +81,15 @@ export async function claimReferral(opts: {
   const admin = createServiceClient();
   const { data: me } = await admin
     .from("profiles")
-    .select("id, referred_by")
+    .select("id, referred_by, created_at")
     .eq("id", opts.userId)
     .maybeSingle();
   if (!me) return { ok: false, reason: "no_profile" };
   if (me.referred_by) return { ok: true, reason: "already_set" };
+  // Only new accounts count as brought in by a link; older accounts clicking one later don't
+  if (me.created_at && Date.now() - Date.parse(me.created_at) > NEW_ACCOUNT_WINDOW_MS) {
+    return { ok: false, reason: "account_too_old" };
+  }
 
   const { data: referrer } = await admin
     .from("profiles")

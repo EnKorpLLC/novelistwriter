@@ -9,6 +9,7 @@ import {
 } from "@/lib/beta-access";
 import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
 import { joinAuthorAudience } from "@/lib/audience";
+import { rewardAcceptedElsewhere } from "@/lib/pass-rewards";
 import {
   missingRequiredAnswers,
   normalizeBetaApplicationForm,
@@ -138,6 +139,11 @@ export async function POST(req: Request) {
         displayName,
         readerUserId,
         source: "beta",
+      });
+      await rewardAcceptedElsewhere(admin, {
+        readerUserId,
+        readerEmail: trimmed,
+        bookAuthorId: project!.user_id,
       });
     }
     return NextResponse.json({

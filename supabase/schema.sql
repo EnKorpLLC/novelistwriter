@@ -404,6 +404,8 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- See migration_ai_disclosure.sql for: projects.ai_deleted_job_counts, projects.ai_disclosure_public
 -- See migration_launch_share.sql for: handles, slugs, launch page and mini-site fields,
 -- share_visits, guest subscriber confirmation
+-- See migration_rewards.sql for: Studio pass bank and ledger, reader_activity_days,
+-- projects.reader_grace_until and projects.locked_at
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
 -- Optional private bucket `manuscripts` for raw uploads if needed later

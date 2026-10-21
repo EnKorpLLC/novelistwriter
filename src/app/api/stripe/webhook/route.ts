@@ -4,6 +4,7 @@ import { handleCheckoutCompleted } from "@/lib/stripe-webhooks";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { SUB_ALLOWANCE } from "@/lib/types";
 import { grantReferralRewardForPurchase } from "@/lib/referral";
+import { onSubscriptionTierChange } from "@/lib/studio-pass";
 import Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -50,6 +51,11 @@ export async function POST(req: Request) {
       if (userId) {
         const active = sub.status === "active" || sub.status === "trialing";
         const tier = active ? ((sub.metadata?.tier as "pro" | "studio") || "pro") : "free";
+        const { data: before } = await admin
+          .from("credit_balances")
+          .select("subscription_tier")
+          .eq("user_id", userId)
+          .maybeSingle();
         const { error } = await admin.from("credit_balances").upsert({
           user_id: userId,
           subscription_tier: active ? tier : "free",
@@ -60,6 +66,7 @@ export async function POST(req: Request) {
           updated_at: new Date().toISOString(),
         });
         if (error) throw new Error(error.message);
+        await onSubscriptionTierChange(admin, userId, before?.subscription_tier, active ? tier : "free");
       }
     }
 

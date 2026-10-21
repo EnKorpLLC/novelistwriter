@@ -89,6 +89,12 @@ export default function BetaSignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enableBetaReader: true, is_author: false }),
       });
+      // Credit whoever's share link brought this reader here
+      await fetch("/api/referral", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => null);
       rememberSide("beta");
       await fetch("/api/beta/dashboard").catch(() => null);
       router.push(nextPath);

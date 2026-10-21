@@ -4,6 +4,7 @@ import { CREDIT_PACKS, SUB_ALLOWANCE } from "@/lib/types";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { grantReferralRewardForPurchase } from "@/lib/referral";
+import { onSubscriptionTierChange } from "@/lib/studio-pass";
 
 async function resolveUserId(session: Stripe.Checkout.Session): Promise<string | null> {
   if (session.metadata?.supabase_user_id) return session.metadata.supabase_user_id;
@@ -126,6 +127,11 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
 
   if (kind === "subscribe") {
     const tier = (session.metadata?.tier || "pro") as "pro" | "studio";
+    const { data: before } = await admin
+      .from("credit_balances")
+      .select("subscription_tier")
+      .eq("user_id", userId)
+      .maybeSingle();
     const { error } = await admin.from("credit_balances").upsert({
       user_id: userId,
       subscription_tier: tier,
@@ -134,6 +140,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
       updated_at: new Date().toISOString(),
     });
     if (error) throw new Error(`subscribe failed: ${error.message}`);
+    await onSubscriptionTierChange(admin, userId, before?.subscription_tier, tier);
     await maybeReferralReward(userId, eventId);
     return { ok: true, applied: `subscribe_${tier}` };
   }

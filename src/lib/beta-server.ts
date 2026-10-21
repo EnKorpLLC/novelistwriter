@@ -6,6 +6,7 @@ import {
   sanitizeDisplayName,
 } from "@/lib/beta-access";
 import { isActiveReaderStatus } from "@/lib/beta-platform";
+import { inReaderGrace } from "@/lib/studio-access";
 
 type Admin = SupabaseClient;
 
@@ -148,6 +149,13 @@ export async function enforceBetaReady(
   project: { id: string; beta_ready?: boolean | null }
 ): Promise<{ closed: boolean }> {
   if (project.beta_ready) return { closed: false };
+  // Author lost Studio: current readers keep reading until the grace window ends
+  const { data } = await admin
+    .from("projects")
+    .select("reader_grace_until")
+    .eq("id", project.id)
+    .maybeSingle();
+  if (inReaderGrace(data)) return { closed: false };
   await revokeProjectBetaAccess(admin, project.id, BETA_CLOSED_REASON);
   return { closed: true };
 }

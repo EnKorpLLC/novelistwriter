@@ -5,7 +5,8 @@ import { accessMessageForStatus, BETA_PERIOD_ENDED_REASON } from "@/lib/beta-acc
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel, linkInvitesForEmail } from "@/lib/beta-platform";
-import { enforceBetaAccessGates, findReaderInvite, inviteAllowsReading, revokeProjectBetaAccess } from "@/lib/beta-server";
+import { enforceBetaAccessGates, findReaderInvite, inviteAllowsReading } from "@/lib/beta-server";
+import { pauseForLostStudio } from "@/lib/studio-access";
 import { userHasStudio } from "@/lib/credits";
 import { normalizePublicLinks, publicLinkList } from "@/lib/public-profile";
 import { isSubscribed } from "@/lib/audience";
@@ -35,14 +36,10 @@ export async function GET(
   }
 
   const authorHasStudio = await userHasStudio(project.user_id);
-  // Public catalog / apply gate is Studio-only; clear stray ready flags
+  // Public catalog / apply gate is Studio-only; current readers get the 7-day grace window
   if (project.beta_ready && !authorHasStudio) {
-    await admin
-      .from("projects")
-      .update({ beta_ready: false, updated_at: new Date().toISOString() })
-      .eq("id", projectId);
+    await pauseForLostStudio(admin, [projectId]);
     project.beta_ready = false;
-    await revokeProjectBetaAccess(admin, projectId);
   }
 
   const publiclyListed = Boolean(project.beta_ready && authorHasStudio);

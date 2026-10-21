@@ -9,6 +9,7 @@ import {
 } from "@/lib/beta-form";
 import { linkInvitesForEmail } from "@/lib/beta-platform";
 import { joinAuthorAudience } from "@/lib/audience";
+import { recordReadingDay, rewardReaderJoin } from "@/lib/pass-rewards";
 import {
   enforceBetaAccessGates,
   findReaderInvite,
@@ -66,6 +67,7 @@ export async function GET(
     readerUserId: user.id,
     source: "beta",
   });
+  await rewardReaderJoin(admin, { readerId: user.id, projectId, kind: "beta" });
 
   const form = normalizeBetaApplicationForm(project.beta_application_form);
   const answers = sanitizeApplicationAnswers(form.fields, invite!.application_answers);
@@ -267,6 +269,7 @@ export async function POST(
   };
   if (invite!.status === "pending") inviteUpdate.status = "accepted";
   await admin.from("beta_invites").update(inviteUpdate).eq("id", invite!.id);
+  await recordReadingDay(admin, user.id);
 
   return NextResponse.json({ ok: true, percent });
 }
