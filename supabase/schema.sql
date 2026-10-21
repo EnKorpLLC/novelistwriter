@@ -401,6 +401,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- platform_messages, author_subscribers, arc_invites, ARC and published-listing columns on projects
 -- See migration_proof_trust.sql for: writing_sessions, chapter imported/prerecord words,
 -- AI off switch, projects.ai_used_at, email notification consent
+-- See migration_ai_disclosure.sql for: projects.ai_deleted_job_counts, projects.ai_disclosure_public
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
 -- Optional private bucket `manuscripts` for raw uploads if needed later

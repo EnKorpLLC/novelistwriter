@@ -8,7 +8,7 @@ import {
   type PublicLinkId,
   type PublicLinks,
 } from "@/lib/public-profile";
-import { TrustBadges } from "@/components/TrustBadges";
+import { AiActionList, TrustBadges } from "@/components/TrustBadges";
 
 export default function PublicProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -155,12 +155,43 @@ type BadgeBook = {
   title: string;
   noAiOnBook: boolean;
   aiUsedAt: string | null;
+  aiActions: { label: string; count: number }[];
+  aiDisclosurePublic: boolean;
   shownOn: { label: string; href: string }[];
 };
 
 function BadgeOverview() {
   const [data, setData] = useState<{ aiOffSince: string | null; books: BadgeBook[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  async function setDisclosure(projectId: string, disclose: boolean) {
+    setSavingId(projectId);
+    setError(null);
+    try {
+      const res = await fetch("/api/profile/badges", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, disclose }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not save");
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              books: d.books.map((b) =>
+                b.projectId === projectId ? { ...b, aiDisclosurePublic: disclose } : b
+              ),
+            }
+          : d
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   useEffect(() => {
     void fetch("/api/profile/badges")
@@ -209,10 +240,28 @@ function BadgeOverview() {
                     {b.noAiOnBook ? (
                       <TrustBadges noAiOnBook />
                     ) : (
-                      <p className="text-xs text-muted">
-                        No &ldquo;No AI used&rdquo; badge: AI was run on this book
-                        {b.aiUsedAt ? ` (first on ${new Date(b.aiUsedAt).toLocaleDateString()})` : ""}.
-                      </p>
+                      <>
+                        <p className="text-xs text-muted">
+                          No &ldquo;No AI used&rdquo; badge: AI was run on this book
+                          {b.aiUsedAt ? ` (first on ${new Date(b.aiUsedAt).toLocaleDateString()})` : ""}.
+                        </p>
+                        <AiActionList actions={b.aiActions} className="mt-1" />
+                        {b.aiActions.length > 0 && (
+                          <label className="mt-2 flex items-start gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={b.aiDisclosurePublic}
+                              disabled={savingId === b.projectId}
+                              onChange={(e) => void setDisclosure(b.projectId, e.target.checked)}
+                            />
+                            <span className="text-muted">
+                              Show this list on the book&apos;s public pages. Only the action names
+                              appear, never what the AI said.
+                            </span>
+                          </label>
+                        )}
+                      </>
                     )}
                   </div>
                   <p className="mt-2 text-xs text-muted">

@@ -48,7 +48,7 @@ export async function DELETE(
   // Keep the "AI was used on this book" fact after the report itself is gone
   const { data: job } = await supabase
     .from("ai_jobs")
-    .select("project_id, created_at")
+    .select("project_id, created_at, job_type")
     .eq("id", jobId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -59,6 +59,22 @@ export async function DELETE(
       .eq("id", job.project_id)
       .eq("user_id", user.id)
       .is("ai_used_at", null);
+    // Keep the action name in the book's AI history after the report is gone
+    const { data: proj } = await supabase
+      .from("projects")
+      .select("ai_deleted_job_counts")
+      .eq("id", job.project_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (proj) {
+      const counts = { ...((proj.ai_deleted_job_counts as Record<string, number>) || {}) };
+      counts[job.job_type] = (counts[job.job_type] || 0) + 1;
+      await supabase
+        .from("projects")
+        .update({ ai_deleted_job_counts: counts })
+        .eq("id", job.project_id)
+        .eq("user_id", user.id);
+    }
   }
 
   const { error } = await supabase

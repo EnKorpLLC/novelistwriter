@@ -1,11 +1,14 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { aiActionCounts, type AiActionCount } from "@/lib/ai-usage";
 
 export type TrustBadges = {
   /** Account-wide AI switch is off since this date */
   aiOffSince: string | null;
   /** No AI run has ever been recorded on this book */
   noAiOnBook: boolean;
+  /** AI action names run on this book; only present when the author chose to show them */
+  aiActions?: AiActionCount[] | null;
 };
 
 /** Account badge plus per-book "No AI used" for any number of the author's books. */
@@ -44,5 +47,15 @@ export async function trustBadgesForBook(
   projectId: string
 ): Promise<TrustBadges> {
   const { aiOffSince, noAiProjectIds } = await loadTrustBadges(admin, authorUserId, [projectId]);
-  return { aiOffSince, noAiOnBook: noAiProjectIds.has(projectId) };
+  const noAiOnBook = noAiProjectIds.has(projectId);
+  if (noAiOnBook) return { aiOffSince, noAiOnBook };
+
+  const { data: proj } = await admin
+    .from("projects")
+    .select("id, ai_disclosure_public, ai_deleted_job_counts")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!proj?.ai_disclosure_public) return { aiOffSince, noAiOnBook };
+  const counts = await aiActionCounts(admin, [proj]);
+  return { aiOffSince, noAiOnBook, aiActions: counts.get(projectId) || [] };
 }
