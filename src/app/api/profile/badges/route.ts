@@ -10,22 +10,22 @@ import { bookPath } from "@/lib/handles";
 import { computeWritingRecord } from "@/lib/writing-record";
 
 /** The author's own badge overview: account badge plus each book's badge and where it's public. */
-export async function GET() {
+export async function GET(req: Request) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const onlyProjectId = new URL(req.url).searchParams.get("projectId");
   const admin = createServiceClient();
-  const [{ data: projects }, handle] = await Promise.all([
-    admin
-      .from("projects")
-      .select("id, title, slug, updated_at, beta_ready, arc_open, arc_deadline, published, launch_public, ai_used_at")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false }),
-    ensureHandle(admin, user.id),
-  ]);
+  let projectQuery = admin
+    .from("projects")
+    .select("id, title, slug, updated_at, beta_ready, arc_open, arc_deadline, published, launch_public, ai_used_at")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+  if (onlyProjectId) projectQuery = projectQuery.eq("id", onlyProjectId);
+  const [{ data: projects }, handle] = await Promise.all([projectQuery, ensureHandle(admin, user.id)]);
   const list = projects || [];
   const ids = list.map((p) => p.id);
 
@@ -60,6 +60,11 @@ export async function GET() {
       : Promise.resolve({ data: [] as { id: string; record_public: boolean }[] }),
   ]);
   const recordPublic = new Map((recordFlags || []).map((r) => [r.id, Boolean(r.record_public)]));
+  // Separate query so the overview still loads before migration_reader_badges.sql is applied
+  const { data: readerFlags } = ids.length
+    ? await admin.from("projects").select("id, reader_show_badges, reader_show_record").in("id", ids)
+    : { data: [] as { id: string; reader_show_badges: boolean; reader_show_record: boolean }[] };
+  const readerFlagById = new Map((readerFlags || []).map((r) => [r.id, r]));
 
   return NextResponse.json({
     userId: user.id,
@@ -86,13 +91,23 @@ export async function GET() {
         recordBadge: records[index].badge,
         recordNeeded: records[index].needed,
         recordPublic: recordPublic.get(p.id) || false,
+        recordStats: {
+          typedPercent: Math.round(records[index].typedShare * 100),
+          sessions: records[index].sessions,
+          activeDays: records[index].activeDays,
+        },
+        readerShowBadges: readerFlagById.get(p.id)?.reader_show_badges !== false,
+        readerShowRecord: readerFlagById.get(p.id)?.reader_show_record === true,
         shownOn,
       };
     }),
   });
 }
 
-/** Author chooses whether a book's public pages list which AI actions were run (names only). */
+/**
+ * Author's per-book display choices: whether public pages list which AI actions were run (names only),
+ * and whether Beta / ARC readers see the badges and the writing record summary.
+ */
 export async function PATCH(req: Request) {
   const supabase = await createClient();
   const {
@@ -100,20 +115,36 @@ export async function PATCH(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await req.json()) as { projectId?: string; disclose?: boolean };
-  if (!body.projectId || typeof body.disclose !== "boolean") {
-    return NextResponse.json({ error: "projectId and disclose required" }, { status: 400 });
+  const body = (await req.json()) as {
+    projectId?: string;
+    disclose?: boolean;
+    readerShowBadges?: boolean;
+    readerShowRecord?: boolean;
+  };
+  const update: Record<string, boolean> = {};
+  if (typeof body.disclose === "boolean") update.ai_disclosure_public = body.disclose;
+  if (typeof body.readerShowBadges === "boolean") update.reader_show_badges = body.readerShowBadges;
+  if (typeof body.readerShowRecord === "boolean") update.reader_show_record = body.readerShowRecord;
+  if (!body.projectId || !Object.keys(update).length) {
+    return NextResponse.json({ error: "projectId and a setting required" }, { status: 400 });
   }
   const { error } = await supabase
     .from("projects")
-    .update({ ai_disclosure_public: body.disclose })
+    .update(update)
     .eq("id", body.projectId)
     .eq("user_id", user.id);
   if (error) {
     const hint = error.message.includes("ai_disclosure_public")
       ? "Database needs an update. Run supabase/migration_ai_disclosure.sql in the Supabase SQL editor."
-      : error.message;
+      : error.message.includes("reader_show_")
+        ? "Database needs an update. Run supabase/migration_reader_badges.sql in the Supabase SQL editor."
+        : error.message;
     return NextResponse.json({ error: hint }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, aiDisclosurePublic: body.disclose });
+  return NextResponse.json({
+    ok: true,
+    ...(typeof body.disclose === "boolean" ? { aiDisclosurePublic: body.disclose } : {}),
+    ...(typeof body.readerShowBadges === "boolean" ? { readerShowBadges: body.readerShowBadges } : {}),
+    ...(typeof body.readerShowRecord === "boolean" ? { readerShowRecord: body.readerShowRecord } : {}),
+  });
 }

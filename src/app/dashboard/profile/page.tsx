@@ -11,6 +11,7 @@ import {
 import { AiActionList, TrustBadges } from "@/components/TrustBadges";
 import { SITE_THEMES, type SiteThemeId } from "@/lib/site-themes";
 import { RecordBadge } from "@/components/WritingRecordView";
+import { ReaderBadgeToggles } from "@/components/ReaderBadgeSettings";
 
 export default function PublicProfilePage() {
   const [savedHandle, setSavedHandle] = useState("");
@@ -316,6 +317,9 @@ type BadgeBook = {
   recordBadge: "written_here" | "before_records" | null;
   recordNeeded: string[];
   recordPublic: boolean;
+  recordStats?: { typedPercent: number; sessions: number; activeDays: number };
+  readerShowBadges: boolean;
+  readerShowRecord: boolean;
   shownOn: { label: string; href: string }[];
 };
 
@@ -454,6 +458,20 @@ function BadgeOverview() {
                       "Not public yet. Badges appear once its launch page is public (Launch tab), or while beta or ARC reading is open."
                     )}
                   </p>
+                  <div className="mt-3 border-t border-line pt-3">
+                    <p className="mb-2 text-[10px] uppercase tracking-wide text-muted">Beta and ARC readers</p>
+                    <ReaderBadgeToggles
+                      book={b}
+                      aiOffSince={data.aiOffSince}
+                      onChange={(next) =>
+                        setData((d) =>
+                          d
+                            ? { ...d, books: d.books.map((x) => (x.projectId === b.projectId ? { ...x, ...next } : x)) }
+                            : d
+                        )
+                      }
+                    />
+                  </div>
                 </li>
               ))}
             </ul>

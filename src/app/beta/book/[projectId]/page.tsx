@@ -7,9 +7,9 @@ import { BetaFormFields } from "@/components/BetaFormFields";
 import type { BetaApplicationForm } from "@/lib/beta-form";
 import type { LabeledLink } from "@/lib/public-profile";
 import { AuthorConnect, AuthorLinks } from "@/components/AuthorConnect";
-import { TrustBadges } from "@/components/TrustBadges";
+import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
-import type { TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
+import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type GateData = {
   projectId: string;
@@ -20,6 +20,7 @@ type GateData = {
   authorName: string;
   authorLinks: LabeledLink[];
   trust?: TrustBadgeData;
+  record?: RecordSummary | null;
   canSubscribe?: boolean;
   subscribed?: boolean;
   coverUrl: string | null;
@@ -148,6 +149,7 @@ export default function BetaBookGatePage() {
         · {data.genre}
       </p>
       <TrustBadges {...(data.trust || {})} className="mt-2" />
+      <RecordSummaryLine record={data.record} className="mt-2" />
       <AuthorLinks links={data.authorLinks || []} className="mt-2" />
       {data.loggedIn && data.authorUserId && (
         <div className="mt-3">

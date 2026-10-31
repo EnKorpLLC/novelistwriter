@@ -1,4 +1,70 @@
+import { RecordBadge } from "@/components/WritingRecordView";
+
 type AiActionCount = { label: string; count: number };
+
+type RecordSummary = {
+  badge: "written_here" | "before_records" | null;
+  typedPercent: number;
+  sessions: number;
+  activeDays: number;
+  recordHref: string | null;
+};
+
+type TrustData = { aiOffSince?: string | null; noAiOnBook?: boolean; aiActions?: AiActionCount[] | null };
+
+/** Writing record numbers the author chose to show readers: never any manuscript text. */
+export function RecordSummaryLine({ record, className = "" }: { record?: RecordSummary | null; className?: string }) {
+  if (!record) return null;
+  return (
+    <div className={`font-ui text-xs text-muted ${className}`}>
+      {record.badge && (
+        <div className="mb-1">
+          <RecordBadge badge={record.badge} href={record.recordHref || undefined} />
+        </div>
+      )}
+      <p>
+        <span className="text-ink">Writing record:</span> {record.typedPercent}% typed in the editor ·{" "}
+        {record.sessions.toLocaleString()} writing session{record.sessions === 1 ? "" : "s"} over{" "}
+        {record.activeDays.toLocaleString()} day{record.activeDays === 1 ? "" : "s"}
+        {record.recordHref && (
+          <>
+            {" · "}
+            <a href={record.recordHref} className="text-accent underline" target="_blank" rel="noopener noreferrer">
+              Full record
+            </a>
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** Small chips for book cards. */
+export function CompactTrust({ trust, record }: { trust?: TrustData | null; record?: RecordSummary | null }) {
+  const chips: { label: string; title: string }[] = [];
+  if (trust?.noAiOnBook) {
+    chips.push({ label: "No AI used", title: "Novelist Writer has no record of any AI tool being run on this book." });
+  }
+  if (trust?.aiOffSince) {
+    chips.push({ label: "AI tools off", title: "This author has every AI tool switched off on Novelist Writer." });
+  }
+  if (record?.badge === "written_here") {
+    chips.push({
+      label: "Written here",
+      title: `Typed in the Novelist Writer editor: ${record.typedPercent}% typed, ${record.sessions} sessions.`,
+    });
+  }
+  if (!chips.length) return null;
+  return (
+    <ul className="font-ui flex flex-wrap gap-1">
+      {chips.map((c) => (
+        <li key={c.label} className="border border-accent px-1 py-px text-[9px] leading-tight text-accent" title={c.title}>
+          {c.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function monthYear(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric" });

@@ -12,6 +12,7 @@ import {
 import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/beta-platform";
 import { ShareKit } from "@/components/ShareKit";
 import { ReaderInsights } from "@/components/ReaderInsights";
+import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
 
 type ChapterProgress = {
   chapterId: string;
@@ -1110,6 +1111,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
           {studioAccess && (
           <>
           {!loading && <ReaderInsights projectId={projectId} phase="beta" />}
+
+          <ReaderBadgeSettings projectId={projectId} />
 
           <section className="font-ui border border-line p-4">
             <button

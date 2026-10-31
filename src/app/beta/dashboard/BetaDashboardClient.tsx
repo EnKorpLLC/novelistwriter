@@ -9,6 +9,8 @@ import { DashboardRoleNav } from "@/components/DashboardRoleNav";
 import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 import { ClaimReferral } from "@/components/ClaimReferral";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
+import { CompactTrust, RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
+import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type ShelfBook = {
   inviteId: string;
@@ -43,6 +45,8 @@ type CatalogBook = {
   authorName: string;
   coverUrl: string | null;
   onShelf?: boolean;
+  trust?: TrustBadgeData | null;
+  record?: RecordSummary | null;
 };
 
 type ArcCatalogBook = {
@@ -55,6 +59,8 @@ type ArcCatalogBook = {
   coverUrl: string | null;
   deadline: string | null;
   myStatus: "active" | "requested" | "author" | null;
+  trust?: TrustBadgeData | null;
+  record?: RecordSummary | null;
 };
 
 type BlurbPopup = CatalogBook & { arcAction?: { href: string; label: string } };
@@ -664,6 +670,7 @@ export default function BetaDashboardClient() {
                             </Link>
                             <div className="font-ui flex flex-1 flex-col gap-1.5 p-2.5 text-[11px]">
                               <span className="text-muted">{b.genre}</span>
+                              <CompactTrust trust={b.trust} record={b.record} />
                               {b.blurb ? (
                                 <button
                                   type="button"
@@ -759,6 +766,7 @@ export default function BetaDashboardClient() {
                                     </span>
                                   </button>
                                   <div className="flex flex-1 flex-col gap-2 p-2.5">
+                                    <CompactTrust trust={b.trust} record={b.record} />
                                     {b.onShelf && (
                                       <Link
                                         href={`/beta/read/${b.projectId}`}
@@ -1143,6 +1151,12 @@ export default function BetaDashboardClient() {
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
                   {blurbPopup.blurb}
                 </p>
+                {(blurbPopup.trust || blurbPopup.record) && (
+                  <div className="mt-5 space-y-2 border-t border-line pt-4">
+                    <TrustBadges {...(blurbPopup.trust || {})} />
+                    <RecordSummaryLine record={blurbPopup.record} />
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3 sm:px-5">
                 {blurbPopup.arcAction ? (

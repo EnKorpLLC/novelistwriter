@@ -5,6 +5,7 @@ import type { LabeledLink } from "@/lib/public-profile";
 import { formatMailingAddress, reviewSiteKey, type MailingAddress } from "@/lib/arc";
 import { ShareKit } from "@/components/ShareKit";
 import { ReaderInsights } from "@/components/ReaderInsights";
+import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
 
 type ArcInvite = {
   id: string;
@@ -185,6 +186,8 @@ export function ArcPanel({ projectId }: { projectId: string }) {
           {note && <p className="text-sm text-ink">{note}</p>}
 
           <ReaderInsights projectId={projectId} phase="arc" />
+
+          <ReaderBadgeSettings projectId={projectId} />
 
           <section className="border border-line p-4">
             <h3 className="font-display text-lg">

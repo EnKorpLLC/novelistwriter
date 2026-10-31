@@ -13,6 +13,7 @@ import { rowHasStudio } from "@/lib/credits";
 import { pauseForLostStudio } from "@/lib/studio-access";
 import { catalogLabelsForProject } from "@/lib/book-keywords";
 import { isArcWindowOpen } from "@/lib/arc";
+import { readerTrustForBooks } from "@/lib/trust-badges";
 
 export async function GET() {
   const supabase = await createClient();
@@ -257,6 +258,16 @@ export async function GET() {
     .eq("id", user.id)
     .maybeSingle();
 
+  const trustById = await readerTrustForBooks(admin, [
+    ...catalogRaw.map((p) => ({ id: p.id, user_id: p.user_id })),
+    ...arcCatalog.map((b) => ({ id: b.projectId, user_id: b.authorUserId })),
+  ]);
+  const withTrust = <T extends { projectId: string }>(b: T) => ({
+    ...b,
+    trust: trustById.get(b.projectId)?.trust || null,
+    record: trustById.get(b.projectId)?.record || null,
+  });
+
   return NextResponse.json({
     emailPrompt: emailPrefs?.email_notifications === false && !emailPrefs.email_prompt_dismissed_at,
     roles: normalizeRoles(profile),
@@ -264,7 +275,7 @@ export async function GET() {
     stats: computeReaderStats(invites),
     shelf,
     arcShelf,
-    catalog,
-    arcCatalog,
+    catalog: catalog.map((g) => ({ ...g, books: g.books.map(withTrust) })),
+    arcCatalog: arcCatalog.map(withTrust),
   });
 }

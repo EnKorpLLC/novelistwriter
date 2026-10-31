@@ -10,7 +10,7 @@ import { pauseForLostStudio } from "@/lib/studio-access";
 import { userHasStudio } from "@/lib/credits";
 import { normalizePublicLinks, publicLinkList } from "@/lib/public-profile";
 import { isSubscribed } from "@/lib/audience";
-import { trustBadgesForBook } from "@/lib/trust-badges";
+import { readerTrustForBooks } from "@/lib/trust-badges";
 
 export async function GET(
   _req: Request,
@@ -93,7 +93,7 @@ export async function GET(
     authorUserId: project.user_id,
     authorName: author?.display_name || "Author",
     authorLinks: publicLinkList(normalizePublicLinks(author?.public_links)),
-    trust: await trustBadgesForBook(admin, project.user_id, projectId),
+    ...((await readerTrustForBooks(admin, [{ id: projectId, user_id: project.user_id }])).get(projectId) || {}),
     canSubscribe: authorHasStudio,
     coverUrl: coverPublicUrl(
       projectCoverPath(project),
