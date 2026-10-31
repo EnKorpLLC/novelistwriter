@@ -18,18 +18,26 @@ const PROOF_POINTS = [
   },
   {
     t: "Badges readers can trust",
-    d: "Books with no AI run on them show “No AI used on this book.” Turn AI off entirely and your page says so.",
+    d: "Books with no AI run on them show “No AI used on this book.” Turn AI off entirely and your page says so. You choose whether badges and your writing record show on your Beta and ARC listings.",
   },
 ];
 
 const DESK_POINTS = [
   {
     t: "Beta readers, run like a desk",
-    d: "Application forms, auto-approve rules, progress by chapter, DNF reasons, and comments pinned to the exact sentence.",
+    d: "Application forms, auto-approve rules, an end date readers can see (plus 3 days to send final reviews), progress by chapter, DNF reasons, and comments pinned to the exact sentence.",
   },
   {
     t: "ARC copies with a deadline",
-    d: "Send advance copies, set a read-by date, nudge readers before it, and close the manuscript when it passes.",
+    d: "Send advance copies, set a read-by date, send reminders before it, and close the manuscript when it passes.",
+  },
+  {
+    t: "See where readers stop",
+    d: "Reader insights chart who joined when, how far each reader got, how often they come back, and the chapter where most of them drop off.",
+  },
+  {
+    t: "Pick readers with a track record",
+    d: "Every applicant shows their badges: Finisher, On time, Thoughtful feedback, Reviewer, and Top rated, plus ratings from other authors.",
   },
   {
     t: "Reviews in one tap",
@@ -106,6 +114,12 @@ export default function HomePage() {
                 className="rounded-sm border border-ink/20 px-6 py-3 text-ink transition hover:border-accent hover:text-accent"
               >
                 See pricing
+              </Link>
+              <Link
+                href="/readers"
+                className="self-center px-2 py-3 text-accent underline-offset-4 hover:underline"
+              >
+                I&apos;m a reader →
               </Link>
             </div>
           </div>
@@ -246,6 +260,52 @@ export default function HomePage() {
           >
             Start writing free
           </Link>
+        </section>
+
+        <section id="readers" className="scroll-mt-24 border-t border-line bg-paper-deep/30 px-6 py-20 md:px-10">
+          <div className="mx-auto max-w-5xl">
+            <p className="font-ui text-[10px] uppercase tracking-wide text-accent">For readers</p>
+            <h2 className="font-display mt-2 text-3xl text-ink">Read books before anyone else. Free.</h2>
+            <p className="mt-3 max-w-2xl text-muted">
+              Beta read and get advance copies from indie authors, right in your browser. No ads, no
+              fees, ever.
+            </p>
+            <ul className="mt-10 grid gap-8 md:grid-cols-3">
+              {[
+                {
+                  t: "Know how it was written",
+                  d: "Listings can show “No AI used on this book” and a writing record, so you see how a book came together before you apply.",
+                },
+                {
+                  t: "Your feedback, on the page",
+                  d: "Highlight a sentence and tell the author what you felt. Clear end dates and read-by dates, with time to send your final review.",
+                },
+                {
+                  t: "Badges authors notice",
+                  d: "Finish books, leave thoughtful feedback, and post ARC reviews to earn badges that authors see when you apply.",
+                },
+              ].map((item) => (
+                <li key={item.t} className="border-t border-line pt-4">
+                  <h3 className="font-display text-xl">{item.t}</h3>
+                  <p className="mt-2 text-sm text-muted">{item.d}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="font-ui mt-10 flex flex-wrap gap-3">
+              <Link
+                href="/beta/signup"
+                className="rounded-sm bg-accent px-6 py-3 text-paper transition hover:bg-accent-soft"
+              >
+                Create a free reader account
+              </Link>
+              <Link
+                href="/readers"
+                className="rounded-sm border border-ink/20 px-6 py-3 text-ink transition hover:border-accent hover:text-accent"
+              >
+                What readers get
+              </Link>
+            </div>
+          </div>
         </section>
 
         <section className="border-y border-line bg-paper-deep/50 px-6 py-16 md:px-10">

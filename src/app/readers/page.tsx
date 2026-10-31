@@ -38,7 +38,19 @@ const FEATURES = [
   },
   {
     t: "Know how a book was written",
-    d: "Books can show a writing record and badges like “No AI used on this book” or “Written in Novelist Writer.”",
+    d: "Before you apply, listings can show badges like “No AI used on this book” or “Written in Novelist Writer,” and a writing record summary, when the author chooses to share them.",
+  },
+  {
+    t: "Clear dates, fair time",
+    d: "Every beta read shows when it ends, and you get 3 extra days after that to send your final review. Advance copies show their read-by date.",
+  },
+  {
+    t: "Earn reader badges",
+    d: "Finisher, On time, Thoughtful feedback, Reviewer, and Top rated. Authors see your badges when you apply, so a good track record gets you picked.",
+  },
+  {
+    t: "A public reader profile, if you want one",
+    d: "Turn it on to share a page with your badges and reading stats. It never lists the books you read or anything you wrote in them.",
   },
 ];
 

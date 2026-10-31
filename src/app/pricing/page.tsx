@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { SUB_ALLOWANCE } from "@/lib/types";
+import { PublicHeader } from "@/components/PublicHeader";
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen px-6 py-16 md:px-10">
-      <div className="mx-auto max-w-4xl">
-        <Link href="/" className="font-ui text-sm text-accent">
-          ← Home
-        </Link>
-        <h1 className="font-display mt-8 text-4xl">Pricing</h1>
+    <div className="min-h-screen">
+      <PublicHeader />
+      <div className="mx-auto max-w-4xl px-6 py-16 md:px-10">
+        <h1 className="font-display text-4xl">Pricing</h1>
         <p className="mt-3 max-w-xl text-muted">
           Write free forever. Your first book is free, and every plan keeps a record of how you wrote
           it and lets you switch AI off entirely. AI critiques craft; it never writes your novel.
@@ -37,8 +36,10 @@ export default function PricingPage() {
                 <strong className="text-ink">Studio</strong> — $32/mo — everything from draft to
                 launch:
                 <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li>Beta reader desk (forms, auto-approve, progress, highlight comments)</li>
+                  <li>Beta reader desk (forms, auto-approve, end dates, progress, highlight comments)</li>
                   <li>ARC desk (read-by deadlines, reminders, one-tap review links)</li>
+                  <li>Reader insights (joins, progress, return visits, drop-off by chapter)</li>
+                  <li>Reader badges and ratings on every applicant</li>
                   <li>Audience lists across all your books, with CSV export</li>
                   <li>Series tools</li>
                   <li>
