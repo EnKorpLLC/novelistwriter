@@ -122,6 +122,7 @@ export function ReaderInsights({ projectId, phase }: { projectId: string; phase:
 
   const s = data?.summary;
   const word = phase === "arc" ? "ARC readers" : "beta readers";
+  const endWord = phase === "arc" ? "deadline" : "end date";
   const bestWeekday = data && Math.max(...data.weekdays) > 0 ? data.weekdays.indexOf(Math.max(...data.weekdays)) : -1;
   const readers = data ? (showAll ? data.readers : data.readers.slice(0, READER_PREVIEW)) : [];
 
@@ -180,10 +181,9 @@ export function ReaderInsights({ projectId, phase }: { projectId: string; phase:
                 />
                 <Stat label="Read this week" value={s.active7} hint="opened it in the last 7 days" />
                 <Stat label="Stalled" value={s.stalled} hint="no reading for 7+ days" />
-                {phase === "beta" ? (
-                  <Stat label="Did not finish" value={s.dnf} />
-                ) : (
-                  <Stat label="Behind pace" value={data.arc?.atRisk ?? 0} hint="unlikely to make the deadline" />
+                {phase === "beta" && <Stat label="Did not finish" value={s.dnf} />}
+                {data.deadline && (
+                  <Stat label="Behind pace" value={data.deadline.atRisk} hint={`unlikely to finish by the ${endWord}`} />
                 )}
                 <Stat label="Average progress" value={`${s.avgBookPercent}%`} hint="of the book, by words" />
                 <Stat
@@ -197,19 +197,13 @@ export function ReaderInsights({ projectId, phase }: { projectId: string; phase:
                   hint="median, start to finish"
                 />
                 {phase === "beta" && <Stat label="Comments" value={s.comments} hint="left by readers" />}
-                {phase === "arc" && data.arc && (
-                  <Stat
-                    label="Deadline"
-                    value={
-                      data.arc.daysLeft == null
-                        ? "None"
-                        : data.arc.daysLeft > 0
-                          ? `${data.arc.daysLeft}d left`
-                          : "Passed"
-                    }
-                    hint={data.arc.deadline ? shortDate(data.arc.deadline) : undefined}
-                  />
-                )}
+                <Stat
+                  label={phase === "arc" ? "Deadline" : "Beta read ends"}
+                  value={
+                    !data.deadline ? "None" : data.deadline.daysLeft > 0 ? `${data.deadline.daysLeft}d left` : "Passed"
+                  }
+                  hint={data.deadline ? shortDate(data.deadline.date) : undefined}
+                />
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
@@ -324,7 +318,7 @@ export function ReaderInsights({ projectId, phase }: { projectId: string; phase:
                           {r.name}{" "}
                           <span className={STATUS_CLASS[r.status]}>· {STATUS_LABEL[r.status]}</span>
                           {r.atRisk && <span className="text-danger"> · behind pace</span>}
-                          {r.finishedOnTime === false && <span className="text-danger"> · after deadline</span>}
+                          {r.finishedOnTime === false && <span className="text-danger"> · after the {endWord}</span>}
                         </span>
                         <span className="tabular-nums text-muted">{r.bookPercent}%</span>
                       </div>
@@ -379,32 +373,40 @@ export function ReaderInsights({ projectId, phase }: { projectId: string; phase:
                 </Card>
               )}
 
-              {phase === "arc" && data.arc && (
+              {(data.deadline || data.arc) && (
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Card title="Deadline" hint="Who finished in time, and who needs a nudge">
-                    <ul className="space-y-1 text-sm">
-                      <li className="flex justify-between">
-                        <span className="text-muted">Finished on time</span>
-                        <span className="tabular-nums text-ink">{data.arc.finishedOnTime}</span>
-                      </li>
-                      <li className="flex justify-between">
-                        <span className="text-muted">Finished after the deadline</span>
-                        <span className="tabular-nums text-ink">{data.arc.finishedLate}</span>
-                      </li>
-                      <li className="flex justify-between">
-                        <span className="text-muted">Behind pace</span>
-                        <span className="tabular-nums text-ink">{data.arc.atRisk}</span>
-                      </li>
-                      <li className="flex justify-between">
-                        <span className="text-muted">Missed the deadline</span>
-                        <span className="tabular-nums text-ink">{data.arc.missedDeadline}</span>
-                      </li>
-                      <li className="flex justify-between">
-                        <span className="text-muted">Finished, no review posted yet</span>
-                        <span className="tabular-nums text-ink">{data.arc.finishedNoReview}</span>
-                      </li>
-                    </ul>
-                  </Card>
+                  {data.deadline && (
+                    <Card
+                      title={phase === "arc" ? "Deadline" : "Beta read end date"}
+                      hint="Who finished in time, and who needs a reminder"
+                    >
+                      <ul className="space-y-1 text-sm">
+                        <li className="flex justify-between">
+                          <span className="text-muted">Finished on time</span>
+                          <span className="tabular-nums text-ink">{data.deadline.finishedOnTime}</span>
+                        </li>
+                        <li className="flex justify-between">
+                          <span className="text-muted">Finished after the {endWord}</span>
+                          <span className="tabular-nums text-ink">{data.deadline.finishedLate}</span>
+                        </li>
+                        <li className="flex justify-between">
+                          <span className="text-muted">Behind pace</span>
+                          <span className="tabular-nums text-ink">{data.deadline.atRisk}</span>
+                        </li>
+                        <li className="flex justify-between">
+                          <span className="text-muted">Didn&apos;t finish by the {endWord}</span>
+                          <span className="tabular-nums text-ink">{data.deadline.missedDeadline}</span>
+                        </li>
+                        {data.arc && (
+                          <li className="flex justify-between">
+                            <span className="text-muted">Finished, no review posted yet</span>
+                            <span className="tabular-nums text-ink">{data.arc.finishedNoReview}</span>
+                          </li>
+                        )}
+                      </ul>
+                    </Card>
+                  )}
+                  {data.arc && (
                   <Card title="Reviews posted" hint="Readers who marked a review as posted on each site">
                     {data.arc.reviewSites.length === 0 ? (
                       <p className="text-sm text-muted">Add review links above to track where readers post.</p>
@@ -425,6 +427,7 @@ export function ReaderInsights({ projectId, phase }: { projectId: string; phase:
                       </ul>
                     )}
                   </Card>
+                  )}
                 </div>
               )}
             </>

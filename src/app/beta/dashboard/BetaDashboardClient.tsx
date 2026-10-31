@@ -9,6 +9,7 @@ import { DashboardRoleNav } from "@/components/DashboardRoleNav";
 import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 import { ClaimReferral } from "@/components/ClaimReferral";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
+import { betaEndLabel, betaEndState, formatBetaEndDate } from "@/lib/beta-access";
 import { CompactTrust, RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
@@ -23,6 +24,7 @@ type ShelfBook = {
   genre: string;
   authorName: string;
   coverUrl: string | null;
+  endsAt?: string | null;
 };
 
 type ArcShelfBook = {
@@ -45,6 +47,7 @@ type CatalogBook = {
   authorName: string;
   coverUrl: string | null;
   onShelf?: boolean;
+  endsAt?: string | null;
   trust?: TrustBadgeData | null;
   record?: RecordSummary | null;
 };
@@ -616,6 +619,15 @@ export default function BetaDashboardClient() {
                                     ? " · DNF"
                                     : ""}
                               </p>
+                              {!b.finishedAt && b.status !== "dnf" && betaEndLabel(b.endsAt) && (
+                                <p
+                                  className={`font-ui text-xs ${
+                                    betaEndState(b.endsAt) === "open" ? "text-ink" : "text-danger"
+                                  }`}
+                                >
+                                  {betaEndLabel(b.endsAt)}
+                                </p>
+                              )}
                             </div>
                           </div>
                           <Link
@@ -767,6 +779,11 @@ export default function BetaDashboardClient() {
                                   </button>
                                   <div className="flex flex-1 flex-col gap-2 p-2.5">
                                     <CompactTrust trust={b.trust} record={b.record} />
+                                    {b.endsAt && (
+                                      <p className="font-ui text-[11px] text-ink">
+                                        Ends {formatBetaEndDate(b.endsAt)}
+                                      </p>
+                                    )}
                                     {b.onShelf && (
                                       <Link
                                         href={`/beta/read/${b.projectId}`}
@@ -1138,6 +1155,9 @@ export default function BetaDashboardClient() {
                     {blurbPopup.title}
                   </h2>
                   <p className="mt-0.5 text-sm text-muted">{blurbPopup.authorName}</p>
+                  {!blurbPopup.arcAction && betaEndLabel(blurbPopup.endsAt) && (
+                    <p className="font-ui mt-1 text-xs text-ink">{betaEndLabel(blurbPopup.endsAt)}</p>
+                  )}
                 </div>
                 <button
                   type="button"

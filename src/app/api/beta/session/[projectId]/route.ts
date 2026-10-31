@@ -122,6 +122,7 @@ export async function GET(
     inviteId: invite!.id,
     status: invite!.status,
     finishedAt: invite!.finished_at,
+    endsAt: project.beta_expires_at || null,
     hasReview: Boolean(review),
     reviewBody: review?.body || null,
     currentChapterId: resumeChapterId || chapters?.[0]?.id || null,

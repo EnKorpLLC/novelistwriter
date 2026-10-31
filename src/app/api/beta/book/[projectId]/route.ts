@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { accessMessageForStatus, BETA_PERIOD_ENDED_REASON } from "@/lib/beta-access";
+import { accessMessageForStatus, BETA_PERIOD_ENDED_REASON, isBetaClosedToNew } from "@/lib/beta-access";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel, linkInvitesForEmail } from "@/lib/beta-platform";
@@ -42,14 +42,17 @@ export async function GET(
     project.beta_ready = false;
   }
 
-  const publiclyListed = Boolean(project.beta_ready && authorHasStudio);
+  // Past the end date: no new readers, but the page still says the beta read ended
+  const closedToNew = isBetaClosedToNew(project.beta_expires_at);
+  const listedButEnded = Boolean(project.beta_ready && authorHasStudio && closedToNew);
+  const publiclyListed = Boolean(project.beta_ready && authorHasStudio && !closedToNew);
 
-  if (!publiclyListed && !user) {
+  if (!publiclyListed && !listedButEnded && !user) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   // Authors can always view their own book gate; others need a Studio listing or invite
-  if (!publiclyListed && user?.id !== project.user_id) {
+  if (!publiclyListed && !listedButEnded && user?.id !== project.user_id) {
     const invite = user
       ? await findReaderInvite(admin, { projectId, userId: user.id, email: user.email })
       : null;
@@ -100,6 +103,7 @@ export async function GET(
       project.updated_at ? Date.parse(project.updated_at) : undefined
     ),
     applicationForm: form,
+    endsAt: project.beta_expires_at || null,
     reviews: (reviews || []).map((r) => ({
       id: r.id,
       body: r.body,
@@ -112,7 +116,7 @@ export async function GET(
     return NextResponse.json({
       ...base,
       loggedIn: false,
-      access: "login_required" as const,
+      access: listedButEnded ? ("closed" as const) : ("login_required" as const),
     });
   }
 
@@ -195,6 +199,10 @@ export async function GET(
       message: msg.message,
       reason: msg.reason,
     });
+  }
+
+  if (!publiclyListed && user.id !== project.user_id) {
+    return NextResponse.json({ ...base, loggedIn: true, access: "closed" as const });
   }
 
   return NextResponse.json({

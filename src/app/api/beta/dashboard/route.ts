@@ -14,6 +14,7 @@ import { pauseForLostStudio } from "@/lib/studio-access";
 import { catalogLabelsForProject } from "@/lib/book-keywords";
 import { isArcWindowOpen } from "@/lib/arc";
 import { readerTrustForBooks } from "@/lib/trust-badges";
+import { isBetaClosedToNew } from "@/lib/beta-access";
 
 export async function GET() {
   const supabase = await createClient();
@@ -48,7 +49,7 @@ export async function GET() {
         : Promise.resolve({ data: [] as never[] }),
       admin
         .from("projects")
-        .select("id, title, genre, blurb, cover_path, updated_at, user_id, beta_ready, metadata")
+        .select("id, title, genre, blurb, cover_path, updated_at, user_id, beta_ready, metadata, beta_expires_at")
         .eq("beta_ready", true)
         .order("genre", { ascending: true })
         .order("title", { ascending: true }),
@@ -67,7 +68,7 @@ export async function GET() {
   const { data: shelfProjects } = projectIds.length
     ? await admin
         .from("projects")
-        .select("id, title, genre, cover_path, updated_at, user_id, metadata")
+        .select("id, title, genre, cover_path, updated_at, user_id, metadata, beta_expires_at")
         .in("id", projectIds)
     : {
         data: [] as {
@@ -78,6 +79,7 @@ export async function GET() {
           updated_at: string;
           user_id: string;
           metadata: Record<string, unknown> | null;
+          beta_expires_at: string | null;
         }[],
       };
 
@@ -123,12 +125,15 @@ export async function GET() {
         coverUrl: p
           ? coverPublicUrl(projectCoverPath(p), p.updated_at ? Date.parse(p.updated_at) : undefined)
           : null,
+        endsAt: p?.beta_expires_at || null,
       };
     })
     .sort((a, b) => String(b.lastReadAt || "").localeCompare(String(a.lastReadAt || "")));
 
   const shelfIds = new Set(shelf.map((s) => s.projectId));
-  const catalogRaw = (readyProjects || []).filter((p) => studioAuthors.has(p.user_id));
+  const catalogRaw = (readyProjects || []).filter(
+    (p) => studioAuthors.has(p.user_id) && !isBetaClosedToNew(p.beta_expires_at)
+  );
 
   type CatalogBook = (typeof catalogRaw)[number];
   const byKeyword = new Map<string, CatalogBook[]>();
@@ -163,6 +168,7 @@ export async function GET() {
             p.updated_at ? Date.parse(p.updated_at) : undefined
           ),
           onShelf: shelfIds.has(p.id),
+          endsAt: p.beta_expires_at || null,
         })),
     }));
 

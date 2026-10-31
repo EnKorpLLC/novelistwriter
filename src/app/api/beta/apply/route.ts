@@ -6,6 +6,7 @@ import {
   sanitizeDisplayName,
   shouldAutoApprove,
   BETA_PERIOD_ENDED_REASON,
+  isBetaClosedToNew,
 } from "@/lib/beta-access";
 import { enforceBetaExpiry, upsertBetaContact } from "@/lib/beta-server";
 import { joinAuthorAudience } from "@/lib/audience";
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
   }
 
   const { expired } = await enforceBetaExpiry(admin, project);
-  if (expired) {
+  if (expired || isBetaClosedToNew(project.beta_expires_at)) {
     return NextResponse.json(
       { error: BETA_PERIOD_ENDED_REASON, code: "expired", message: BETA_PERIOD_ENDED_REASON },
       { status: 403 }

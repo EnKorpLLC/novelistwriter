@@ -64,7 +64,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   );
 
   if (phase === "beta") {
-    const [{ data: invites }, progress, comments] = await Promise.all([
+    const [{ data: proj }, { data: invites }, progress, comments] = await Promise.all([
+      admin.from("projects").select("beta_expires_at").eq("id", projectId).maybeSingle(),
       admin
         .from("beta_invites")
         .select("id, email, display_name, status, created_at, last_read_at, finished_at, dnf_at, dnf_reason, current_chapter_id")
@@ -100,7 +101,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }));
     return NextResponse.json({
       studioAccess: true,
-      insights: computeReaderInsights({ phase, chapters: chapters || [], invites: rows, progress, days, comments }),
+      insights: computeReaderInsights({
+        phase,
+        chapters: chapters || [],
+        invites: rows,
+        progress,
+        days,
+        comments,
+        deadline: proj?.beta_expires_at || null,
+      }),
     });
   }
 

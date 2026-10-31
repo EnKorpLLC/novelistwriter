@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { BetaFormFields } from "@/components/BetaFormFields";
 import type { BetaApplicationForm } from "@/lib/beta-form";
+import { betaEndLabel } from "@/lib/beta-access";
 import type { LabeledLink } from "@/lib/public-profile";
 import { AuthorConnect, AuthorLinks } from "@/components/AuthorConnect";
 import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
@@ -21,6 +22,7 @@ type GateData = {
   authorLinks: LabeledLink[];
   trust?: TrustBadgeData;
   record?: RecordSummary | null;
+  endsAt?: string | null;
   canSubscribe?: boolean;
   subscribed?: boolean;
   coverUrl: string | null;
@@ -148,6 +150,9 @@ export default function BetaBookGatePage() {
         )}{" "}
         · {data.genre}
       </p>
+      {betaEndLabel(data.endsAt) && (
+        <p className="font-ui mt-1 text-xs text-ink">{betaEndLabel(data.endsAt)}</p>
+      )}
       <TrustBadges {...(data.trust || {})} className="mt-2" />
       <RecordSummaryLine record={data.record} className="mt-2" />
       <AuthorLinks links={data.authorLinks || []} className="mt-2" />
@@ -162,7 +167,14 @@ export default function BetaBookGatePage() {
         </div>
       )}
 
-      {!data.loggedIn && (
+      {data.access === "closed" && (
+        <p className="mt-8 border border-line bg-paper p-5 text-sm text-ink">
+          This beta read has ended and isn&apos;t taking new readers. Follow the author to hear about their
+          next book.
+        </p>
+      )}
+
+      {!data.loggedIn && data.access !== "closed" && (
         <div className="mt-8 border border-line bg-paper p-5">
           <p className="text-sm text-ink">Log in or create a free reader account to continue.</p>
           <div className="mt-4 flex flex-wrap gap-3 font-ui text-sm">

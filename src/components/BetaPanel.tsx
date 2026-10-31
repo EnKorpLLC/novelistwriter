@@ -8,6 +8,10 @@ import {
   normalizeBetaAutoApprove,
   type BetaAutoApproveSettings,
   BETA_PERIOD_ENDED_REASON,
+  BETA_REVIEW_GRACE_DAYS,
+  betaEndState,
+  betaGraceEndsAt,
+  formatBetaEndDate,
 } from "@/lib/beta-access";
 import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/beta-platform";
 import { ShareKit } from "@/components/ShareKit";
@@ -106,10 +110,8 @@ function toDateInput(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) {
     return iso.length >= 10 ? iso.slice(0, 10) : "";
   }
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  // End dates are stored in UTC as the last moment of the chosen day
+  return d.toISOString().slice(0, 10);
 }
 
 function inviteLabel(inv: Invite): string {
@@ -124,6 +126,15 @@ function isInactiveReader(inv: Invite): boolean {
   if (inv.finishedAt || inv.bookReview) return false;
   if (!inv.lastReadAt) return true;
   return Date.now() - Date.parse(inv.lastReadAt) >= INACTIVE_AFTER_MS;
+}
+
+/** Unfinished readers can be reminded any time in the last week before the end date, or during the grace days. */
+function canNudgeBeforeEnd(inv: Invite, endsAt: string | null): boolean {
+  if (inv.status !== "pending" && inv.status !== "accepted") return false;
+  if (inv.finishedAt || inv.bookReview || !endsAt) return false;
+  const state = betaEndState(endsAt);
+  if (state === "grace") return true;
+  return state === "open" && Date.parse(endsAt) - Date.now() <= INACTIVE_AFTER_MS;
 }
 
 function csvEscape(value: string): string {
@@ -150,6 +161,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [expiresAt, setExpiresAt] = useState("");
   const [periodEnded, setPeriodEnded] = useState(false);
   const [savingAccess, setSavingAccess] = useState(false);
+  const [savingEndDate, setSavingEndDate] = useState(false);
+  const [savedEndsAt, setSavedEndsAt] = useState<string | null>(null);
   const [reasonPrompt, setReasonPrompt] = useState<null | {
     inviteId: string;
     action: "deny" | "remove";
@@ -209,6 +222,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         setContacts(data.contacts || []);
         setAutoApprove(normalizeBetaAutoApprove(data.autoApprove));
         setExpiresAt(toDateInput(data.expiresAt));
+        setSavedEndsAt(data.expiresAt || null);
         setPeriodEnded(Boolean(data.periodEnded));
         setBetaReady(Boolean(data.betaReady));
         setShareLink(data.shareLink || "");
@@ -604,7 +618,6 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         body: JSON.stringify({
           action: "saveAccessSettings",
           autoApprove,
-          expiresAt: expiresAt || null,
         }),
       });
       const data = await res.json();
@@ -613,11 +626,31 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         return;
       }
       setAutoApprove(normalizeBetaAutoApprove(data.autoApprove));
-      setExpiresAt(toDateInput(data.expiresAt));
       setNote("Access settings saved.");
       void load();
     } finally {
       setSavingAccess(false);
+    }
+  }
+
+  async function saveEndDate(next: string) {
+    setSavingEndDate(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/beta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveEndDate", endsOn: next || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(data.error || "Could not save the end date");
+        return;
+      }
+      setExpiresAt(toDateInput(data.expiresAt));
+      setNote(next ? "Beta read end date saved." : "End date cleared. The beta read stays open until you turn it off.");
+      void load();
+    } finally {
+      setSavingEndDate(false);
     }
   }
 
@@ -1104,6 +1137,52 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                     Ready for beta readers
                   </label>
                 )}
+                {!loading && (
+                  <div className="font-ui mt-4 border border-line p-3">
+                    <label className="text-[10px] uppercase tracking-wide text-muted" htmlFor="beta-ends-on">
+                      Beta read ends
+                    </label>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <input
+                        id="beta-ends-on"
+                        type="date"
+                        className="border border-line px-2 py-1.5 text-sm"
+                        value={expiresAt}
+                        onChange={(e) => setExpiresAt(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        disabled={savingEndDate || expiresAt === toDateInput(savedEndsAt)}
+                        className="bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-40"
+                        onClick={() => void saveEndDate(expiresAt)}
+                      >
+                        {savingEndDate ? "Saving…" : "Save date"}
+                      </button>
+                      {savedEndsAt && (
+                        <button
+                          type="button"
+                          disabled={savingEndDate}
+                          className="border border-line px-3 py-1.5 text-xs text-muted"
+                          onClick={() => void saveEndDate("")}
+                        >
+                          No end date
+                        </button>
+                      )}
+                    </div>
+                    <p className="mt-2 text-xs text-muted">
+                      Readers see this date on Available, their shelf, the book page, and while reading. On
+                      that day the book leaves Available and stops taking applications. Current readers get{" "}
+                      {BETA_REVIEW_GRACE_DAYS} more days to finish and send their final review, then access
+                      closes.
+                    </p>
+                    {betaEndState(savedEndsAt) === "grace" && (
+                      <p className="mt-2 text-xs text-danger">
+                        The beta read has ended. Readers can send final reviews until{" "}
+                        {formatBetaEndDate(betaGraceEndsAt(savedEndsAt)!)}.
+                      </p>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1417,11 +1496,10 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                       : `Auto-approve by rules (${autoApprove.rules.length}, ${
                           autoApprove.match === "any" ? "OR" : "AND"
                         })`}
-                  {expiresAt ? ` · Ends ${expiresAt}` : ""}
                 </span>
                 {periodEnded && (
                   <span className="mt-1 block text-xs text-danger">
-                    Beta period ended — readers were removed.
+                    Beta read ended — readers were removed.
                   </span>
                 )}
               </span>
@@ -1433,11 +1511,11 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
             {accessSettingsOpen && (
               <div className="mt-4">
                 <p className="text-xs text-muted">
-                  Auto-approve applicants and set when the beta period ends.
+                  Auto-approve applicants. Set when the beta read ends at the top of this tab.
                 </p>
                 {periodEnded && (
                   <p className="mt-2 text-sm text-danger">
-                    Beta period ended — readers were removed. {BETA_PERIOD_ENDED_REASON}
+                    Beta read ended — readers were removed. {BETA_PERIOD_ENDED_REASON}
                   </p>
                 )}
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1457,28 +1535,6 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                       <option value="all">Approve all</option>
                       <option value="rules">Approve by yes/no rules</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wide text-muted">
-                      Expiration date
-                    </label>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      <input
-                        type="date"
-                        className="border border-line px-2 py-1.5 text-sm"
-                        value={expiresAt}
-                        onChange={(e) => setExpiresAt(e.target.value)}
-                      />
-                      {expiresAt && (
-                        <button
-                          type="button"
-                          className="border border-line px-2 py-1.5 text-xs text-muted"
-                          onClick={() => setExpiresAt("")}
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
                   </div>
                 </div>
                 {autoApprove.mode === "rules" && (
@@ -1977,7 +2033,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                   Invite claim link
                                 </button>
                               )}
-                              {isInactiveReader(inv) &&
+                              {(isInactiveReader(inv) || canNudgeBeforeEnd(inv, savedEndsAt)) &&
                                 (!inv.readerHasAccount ? (
                                   <span
                                     className="text-xs text-muted"

@@ -63,11 +63,50 @@ export function sanitizeDisplayName(raw: unknown): string {
   return text.slice(0, 80);
 }
 
-export function isBetaExpired(expiresAt: string | null | undefined, now = new Date()): boolean {
-  if (!expiresAt) return false;
+/** Days current readers keep access after the beta read ends, to finish and leave their final review. */
+export const BETA_REVIEW_GRACE_DAYS = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type BetaEndState = "open" | "grace" | "ended";
+
+/** open: before the end date. grace: ended, readers still finishing. ended: access closes. */
+export function betaEndState(expiresAt: string | null | undefined, now = new Date()): BetaEndState {
+  if (!expiresAt) return "open";
   const t = new Date(expiresAt).getTime();
-  if (Number.isNaN(t)) return false;
-  return t <= now.getTime();
+  if (Number.isNaN(t) || t > now.getTime()) return "open";
+  return now.getTime() < t + BETA_REVIEW_GRACE_DAYS * DAY_MS ? "grace" : "ended";
+}
+
+export function betaGraceEndsAt(expiresAt: string | null | undefined): string | null {
+  if (!expiresAt) return null;
+  const t = new Date(expiresAt).getTime();
+  return Number.isNaN(t) ? null : new Date(t + BETA_REVIEW_GRACE_DAYS * DAY_MS).toISOString();
+}
+
+/** No new listings or applications once the end date passes (readers may still be in grace). */
+export function isBetaClosedToNew(expiresAt: string | null | undefined, now = new Date()): boolean {
+  return betaEndState(expiresAt, now) !== "open";
+}
+
+/** End dates are saved as the last moment of the chosen day (UTC), so show them in UTC too. */
+export function formatBetaEndDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/** What readers see about the end date, or null when the author set none. */
+export function betaEndLabel(expiresAt: string | null | undefined, now = new Date()): string | null {
+  if (!expiresAt) return null;
+  const state = betaEndState(expiresAt, now);
+  if (state === "open") return `Beta read ends ${formatBetaEndDate(expiresAt)}`;
+  if (state === "grace") {
+    return `Beta read ended · finish and send your final review by ${formatBetaEndDate(betaGraceEndsAt(expiresAt)!)}`;
+  }
+  return "Beta read ended";
+}
+
+/** Reader access closes: the end date plus the review grace period has passed. */
+export function isBetaExpired(expiresAt: string | null | undefined, now = new Date()): boolean {
+  return betaEndState(expiresAt, now) === "ended";
 }
 
 export type BetaAccessCode =

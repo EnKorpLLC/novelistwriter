@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BetaFormFields } from "@/components/BetaFormFields";
 import type { BetaApplicationForm } from "@/lib/beta-form";
+import { betaEndLabel, betaEndState } from "@/lib/beta-access";
 import { highlightPassageInElement } from "@/lib/passage-highlight";
 
 type Chapter = {
@@ -91,6 +92,7 @@ export function BetaAuthReaderClient({
   const lastSentPercent = useRef(0);
 
   const [title, setTitle] = useState("");
+  const [endsAt, setEndsAt] = useState<string | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [unlocked, setUnlocked] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -139,6 +141,7 @@ export function BetaAuthReaderClient({
     title?: string;
     currentChapterId?: string | null;
     finishedAt?: string | null;
+    endsAt?: string | null;
     hasReview?: boolean;
     reviewBody?: string | null;
   }) {
@@ -147,6 +150,7 @@ export function BetaAuthReaderClient({
     setUnlocked(true);
     setGateNeedsApplication(false);
     if (data.title) setTitle(data.title);
+    setEndsAt(data.endsAt || null);
     if (data.status === "dnf") setDnf(true);
     if (data.finishedAt || data.hasReview) {
       setFinished(true);
@@ -751,6 +755,17 @@ export function BetaAuthReaderClient({
         </Link>
         {title ? <p className="text-sm text-muted">{title}</p> : null}
       </div>
+
+      {!finished && !dnf && betaEndLabel(endsAt) && (
+        <p
+          className={`font-ui mb-6 border px-3 py-2 text-sm ${
+            betaEndState(endsAt) === "open" ? "border-line text-ink" : "border-danger/40 bg-danger/10 text-danger"
+          }`}
+        >
+          {betaEndLabel(endsAt)}
+          {betaEndState(endsAt) === "grace" && ". Use “Finished the book?” to send it."}
+        </p>
+      )}
 
       {dnf && (
         <div className="font-ui mb-6 border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">

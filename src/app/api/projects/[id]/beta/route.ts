@@ -6,6 +6,8 @@ import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import {
   normalizeBetaAutoApprove,
   sanitizeDisplayName,
+  betaEndLabel,
+  betaEndState,
 } from "@/lib/beta-access";
 import {
   enforceBetaExpiry,
@@ -456,9 +458,7 @@ export async function GET(
     applicationForm,
     autoApprove,
     expiresAt: project.beta_expires_at || null,
-    periodEnded: Boolean(
-      project.beta_expires_at && new Date(project.beta_expires_at).getTime() <= Date.now()
-    ),
+    periodEnded: betaEndState(project.beta_expires_at) === "ended",
     chapters: chapters || [],
     contacts: contactRows.map((c) => {
       const emailKey = String(c.email || "")
@@ -680,6 +680,7 @@ export async function POST(
     const { data: proj } = await admin.from("projects").select("title").eq("id", projectId).maybeSingle();
     const author = await authorContact(admin, user.id);
     const title = proj?.title || "the manuscript";
+    const endLine = betaEndLabel(project.beta_expires_at);
 
     let channel: "email" | "in_app" = "in_app";
     if (consent.optedIn && emailConfigured()) {
@@ -688,6 +689,7 @@ export async function POST(
         paragraphs: [
           inv.display_name ? `Hi ${inv.display_name},` : "Hi,",
           `${author.name} wanted to check in on your beta read of "${title}". Your place is saved, so you can pick up right where you left off.`,
+          ...(endLine ? [`${endLine}.`] : []),
           "If you've decided to stop, you can mark it DNF from the reading page. That helps the author too.",
         ],
         button: { label: "Continue reading", url: appUrl(`/beta/book/${projectId}`) },
@@ -710,7 +712,7 @@ export async function POST(
       userId: consent.userId,
       type: "reading_reminder",
       title: `${author.name} is checking in`,
-      body: `Pick up "${title}" where you left off.`,
+      body: `Pick up "${title}" where you left off.${endLine ? ` ${endLine}.` : ""}`,
       href: `/beta/book/${projectId}`,
       meta: { projectId },
     });
@@ -748,26 +750,37 @@ export async function POST(
 
   if (body?.action === "saveAccessSettings") {
     const autoApprove = normalizeBetaAutoApprove(body.autoApprove);
-    let expiresAt: string | null = null;
-    if (body.expiresAt) {
-      const d = new Date(String(body.expiresAt));
-      if (Number.isNaN(d.getTime())) {
-        return NextResponse.json({ error: "Invalid expiration date" }, { status: 400 });
-      }
-      expiresAt = d.toISOString();
-    }
     const { error } = await supabase
       .from("projects")
       .update({
         beta_auto_approve: autoApprove,
-        beta_expires_at: expiresAt,
         updated_at: new Date().toISOString(),
       })
       .eq("id", projectId)
       .eq("user_id", user.id);
     if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
+    return NextResponse.json({ ok: true, autoApprove });
+  }
+
+  if (body?.action === "saveEndDate") {
+    let expiresAt: string | null = null;
+    if (body.endsOn) {
+      const day = String(body.endsOn).slice(0, 10);
+      // The beta read runs through the whole chosen day
+      const d = new Date(`${day}T23:59:59.999Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: "Invalid end date" }, { status: 400 });
+      }
+      expiresAt = d.toISOString();
+    }
+    const { error } = await supabase
+      .from("projects")
+      .update({ beta_expires_at: expiresAt, updated_at: new Date().toISOString() })
+      .eq("id", projectId)
+      .eq("user_id", user.id);
+    if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
     if (expiresAt) await enforceBetaExpiry(supabase, { id: projectId, beta_expires_at: expiresAt });
-    return NextResponse.json({ ok: true, autoApprove, expiresAt });
+    return NextResponse.json({ ok: true, expiresAt });
   }
 
   if (body?.action === "deleteContact") {

@@ -59,13 +59,16 @@ export type ReaderInsights = {
   biggestDrop: { title: string; stopped: number } | null;
   readers: ReaderInsightRow[];
   dnfReasons: { name: string; chapter: string | null; reason: string; at: string | null }[];
-  arc: {
-    deadline: string | null;
-    daysLeft: number | null;
+  /** ARC read-by date or beta end date; null when the author set none */
+  deadline: {
+    date: string;
+    daysLeft: number;
     finishedOnTime: number;
     finishedLate: number;
     missedDeadline: number;
     atRisk: number;
+  } | null;
+  arc: {
     finishedNoReview: number;
     reviewSites: { label: string; posted: number }[];
   } | null;
@@ -224,7 +227,7 @@ export function computeReaderInsights(input: {
     }
 
     let atRisk = false;
-    if (input.phase === "arc" && hasDeadline && !finished && deadlineMs > now) {
+    if (hasDeadline && !finished && status !== "dnf" && deadlineMs > now) {
       const joined = Date.parse(inv.createdAt);
       const window = Math.max(DAY_MS, deadlineMs - joined);
       const expected = Math.min(100, ((now - joined) / window) * 100);
@@ -245,10 +248,7 @@ export function computeReaderInsights(input: {
       avgGapDays,
       comments: commentsByInvite.get(inv.id) || 0,
       atRisk,
-      finishedOnTime:
-        input.phase === "arc" && inv.finishedAt
-          ? !hasDeadline || Date.parse(inv.finishedAt) <= deadlineMs
-          : null,
+      finishedOnTime: inv.finishedAt && hasDeadline ? Date.parse(inv.finishedAt) <= deadlineMs : null,
       reviewsPosted: Object.keys(inv.reviewPosts || {}).length,
     };
   });
@@ -347,15 +347,21 @@ export function computeReaderInsights(input: {
       at: i.dnfAt || null,
     }));
 
+  const deadline: ReaderInsights["deadline"] = hasDeadline
+    ? {
+        date: input.deadline as string,
+        daysLeft: Math.ceil((deadlineMs - now) / DAY_MS),
+        finishedOnTime: readers.filter((r) => r.finishedOnTime === true).length,
+        finishedLate: readers.filter((r) => r.finishedOnTime === false).length,
+        missedDeadline:
+          deadlineMs <= now ? readers.filter((r) => !r.finishedAt && r.status !== "dnf").length : 0,
+        atRisk: readers.filter((r) => r.atRisk).length,
+      }
+    : null;
+
   let arc: ReaderInsights["arc"] = null;
   if (input.phase === "arc") {
     arc = {
-      deadline: input.deadline || null,
-      daysLeft: hasDeadline ? Math.ceil((deadlineMs - now) / DAY_MS) : null,
-      finishedOnTime: readers.filter((r) => r.finishedOnTime === true).length,
-      finishedLate: readers.filter((r) => r.finishedOnTime === false).length,
-      missedDeadline: hasDeadline && deadlineMs <= now ? readers.filter((r) => !r.finishedAt).length : 0,
-      atRisk: readers.filter((r) => r.atRisk).length,
       finishedNoReview: readers.filter((r) => r.finishedAt && r.reviewsPosted === 0).length,
       reviewSites: (input.reviewSites || []).map((s) => ({
         label: s.label,
@@ -395,6 +401,7 @@ export function computeReaderInsights(input: {
     biggestDrop: worst ? { title: worst.title, stopped: worst.stoppedHere } : null,
     readers: readers.sort((a, b) => b.bookPercent - a.bookPercent || a.name.localeCompare(b.name)),
     dnfReasons,
+    deadline,
     arc,
   };
 }
