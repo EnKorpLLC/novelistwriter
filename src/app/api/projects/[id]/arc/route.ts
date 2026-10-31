@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { userHasStudio } from "@/lib/credits";
 import { appUrl } from "@/lib/stripe";
 import { sanitizeDisplayName } from "@/lib/beta-access";
-import { createNotification } from "@/lib/beta-social";
+import { createNotification, publicReaderProfileUrls, readerBadgeStatsFor } from "@/lib/beta-social";
 import {
   authorContact,
   joinAuthorAudience,
@@ -170,6 +170,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     (invites || []).map((i) => ({ email: i.email, userId: i.reader_user_id }))
   );
   const deadlineMs = project.arc_deadline ? Date.parse(project.arc_deadline) : null;
+  const readerIdents = (invites || []).map((i) => ({ userId: i.reader_user_id, email: i.email }));
+  const [badgesByReader, profileUrlByUser] = await Promise.all([
+    readerBadgeStatsFor(admin, readerIdents).catch(() => new Map()),
+    publicReaderProfileUrls(admin, readerIdents.map((r) => r.userId).filter(Boolean) as string[]),
+  ]);
 
   return NextResponse.json({
     studioAccess: true,
@@ -201,6 +206,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       reviewBody: i.review_body,
       reviewPosts: (i.review_posts as Record<string, string>) || {},
       mailingAddress: normalizeMailingAddress(i.mailing_address),
+      readerBadges: badgesByReader.get(i.reader_user_id || i.email.toLowerCase())?.badges || [],
+      readerProfileUrl: (i.reader_user_id && profileUrlByUser.get(i.reader_user_id)) || null,
     })),
   });
 }

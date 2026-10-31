@@ -10,7 +10,8 @@ import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 import { ClaimReferral } from "@/components/ClaimReferral";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
 import { betaEndLabel, betaEndState, formatBetaEndDate } from "@/lib/beta-access";
-import { CompactTrust, RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
+import { CompactTrust, ReaderBadgeList, RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
+import type { READER_BADGE_RULES, ReaderBadge, ReaderBadgeStats } from "@/lib/beta-social";
 import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type ShelfBook = {
@@ -154,6 +155,140 @@ type FollowItem = {
   authorName: string;
   createdAt: string;
 };
+
+type ReaderProfileData = {
+  badges: ReaderBadge[];
+  stats: ReaderBadgeStats | null;
+  rules: typeof READER_BADGE_RULES;
+  public: boolean;
+  url: string | null;
+  hasDisplayName: boolean;
+  migrationNeeded: boolean;
+};
+
+/** Next step toward each badge the reader hasn't maxed out yet. */
+function badgeHints(s: ReaderBadgeStats, r: typeof READER_BADGE_RULES): string[] {
+  const out: string[] = [];
+  const nextFinisher = [...r.finisherTiers].reverse().find((t) => s.booksFinished < t);
+  if (nextFinisher) {
+    const left = nextFinisher - s.booksFinished;
+    out.push(`Finisher${nextFinisher > 1 ? ` ${nextFinisher}+` : ""}: finish ${left} more beta or ARC book${left === 1 ? "" : "s"}`);
+  }
+  if (s.arcsOnTime < r.onTime) out.push("On time: finish an ARC before its deadline");
+  if (s.comments < r.feedbackComments && s.thanks < r.feedbackThanks) {
+    out.push(
+      `Thoughtful feedback: ${r.feedbackComments - s.comments} more comments, or ${r.feedbackThanks - s.thanks} more thank-yous from authors`
+    );
+  }
+  const nextReviewer = [...r.reviewerTiers].reverse().find((t) => s.reviewsPosted < t);
+  if (nextReviewer) {
+    const left = nextReviewer - s.reviewsPosted;
+    out.push(`Reviewer${nextReviewer > 1 ? ` ${nextReviewer}+` : ""}: post ${left} more ARC review${left === 1 ? "" : "s"} on review sites`);
+  }
+  if (s.ratingCount < r.topRatedMinRatings || (s.avgRating ?? 0) < r.topRatedAvg) {
+    out.push(
+      `Top rated: an average of ${r.topRatedAvg}+ stars from at least ${r.topRatedMinRatings} authors (${s.ratingCount} so far)`
+    );
+  }
+  return out;
+}
+
+function ReaderBadgesBox() {
+  const [data, setData] = useState<ReaderProfileData | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showHints, setShowHints] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/profile/reader-profile")
+      .then(async (r) => (r.ok ? setData(await r.json()) : null))
+      .catch(() => null);
+  }, []);
+
+  async function setPublic(next: boolean) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/profile/reader-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public: next }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not save");
+      setData((d) => (d ? { ...d, public: json.public, url: json.url } : d));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!data) return null;
+  const hints = data.stats ? badgeHints(data.stats, data.rules) : [];
+  return (
+    <section className="font-ui mt-4 border border-line px-5 py-4 text-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-lg text-ink">Your badges</h2>
+        {hints.length > 0 && (
+          <button type="button" className="text-xs text-accent hover:underline" onClick={() => setShowHints((v) => !v)}>
+            {showHints ? "Hide how to earn more" : "How to earn more"}
+          </button>
+        )}
+      </div>
+      {data.badges.length ? (
+        <ReaderBadgeList badges={data.badges} showDetail className="mt-2" />
+      ) : (
+        <p className="mt-1 text-xs text-muted">
+          None yet. Finish books, leave feedback, and post ARC reviews to earn them. Authors see your badges
+          when you apply.
+        </p>
+      )}
+      {showHints && (
+        <ul className="mt-3 list-disc space-y-0.5 pl-5 text-xs text-muted">
+          {hints.map((h) => (
+            <li key={h}>{h}</li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3 border-t border-line pt-3 text-xs">
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={data.public}
+            disabled={saving || data.migrationNeeded}
+            onChange={(e) => void setPublic(e.target.checked)}
+          />
+          <span>
+            <span className="text-ink">Public reader profile</span>
+            <span className="block text-muted">
+              A page with your display name, badges, and reading stats that anyone can see. Never the books
+              you read or anything you wrote in them.
+            </span>
+          </span>
+        </label>
+        {data.public && data.url && (
+          <p className="mt-2">
+            <a href={data.url} target="_blank" rel="noopener noreferrer" className="text-accent underline">
+              View your public profile
+            </a>
+          </p>
+        )}
+        {!data.hasDisplayName && !data.public && (
+          <p className="mt-2 text-muted">
+            Add a display name in{" "}
+            <Link href="/settings" className="text-accent underline">
+              Settings
+            </Link>{" "}
+            before making it public.
+          </p>
+        )}
+        {error && <p className="mt-2 text-danger">{error}</p>}
+      </div>
+    </section>
+  );
+}
 
 const TABS = [
   { id: "books", label: "My books" },
@@ -497,6 +632,8 @@ export default function BetaDashboardClient() {
                 <span className="text-ink">{stats.reading}</span>
               </span>
             </div>
+
+            <ReaderBadgesBox />
 
             <nav
               className="font-ui mt-8 flex flex-wrap gap-1 border-b border-line"

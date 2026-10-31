@@ -39,6 +39,40 @@ export function RecordSummaryLine({ record, className = "" }: { record?: RecordS
   );
 }
 
+/** Badges a reader has earned; hover (or showDetail) explains each one. */
+export function ReaderBadgeList({
+  badges,
+  showDetail = false,
+  className = "",
+}: {
+  badges?: { id: string; label: string; detail: string }[] | null;
+  showDetail?: boolean;
+  className?: string;
+}) {
+  if (!badges?.length) return null;
+  if (showDetail) {
+    return (
+      <ul className={`font-ui space-y-1.5 ${className}`}>
+        {badges.map((b) => (
+          <li key={b.id} className="flex flex-wrap items-baseline gap-2 text-xs">
+            <span className="border border-accent px-2 py-0.5 text-[11px] text-accent">{b.label}</span>
+            <span className="text-muted">{b.detail}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <ul className={`font-ui flex flex-wrap gap-1 ${className}`}>
+      {badges.map((b) => (
+        <li key={b.id} className="border border-accent px-1.5 py-px text-[10px] text-accent" title={b.detail}>
+          {b.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Small chips for book cards. */
 export function CompactTrust({ trust, record }: { trust?: TrustData | null; record?: RecordSummary | null }) {
   const chips: { label: string; title: string }[] = [];

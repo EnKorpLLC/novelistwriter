@@ -17,6 +17,8 @@ import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/beta-platform";
 import { ShareKit } from "@/components/ShareKit";
 import { ReaderInsights } from "@/components/ReaderInsights";
 import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
+import { ReaderBadgeList } from "@/components/TrustBadges";
+import type { ReaderBadge } from "@/lib/beta-social";
 
 type ChapterProgress = {
   chapterId: string;
@@ -49,6 +51,8 @@ type Invite = {
   furthestSortOrder?: number;
   furthestPercent?: number;
   readerStats?: { finished: number; dnf: number; reading: number };
+  readerBadges?: ReaderBadge[];
+  readerProfileUrl?: string | null;
   reviewCount?: number;
   avgRating?: number | null;
   readerUserId?: string | null;
@@ -834,6 +838,25 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
     return `Finished ${s.finished} · DNF ${s.dnf} · Reading ${s.reading}`;
   }
 
+  function readerBadgeRow(inv: Invite) {
+    if (!inv.readerBadges?.length && !inv.readerProfileUrl) return null;
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <ReaderBadgeList badges={inv.readerBadges} />
+        {inv.readerProfileUrl && (
+          <a
+            href={inv.readerProfileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-ui text-[11px] text-accent underline"
+          >
+            Reader profile
+          </a>
+        )}
+      </div>
+    );
+  }
+
   function reviewSummaryLine(inv: Invite): string | null {
     if (inv.reviewCount == null && inv.avgRating == null) return null;
     const parts: string[] = [];
@@ -978,6 +1001,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
             {summary && <p>{summary}</p>}
           </div>
         )}
+        {!opts?.hideStats && readerBadgeRow(inv)}
 
         <div className="flex flex-wrap gap-3 text-xs">
           <button
@@ -1772,6 +1796,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                             .join(" · ")}
                         </p>
                       )}
+                      {readerBadgeRow(inv)}
                       {open && (
                         <div className="mt-2 space-y-3 border-t border-accent/20 pt-2 text-sm">
                           {lines.length === 0 ? (
@@ -1873,6 +1898,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                                 .join(" · ")}
                             </p>
                           )}
+                          {readerBadgeRow(inv)}
                           {open && (
                             <div className="mt-2 space-y-3 border-t border-line pt-2 text-sm">
                               {lines.length === 0 ? (

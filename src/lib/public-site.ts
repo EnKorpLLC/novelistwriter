@@ -72,7 +72,7 @@ export type AuthorSite = {
 };
 
 /** URL segments go into ilike lookups, so only plain slug characters are allowed through. */
-function safeSegment(raw: string): string | null {
+export function safeSegment(raw: string): string | null {
   const s = decodeURIComponent(raw || "").toLowerCase();
   return /^[a-z0-9-]{1,60}$/.test(s) ? s : null;
 }

@@ -14,7 +14,12 @@ import {
   revokeProjectBetaAccess,
   upsertBetaContact,
 } from "@/lib/beta-server";
-import { computeReaderStats, createNotification } from "@/lib/beta-social";
+import {
+  computeReaderStats,
+  createNotification,
+  publicReaderProfileUrls,
+  readerBadgeStatsFor,
+} from "@/lib/beta-social";
 import { userHasStudio } from "@/lib/credits";
 import {
   authorContact,
@@ -450,6 +455,18 @@ export async function GET(
     }
   }
 
+  const badgeAdmin = createServiceClient();
+  const readerIdents = (invites || []).map((i) => ({ userId: i.reader_user_id, email: i.email }));
+  const [badgesByReader, profileUrlByUser] = await Promise.all([
+    readerBadgeStatsFor(badgeAdmin, readerIdents).catch(() => new Map()),
+    publicReaderProfileUrls(
+      badgeAdmin,
+      readerIdents.map((r) => r.userId).filter(Boolean) as string[]
+    ),
+  ]);
+  const badgeKey = (i: { reader_user_id: string | null; email: string }) =>
+    i.reader_user_id || String(i.email || "").trim().toLowerCase();
+
   return NextResponse.json({
     studioAccess: true,
     betaReady: Boolean(project.beta_ready),
@@ -534,6 +551,8 @@ export async function GET(
         readerEmailOptIn: consentByEmail.get(emailKey)?.optedIn ?? false,
         chapterProgress,
         readerStats: stats,
+        readerBadges: badgesByReader.get(badgeKey(i))?.badges || [],
+        readerProfileUrl: (i.reader_user_id && profileUrlByUser.get(i.reader_user_id)) || null,
         reviewCount: reviewCountByEmail.get(emailKey) || 0,
         avgRating: avgRatingByEmail.get(emailKey) ?? null,
         currentChapter: current

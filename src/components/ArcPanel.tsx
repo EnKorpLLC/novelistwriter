@@ -6,6 +6,8 @@ import { formatMailingAddress, reviewSiteKey, type MailingAddress } from "@/lib/
 import { ShareKit } from "@/components/ShareKit";
 import { ReaderInsights } from "@/components/ReaderInsights";
 import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
+import { ReaderBadgeList } from "@/components/TrustBadges";
+import type { ReaderBadge } from "@/lib/beta-social";
 
 type ArcInvite = {
   id: string;
@@ -23,7 +25,28 @@ type ArcInvite = {
   reviewBody: string | null;
   reviewPosts: Record<string, string>;
   mailingAddress: MailingAddress | null;
+  readerBadges?: ReaderBadge[];
+  readerProfileUrl?: string | null;
 };
+
+function ReaderBadgeRow({ invite }: { invite: ArcInvite }) {
+  if (!invite.readerBadges?.length && !invite.readerProfileUrl) return null;
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-2">
+      <ReaderBadgeList badges={invite.readerBadges} />
+      {invite.readerProfileUrl && (
+        <a
+          href={invite.readerProfileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[11px] text-accent underline"
+        >
+          Reader profile
+        </a>
+      )}
+    </span>
+  );
+}
 
 type ArcState = {
   studioAccess: boolean;
@@ -431,7 +454,10 @@ export function ArcPanel({ projectId }: { projectId: string }) {
               <ul className="mt-3 space-y-2">
                 {requests.map((r) => (
                   <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border border-line px-3 py-2 text-sm">
-                    <span>{label(r)}</span>
+                    <span>
+                      {label(r)}
+                      <ReaderBadgeRow invite={r} />
+                    </span>
                     <span className="flex gap-3 text-xs">
                       <button
                         type="button"
@@ -491,6 +517,7 @@ export function ArcPanel({ projectId }: { projectId: string }) {
                               Says they posted on: {posted.map((p) => p.label).join(", ")}
                             </p>
                           )}
+                          <ReaderBadgeRow invite={r} />
                         </div>
                         <span className="flex flex-wrap gap-3 text-xs">
                           {!r.finishedAt && state?.windowOpen &&
