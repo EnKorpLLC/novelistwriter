@@ -18,6 +18,7 @@ import { ShareKit } from "@/components/ShareKit";
 import { ReaderInsights } from "@/components/ReaderInsights";
 import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
 import { ReaderBadgeList } from "@/components/TrustBadges";
+import { FeedbackExport } from "@/components/FeedbackExport";
 import type { ReaderBadge } from "@/lib/beta-social";
 
 type ChapterProgress = {
@@ -1143,6 +1144,12 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                 >
                   Upgrade to Studio
                 </a>
+                <p className="mt-4 text-xs text-muted">
+                  Feedback from earlier beta reads stays yours: export it below anytime.
+                </p>
+                <div className="mt-4">
+                  <FeedbackExport projectId={projectId} chapters={chapters.map((c) => ({ id: c.id, title: c.title }))} />
+                </div>
               </div>
             ) : (
               <>
@@ -2409,6 +2416,8 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
               </div>
             )}
           </section>
+
+          <FeedbackExport projectId={projectId} chapters={chapters.map((c) => ({ id: c.id, title: c.title }))} />
 
           <section>
             <h3 className="font-display text-xl">Comments</h3>

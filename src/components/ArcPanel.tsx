@@ -7,6 +7,7 @@ import { ShareKit } from "@/components/ShareKit";
 import { ReaderInsights } from "@/components/ReaderInsights";
 import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
 import { ReaderBadgeList } from "@/components/TrustBadges";
+import { FeedbackExport } from "@/components/FeedbackExport";
 import type { ReaderBadge } from "@/lib/beta-social";
 
 type ArcInvite = {
@@ -158,6 +159,9 @@ export function ArcPanel({ projectId }: { projectId: string }) {
               Upgrade to Studio
             </a>
           </div>
+          <div className="mt-6">
+            <FeedbackExport projectId={projectId} defaultBeta={false} />
+          </div>
         </div>
       </div>
     );
@@ -211,6 +215,8 @@ export function ArcPanel({ projectId }: { projectId: string }) {
           <ReaderInsights projectId={projectId} phase="arc" />
 
           <ReaderBadgeSettings projectId={projectId} />
+
+          <FeedbackExport projectId={projectId} defaultBeta={false} />
 
           <section className="border border-line p-4">
             <h3 className="font-display text-lg">

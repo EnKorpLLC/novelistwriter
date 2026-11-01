@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ManuscriptEditor } from "@/components/ManuscriptEditor";
 import { CritiquePanel } from "@/components/CritiquePanel";
+import { ChapterFeedbackPanel } from "@/components/ChapterFeedbackPanel";
 import { BiblePanel } from "@/components/BiblePanel";
 import { ProjectTools } from "@/components/ProjectTools";
 import { BetaPanel } from "@/components/BetaPanel";
@@ -46,6 +47,8 @@ type Props = {
   /** Account notice shown above the workspace (e.g. Studio pass ending) */
   notice?: React.ReactNode;
 };
+
+const SIDE_PANE_KEY = "nw_write_side_pane";
 
 function chapterStorageKey(projectId: string) {
   return `nw_active_chapter_${projectId}`;
@@ -104,6 +107,32 @@ export function ProjectWorkspace({
   const [lookupHighlight, setLookupHighlight] = useState<string | null>(null);
   /** Mobile write layout: only one pane visible below lg. */
   const [writePane, setWritePane] = useState<"chapters" | "editor" | "critique">("editor");
+  /** Right column beside the editor: AI Actions or beta readers' comments on the open chapter */
+  const [sidePane, setSidePane] = useState<"ai" | "feedback">("ai");
+  const [feedbackTotal, setFeedbackTotal] = useState(0);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(SIDE_PANE_KEY) === "feedback") setSidePane("feedback");
+    } catch {
+      /* ignore */
+    }
+    void fetch(`/api/projects/${project.id}/feedback`)
+      .then(async (r) => (r.ok ? setFeedbackTotal((await r.json()).total || 0) : null))
+      .catch(() => null);
+  }, [project.id]);
+
+  function chooseSidePane(next: "ai" | "feedback") {
+    setSidePane(next);
+    try {
+      localStorage.setItem(SIDE_PANE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // With AI off, the column only appears once readers have left comments
+  const showSideColumn = !focusMode && (!aiDisabled || feedbackTotal > 0);
 
   const selectChapter = useCallback(
     (id: string) => {
@@ -753,21 +782,56 @@ export function ProjectWorkspace({
                 )}
               </div>
 
-              {!focusMode && !aiDisabled && (
+              {showSideColumn && (
                 <div
-                  className={`min-h-0 w-full shrink-0 overflow-hidden lg:block lg:w-[360px] ${
-                    writePane === "critique" ? "block" : "hidden"
+                  className={`min-h-0 w-full shrink-0 flex-col overflow-hidden lg:flex lg:w-[360px] ${
+                    writePane === "critique" ? "flex" : "hidden"
                   }`}
                 >
-                  <CritiquePanel
-                    projectId={project.id}
-                    chapterId={active?.id}
-                    chapterCount={chapters.length}
-                    selectionText={selectionText}
-                    challengeLevel={challengeLevel}
-                    onChallengeChange={setChallengeLevel}
-                    onCreditsChange={setCredits}
-                  />
+                  {!aiDisabled && (
+                    <div className="font-ui flex shrink-0 border-b border-l border-line text-xs">
+                      {(
+                        [
+                          ["ai", "AI Actions"],
+                          ["feedback", feedbackTotal ? `Reader feedback (${feedbackTotal})` : "Reader feedback"],
+                        ] as const
+                      ).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => chooseSidePane(id)}
+                          className={`flex-1 py-2 ${
+                            sidePane === id ? "bg-accent text-paper" : "text-muted hover:text-ink"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="min-h-0 flex-1">
+                    {aiDisabled || sidePane === "feedback" ? (
+                      <ChapterFeedbackPanel
+                        projectId={project.id}
+                        chapterId={active?.id || null}
+                        onHighlight={(excerpt) => {
+                          setLookupHighlight(excerpt.trim().length >= 2 ? excerpt.trim() : null);
+                          setWritePane("editor");
+                        }}
+                        onOpenAll={() => selectTab("beta")}
+                      />
+                    ) : (
+                      <CritiquePanel
+                        projectId={project.id}
+                        chapterId={active?.id}
+                        chapterCount={chapters.length}
+                        selectionText={selectionText}
+                        challengeLevel={challengeLevel}
+                        onChallengeChange={setChallengeLevel}
+                        onCreditsChange={setCredits}
+                      />
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -778,10 +842,10 @@ export function ProjectWorkspace({
                   [
                     ["chapters", "Chapters"],
                     ["editor", "Editor"],
-                    ["critique", "AI Actions"],
+                    ["critique", aiDisabled ? "Feedback" : "AI & feedback"],
                   ] as const
                 )
-                  .filter(([id]) => !(aiDisabled && id === "critique"))
+                  .filter(([id]) => !(id === "critique" && !showSideColumn))
                   .map(([id, label]) => (
                   <button
                     key={id}
