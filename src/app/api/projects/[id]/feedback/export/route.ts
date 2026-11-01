@@ -2,13 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { feedbackDocx, loadReaderFeedback } from "@/lib/reader-feedback";
+import { userHasStudio } from "@/lib/credits";
 
 export const maxDuration = 60;
 
-/**
- * Beta comments, final reviews, DNF reasons, and ARC reviews as a Word document. Owner only, and
- * never behind Studio: it's the author's own feedback.
- */
+/** Beta comments, final reviews, DNF reasons, and ARC reviews as a Word document. Owner on Studio only. */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
   const q = new URL(req.url).searchParams;
@@ -25,6 +23,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     .eq("user_id", user.id)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await userHasStudio(user.id))) {
+    return NextResponse.json(
+      { error: "Reader feedback is included with Studio. Upgrade on the Billing page.", code: "studio_required" },
+      { status: 403 }
+    );
+  }
 
   const chapterParam = (q.get("chapters") || "").split(",").map((s) => s.trim()).filter(Boolean);
   const feedback = await loadReaderFeedback(createServiceClient(), projectId);

@@ -158,9 +158,9 @@ export function ArcPanel({ projectId }: { projectId: string }) {
             <a href="/billing" className="mt-4 inline-block bg-accent px-4 py-2 text-sm text-paper">
               Upgrade to Studio
             </a>
-          </div>
-          <div className="mt-6">
-            <FeedbackExport projectId={projectId} defaultBeta={false} />
+            <p className="mt-4 text-xs text-muted">
+              Reviews from earlier ARC reads are kept. Studio unlocks them here and as a Word export.
+            </p>
           </div>
         </div>
       </div>

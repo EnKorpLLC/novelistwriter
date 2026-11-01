@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { loadReaderFeedback } from "@/lib/reader-feedback";
+import { userHasStudio } from "@/lib/credits";
 
 /**
- * Reader comments on one chapter, for the feedback column beside the editor. Owner only.
- * Without chapterId, returns just how many reader comments the book has.
+ * Reader comments on one chapter, for the feedback column beside the editor. Owner on Studio only.
+ * Without chapterId, returns how many reader comments the book has (the count only, even without
+ * Studio, so a lapsed author can see what's waiting).
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
@@ -25,13 +27,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const admin = createServiceClient();
+  const studio = await userHasStudio(user.id);
   if (!chapterId) {
     const { count } = await admin
       .from("beta_comments")
       .select("id", { count: "exact", head: true })
       .eq("project_id", projectId)
       .is("author_user_id", null);
-    return NextResponse.json({ total: count || 0 });
+    return NextResponse.json({ total: count || 0, studio });
+  }
+  if (!studio) {
+    return NextResponse.json(
+      { error: "Reader feedback is included with Studio.", code: "studio_required" },
+      { status: 403 }
+    );
   }
 
   const feedback = await loadReaderFeedback(admin, projectId, { chapterId });

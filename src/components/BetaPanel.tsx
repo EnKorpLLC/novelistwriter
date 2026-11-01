@@ -1145,11 +1145,9 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                   Upgrade to Studio
                 </a>
                 <p className="mt-4 text-xs text-muted">
-                  Feedback from earlier beta reads stays yours: export it below anytime.
+                  Comments and reviews from earlier beta reads are kept. Studio unlocks them here, beside
+                  the editor, and as a Word export.
                 </p>
-                <div className="mt-4">
-                  <FeedbackExport projectId={projectId} chapters={chapters.map((c) => ({ id: c.id, title: c.title }))} />
-                </div>
               </div>
             ) : (
               <>

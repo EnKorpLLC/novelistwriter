@@ -23,11 +23,16 @@ function shortDate(iso: string) {
 export function ChapterFeedbackPanel({
   projectId,
   chapterId,
+  studio,
+  waitingCount,
   onHighlight,
   onOpenAll,
 }: {
   projectId: string;
   chapterId: string | null;
+  /** Without Studio the comments stay locked; only the count shows */
+  studio: boolean;
+  waitingCount: number;
   onHighlight: (excerpt: string) => void;
   onOpenAll: () => void;
 }) {
@@ -39,7 +44,7 @@ export function ChapterFeedbackPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!chapterId) return;
+    if (!chapterId || !studio) return;
     setError(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/feedback?chapterId=${encodeURIComponent(chapterId)}`);
@@ -49,7 +54,7 @@ export function ChapterFeedbackPanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load feedback");
     }
-  }, [projectId, chapterId]);
+  }, [projectId, chapterId, studio]);
 
   useEffect(() => {
     setComments(null);
@@ -100,6 +105,21 @@ export function ChapterFeedbackPanel({
 
   const list = (comments || []).filter((c) => showResolved || !c.completed);
   const openCount = (comments || []).filter((c) => !c.completed).length;
+
+  if (!studio) {
+    return (
+      <aside className="font-ui flex h-full min-h-0 flex-col border-l border-line bg-paper-deep/40 px-4 py-4">
+        <p className="text-sm text-ink">Reader feedback</p>
+        <p className="mt-2 text-xs text-muted">
+          {waitingCount} reader comment{waitingCount === 1 ? " is" : "s are"} waiting on this book. Studio
+          shows them here beside each chapter, in the Beta tab, and as a Word export.
+        </p>
+        <a href="/billing" className="mt-4 self-start bg-accent px-4 py-2 text-xs text-paper">
+          Upgrade to Studio
+        </a>
+      </aside>
+    );
+  }
 
   return (
     <aside className="font-ui flex h-full min-h-0 flex-col border-l border-line bg-paper-deep/40">

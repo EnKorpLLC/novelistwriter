@@ -110,6 +110,7 @@ export function ProjectWorkspace({
   /** Right column beside the editor: AI Actions or beta readers' comments on the open chapter */
   const [sidePane, setSidePane] = useState<"ai" | "feedback">("ai");
   const [feedbackTotal, setFeedbackTotal] = useState(0);
+  const [feedbackStudio, setFeedbackStudio] = useState(false);
 
   useEffect(() => {
     try {
@@ -118,7 +119,12 @@ export function ProjectWorkspace({
       /* ignore */
     }
     void fetch(`/api/projects/${project.id}/feedback`)
-      .then(async (r) => (r.ok ? setFeedbackTotal((await r.json()).total || 0) : null))
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = await r.json();
+        setFeedbackTotal(json.total || 0);
+        setFeedbackStudio(Boolean(json.studio));
+      })
       .catch(() => null);
   }, [project.id]);
 
@@ -131,8 +137,11 @@ export function ProjectWorkspace({
     }
   }
 
+  // The feedback tab shows on Studio, or (as an upgrade prompt) once readers have left comments
+  const feedbackTab = feedbackStudio || feedbackTotal > 0;
   // With AI off, the column only appears once readers have left comments
   const showSideColumn = !focusMode && (!aiDisabled || feedbackTotal > 0);
+  const showFeedback = aiDisabled || (feedbackTab && sidePane === "feedback");
 
   const selectChapter = useCallback(
     (id: string) => {
@@ -788,7 +797,7 @@ export function ProjectWorkspace({
                     writePane === "critique" ? "flex" : "hidden"
                   }`}
                 >
-                  {!aiDisabled && (
+                  {!aiDisabled && feedbackTab && (
                     <div className="font-ui flex shrink-0 border-b border-l border-line text-xs">
                       {(
                         [
@@ -801,7 +810,7 @@ export function ProjectWorkspace({
                           type="button"
                           onClick={() => chooseSidePane(id)}
                           className={`flex-1 py-2 ${
-                            sidePane === id ? "bg-accent text-paper" : "text-muted hover:text-ink"
+                            (id === "feedback") === showFeedback ? "bg-accent text-paper" : "text-muted hover:text-ink"
                           }`}
                         >
                           {label}
@@ -810,10 +819,12 @@ export function ProjectWorkspace({
                     </div>
                   )}
                   <div className="min-h-0 flex-1">
-                    {aiDisabled || sidePane === "feedback" ? (
+                    {showFeedback ? (
                       <ChapterFeedbackPanel
                         projectId={project.id}
                         chapterId={active?.id || null}
+                        studio={feedbackStudio}
+                        waitingCount={feedbackTotal}
                         onHighlight={(excerpt) => {
                           setLookupHighlight(excerpt.trim().length >= 2 ? excerpt.trim() : null);
                           setWritePane("editor");
