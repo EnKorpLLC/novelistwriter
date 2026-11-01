@@ -32,6 +32,10 @@ const DESK_POINTS = [
     d: "Send advance copies, set a read-by date, send reminders before it, and close the manuscript when it passes.",
   },
   {
+    t: "Feedback where you write",
+    d: "Each chapter's reader comments sit right beside the text as you revise. Resolve and reply without leaving the page, or export everything as a Word document.",
+  },
+  {
     t: "See where readers stop",
     d: "Reader insights chart who joined when, how far each reader got, how often they come back, and the chapter where most of them drop off.",
   },

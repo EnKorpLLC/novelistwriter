@@ -18,7 +18,7 @@ const FEATURES = [
   },
   {
     t: "Comment on the exact sentence",
-    d: "Highlight a passage and tell the author what you felt, or leave notes for a whole chapter. Authors can react and reply.",
+    d: "Highlight a passage and tell the author what you felt, or leave notes for a whole chapter. Authors see your notes right beside the chapter as they revise, and can react and reply.",
   },
   {
     t: "Finish, or say why you stopped",

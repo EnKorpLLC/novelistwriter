@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { ClaimReferral } from "@/components/ClaimReferral";
-import { SUB_ALLOWANCE } from "@/lib/types";
+import { PLANS, type PlanCopy } from "@/lib/plans";
+
+function planItems(id: PlanCopy["id"]) {
+  return PLANS.find((p) => p.id === id)?.items || [];
+}
 
 const REFERRAL_REWARD_CREDITS = 50;
 
@@ -207,8 +211,8 @@ function BillingInner() {
       <section className="mt-6 border border-accent p-6">
         <h2 className="font-display text-xl">Optional subscription</h2>
         <p className="mt-1 text-sm text-muted">
-          Unlimited project slots plus a monthly AI credit allowance. Cancel anytime in the Stripe
-          portal.
+          Pro adds unlimited projects and monthly AI credits. Studio adds the beta and ARC desks, reader
+          feedback beside the editor, and reader insights. Cancel anytime in the Stripe portal.
         </p>
 
         <div className="mt-6 grid gap-6 md:grid-cols-2">
@@ -219,10 +223,9 @@ function BillingInner() {
             </p>
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
-              <li>Unlimited projects</li>
-              <li>{SUB_ALLOWANCE.pro} AI credits every month</li>
-              <li>All critique actions & story bible tools</li>
-              <li>DOCX / EPUB export & KDP checklist</li>
+              {planItems("pro").map((i) => (
+                <li key={i}>{i}</li>
+              ))}
             </ul>
             <div className="font-ui mt-4 flex flex-wrap gap-2">
               <button
@@ -251,12 +254,9 @@ function BillingInner() {
             </p>
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
-              <li>Everything in Pro</li>
-              <li>Beta reader desk — forms, auto-approve, progress, highlight comments</li>
-              <li>ARC desk — read-by deadlines, reminders, one-tap review links</li>
-              <li>Audience lists across all your books</li>
-              <li>Series tools</li>
-              <li>{SUB_ALLOWANCE.studio} AI credits every month, BYOK, priority AI jobs</li>
+              {planItems("studio").map((i) => (
+                <li key={i}>{i}</li>
+              ))}
             </ul>
             <div className="font-ui mt-4 flex flex-wrap gap-2">
               <button

@@ -1,81 +1,77 @@
 import Link from "next/link";
-import { SUB_ALLOWANCE } from "@/lib/types";
 import { PublicHeader } from "@/components/PublicHeader";
+import { PlanCards } from "@/components/PlanCards";
+import { PAY_AS_YOU_GO, PRICING_FAQ } from "@/lib/plans";
+
+export const metadata = {
+  title: "Pricing — Novelist Writer",
+  description:
+    "Write free forever. Pro for unlimited projects and AI critique credits; Studio for beta readers, ARCs, reader feedback, and insights. Readers are always free.",
+};
 
 export default function PricingPage() {
   return (
     <div className="min-h-screen">
       <PublicHeader />
-      <div className="mx-auto max-w-4xl px-6 py-16 md:px-10">
+      <main className="mx-auto max-w-5xl px-6 py-16 md:px-10">
         <h1 className="font-display text-4xl">Pricing</h1>
-        <p className="mt-3 max-w-xl text-muted">
-          Write free forever. Your first book is free, and every plan keeps a record of how you wrote
-          it and lets you switch AI off entirely. AI critiques craft; it never writes your novel.
+        <p className="mt-3 max-w-2xl text-muted">
+          Write free forever. Your first book is free, and every plan keeps a record of how you wrote it
+          and lets you switch AI off entirely. AI critiques craft; it never writes your novel.
         </p>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
-          <div className="border border-line bg-paper p-6">
+        <section className="mt-12">
+          <PlanCards />
+        </section>
+
+        <section className="mt-12 grid gap-6 md:grid-cols-2">
+          <div className="border border-line p-6">
             <h2 className="font-display text-2xl">Pay as you go</h2>
-            <ul className="mt-4 space-y-2 text-sm text-muted">
-              <li>Core studio — $0 forever</li>
-              <li>1st project — free</li>
-              <li>Writing record and AI off switch — included</li>
-              <li>Extra projects — $9 one-time each</li>
-              <li>AI credit packs from $5</li>
-              <li>Price shown before every AI run</li>
+            <p className="font-ui mt-1 text-sm text-muted">No subscription needed.</p>
+            <ul className="font-ui mt-4 space-y-2 text-sm text-ink">
+              {PAY_AS_YOU_GO.map((i) => (
+                <li key={i} className="border-t border-line pt-2">
+                  {i}
+                </li>
+              ))}
             </ul>
           </div>
-          <div className="border border-accent bg-paper p-6">
-            <h2 className="font-display text-2xl">Optional subscription</h2>
-            <ul className="mt-4 space-y-3 text-sm text-muted">
-              <li>
-                <strong className="text-ink">Pro</strong> — $16/mo — unlimited projects +{" "}
-                {SUB_ALLOWANCE.pro} monthly AI credits (all critique actions)
-              </li>
-              <li>
-                <strong className="text-ink">Studio</strong> — $32/mo — everything from draft to
-                launch:
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li>Beta reader desk (forms, auto-approve, end dates, progress, highlight comments)</li>
-                  <li>ARC desk (read-by deadlines, reminders, one-tap review links)</li>
-                  <li>Reader insights (joins, progress, return visits, drop-off by chapter)</li>
-                  <li>Reader badges and ratings on every applicant</li>
-                  <li>Audience lists across all your books, with CSV export</li>
-                  <li>Series tools</li>
-                  <li>
-                    If you use AI: {SUB_ALLOWANCE.studio} monthly credits, bring your own API key,
-                    priority jobs
-                  </li>
-                </ul>
-              </li>
-            </ul>
+          <div className="border border-line p-6">
+            <h2 className="font-display text-2xl">Readers: always free</h2>
+            <p className="font-ui mt-2 text-sm text-muted">
+              Beta reads, advance copies, comments, reader badges, and a public reader profile cost
+              nothing, with no ads.
+            </p>
+            <Link href="/readers" className="font-ui mt-4 inline-block text-sm text-accent underline-offset-2 hover:underline">
+              What readers get →
+            </Link>
           </div>
-        </div>
+        </section>
 
-        <p className="font-ui mt-8 max-w-2xl text-sm text-muted">
-          Not ready to pay for Studio? Earn free Studio days (no AI credits) by sharing your books and
-          bringing readers and writers to Novelist Writer. Bank up to 28 days and start them when you
-          need them.
-        </p>
-        <p className="font-ui mt-4 max-w-2xl text-sm text-muted">
-          Want the full picture? See{" "}
-          <Link href="/authors" className="text-accent underline-offset-2 hover:underline">
-            what authors get on each plan
-          </Link>{" "}
-          and{" "}
-          <Link href="/readers" className="text-accent underline-offset-2 hover:underline">
-            what readers get (free)
+        <section className="mt-16">
+          <h2 className="font-display text-3xl">Questions</h2>
+          <dl className="mt-6 space-y-6">
+            {PRICING_FAQ.map((f) => (
+              <div key={f.q} className="border-t border-line pt-4">
+                <dt className="font-display text-xl text-ink">{f.q}</dt>
+                <dd className="mt-2 max-w-3xl text-sm text-muted">{f.a}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <div className="font-ui mt-12 flex flex-wrap gap-3">
+          <Link href="/signup" className="rounded-sm bg-accent px-6 py-3 text-paper hover:bg-accent-soft">
+            Start free
           </Link>
-          .
-        </p>
-
-        <Link
-          href="/signup"
-          className="font-ui mt-10 inline-block rounded-sm bg-accent px-6 py-3 text-paper hover:bg-accent-soft"
-        >
-          Start free
-        </Link>
-      </div>
+          <Link
+            href="/authors"
+            className="rounded-sm border border-ink/20 px-6 py-3 text-ink transition hover:border-accent hover:text-accent"
+          >
+            What authors get
+          </Link>
+        </div>
+      </main>
     </div>
   );
 }
