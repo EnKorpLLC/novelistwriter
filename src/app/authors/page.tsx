@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
+import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { PlanCards } from "@/components/PlanCards";
 
 export const metadata = {
@@ -12,6 +13,7 @@ export default function AuthorsPage() {
   return (
     <div className="min-h-screen">
       <PublicHeader />
+      <ShareVisitBeacon />
       <main>
         <section className="hero-wash border-b border-line px-6 py-20 md:px-10">
           <div className="mx-auto max-w-5xl">
@@ -24,8 +26,8 @@ export default function AuthorsPage() {
             <p className="mt-6 max-w-2xl text-lg text-muted">
               One studio from first draft to release day: a record of how you wrote it, beta readers
               and ARCs that live where your book does, their feedback right beside each chapter as you
-              revise, and a launch page you can share anywhere. AI critiques and never writes, and it
-              turns off with one switch.
+              revise, and, from Pro up, an author site and launch pages you can share anywhere. AI
+              critiques and never writes, and it turns off with one switch.
             </p>
             <div className="font-ui mt-10 flex flex-wrap gap-3">
               <Link href="/signup" className="rounded-sm bg-ink px-6 py-3 text-paper transition hover:bg-accent">
@@ -63,9 +65,9 @@ export default function AuthorsPage() {
               <h2 className="font-display text-2xl">On every plan</h2>
               <ul className="font-ui mt-3 space-y-1.5 text-sm text-muted">
                 <li>Your book stays yours: we never train on your manuscript</li>
-                <li>Export anytime; nothing is held hostage</li>
-                <li>Writing records and AI-off badges</li>
-                <li>Launch page and author site</li>
+                <li>Export your manuscript anytime; it&apos;s never held hostage</li>
+                <li>A private record of how you wrote every book</li>
+                <li>One switch to turn every AI tool off</li>
               </ul>
             </div>
           </div>

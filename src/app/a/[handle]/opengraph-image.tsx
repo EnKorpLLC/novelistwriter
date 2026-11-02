@@ -10,7 +10,7 @@ export default async function Image({ params }: { params: Promise<{ handle: stri
   const { handle } = await params;
   const admin = createServiceClient();
   const author = await resolveAuthor(admin, handle);
-  if (!author) {
+  if (!author || !author.sitePublic) {
     return renderShareImage({ ...size, title: "Novelist Writer", subtitle: "Write it yourself. Prove it.", kicker: "", image: null });
   }
   const books = await listLaunchBooks(admin, author.userId);

@@ -6,7 +6,7 @@ import { genreLabel } from "@/lib/beta-platform";
 import { isArcWindowOpen, normalizeBuyLinks, normalizeTropes, type BuyLink } from "@/lib/arc";
 import { normalizePublicLinks, publicLinkList, type LabeledLink } from "@/lib/public-profile";
 import { normalizeTheme, type SiteThemeId } from "@/lib/site-themes";
-import { userHasStudio } from "@/lib/credits";
+import { authorSitePublic, userHasStudio } from "@/lib/credits";
 
 /** Give an author a handle the first time something needs their public link. */
 export async function ensureHandle(admin: SupabaseClient, userId: string): Promise<string | null> {
@@ -69,6 +69,8 @@ export type AuthorSite = {
   theme: SiteThemeId;
   featuredProjectId: string | null;
   links: LabeledLink[];
+  /** Pro and up (or within the grace week). Otherwise visitors get the holding page. */
+  sitePublic: boolean;
 };
 
 /** URL segments go into ilike lookups, so only plain slug characters are allowed through. */
@@ -87,6 +89,7 @@ export async function resolveAuthor(admin: SupabaseClient, rawHandle: string): P
     .maybeSingle();
   if (!p || p.is_author === false) return null;
   return {
+    sitePublic: await authorSitePublic(p.id),
     userId: p.id,
     handle: p.handle,
     name: p.display_name || "Author",

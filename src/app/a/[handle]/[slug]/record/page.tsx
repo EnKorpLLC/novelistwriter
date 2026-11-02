@@ -9,6 +9,7 @@ import { trustBadgesForBook } from "@/lib/trust-badges";
 import { bookPath } from "@/lib/handles";
 import { themeStyle } from "@/lib/site-themes";
 import { PublicHeader } from "@/components/PublicHeader";
+import { SiteHolding } from "@/components/SiteHolding";
 import { TrustBadges } from "@/components/TrustBadges";
 import { RecordBadge, WritingRecordView } from "@/components/WritingRecordView";
 
@@ -22,6 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   const author = await resolveAuthor(admin, handle);
   const book = author ? await getLaunchBook(admin, author.userId, slug) : null;
   if (!author || !book) return { title: "Writing record not found" };
+  if (!author.sitePublic) return { title: "Novelist Writer", robots: { index: false } };
   return {
     title: `How ${book.title} was written`,
     description: `The writing record for ${book.title} by ${author.name}: sessions, dates, and typed vs pasted text.`,
@@ -41,8 +43,9 @@ export default async function WritingRecordPage({ params }: { params: Promise<Pa
     data: { user },
   } = await supabase.auth.getUser();
   const isOwner = user?.id === author.userId;
+  if (!author.sitePublic && !isOwner) return <SiteHolding authorName={author.name} />;
   const { data: flags } = await admin.from("projects").select("record_public").eq("id", book.id).maybeSingle();
-  const isPublic = Boolean(flags?.record_public);
+  const isPublic = Boolean(flags?.record_public) && author.sitePublic;
   if (!isPublic && !isOwner) notFound();
 
   const [record, trust] = await Promise.all([
@@ -57,11 +60,22 @@ export default async function WritingRecordPage({ params }: { params: Promise<Pa
       {isOwner && !isPublic && (
         <div className="font-ui border-b border-line bg-paper-deep/60 px-6 py-2 text-xs md:px-10">
           <div className="mx-auto max-w-3xl">
-            Only you can see this. Publish it from the book&apos;s{" "}
-            <Link href={`/project/${book.id}?tab=publish`} className="text-accent underline">
-              Launch tab
-            </Link>
-            .
+            {author.sitePublic ? (
+              <>
+                Only you can see this. Publish it from the book&apos;s{" "}
+                <Link href={`/project/${book.id}?tab=publish`} className="text-accent underline">
+                  Launch tab
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                Only you can see this. Public writing records are part of Pro and Studio.{" "}
+                <Link href="/billing" className="text-accent underline">
+                  Publish with Pro
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

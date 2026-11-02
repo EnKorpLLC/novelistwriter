@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/beta-social";
+import { SITE_GRACE_DAYS } from "@/lib/credits";
 
 /** Banked days plus days still running on an active pass can never exceed this. */
 export const PASS_BANK_CAP = 28;
@@ -191,5 +192,20 @@ export async function onSubscriptionTierChange(
     }
   } catch (err) {
     console.error("[studio-pass] tier change handling failed", err);
+  }
+  try {
+    const wasPaid = prevTier === "pro" || prevTier === "studio";
+    const isPaid = nextTier === "pro" || nextTier === "studio";
+    if (wasPaid !== isPaid) {
+      // Author site and launch pages stay up for a week after a paid plan ends
+      await admin
+        .from("credit_balances")
+        .update({
+          site_grace_until: isPaid ? null : new Date(Date.now() + SITE_GRACE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .eq("user_id", userId);
+    }
+  } catch (err) {
+    console.error("[studio-pass] site grace update failed", err);
   }
 }

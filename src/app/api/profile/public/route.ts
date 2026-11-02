@@ -6,6 +6,7 @@ import { handleProblem } from "@/lib/handles";
 import { ensureHandle } from "@/lib/public-site";
 import { normalizeTheme } from "@/lib/site-themes";
 import { coverPublicUrl } from "@/lib/cover";
+import { authorSitePublic } from "@/lib/credits";
 
 const FIELDS = "display_name, public_links, handle, bio, avatar_path, banner_path, site_theme, featured_project_id, updated_at";
 
@@ -24,9 +25,10 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await ensureHandle(createServiceClient(), user.id);
-  const [{ data, error }, { data: projects }] = await Promise.all([
+  const [{ data, error }, { data: projects }, sitePublic] = await Promise.all([
     supabase.from("profiles").select(FIELDS).eq("id", user.id).maybeSingle(),
     supabase.from("projects").select("id, title").eq("user_id", user.id).order("updated_at", { ascending: false }),
+    authorSitePublic(user.id),
   ]);
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
   const version = data?.updated_at ? Date.parse(data.updated_at) : undefined;
@@ -41,6 +43,7 @@ export async function GET() {
     theme: normalizeTheme(data?.site_theme),
     featuredProjectId: data?.featured_project_id || "",
     projects: projects || [],
+    sitePublic,
   });
 }
 

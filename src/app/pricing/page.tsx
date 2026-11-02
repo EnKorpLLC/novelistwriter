@@ -6,7 +6,7 @@ import { PAY_AS_YOU_GO, PRICING_FAQ } from "@/lib/plans";
 export const metadata = {
   title: "Pricing — Novelist Writer",
   description:
-    "Write free forever. Pro for unlimited projects and AI critique credits; Studio for beta readers, ARCs, reader feedback, and insights. Readers are always free.",
+    "Write free forever. Pro adds your author site, launch pages, unlimited projects, and AI critique credits; Studio adds beta readers, ARCs, reader feedback, and insights. Readers are always free.",
 };
 
 export default function PricingPage() {

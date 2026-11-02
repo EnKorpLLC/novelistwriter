@@ -12,7 +12,8 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { AuthorLinks } from "@/components/AuthorConnect";
 import { TrustBadges } from "@/components/TrustBadges";
 import { GuestListSignup } from "@/components/GuestListSignup";
-import { OwnerBar, PreviewBar } from "@/components/OwnerBar";
+import { OwnerBar, PreviewBar, SitePrivateBar } from "@/components/OwnerBar";
+import { SiteHolding } from "@/components/SiteHolding";
 import { VisitorShareButton } from "@/components/ShareKit";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 
@@ -29,6 +30,7 @@ export async function generateMetadata({ params }: { params: Promise<{ handle: s
   const { handle } = await params;
   const author = await resolveAuthor(createServiceClient(), handle);
   if (!author) return { title: "Author not found" };
+  if (!author.sitePublic) return { title: "Novelist Writer", robots: { index: false } };
   const title = `${author.name} — Novelist Writer`;
   const description = author.bio.slice(0, 200) || `Books by ${author.name}.`;
   return { title, description, openGraph: { title, description, type: "profile" }, twitter: { card: "summary_large_image", title, description } };
@@ -95,6 +97,10 @@ export default async function AuthorSitePage({
   } = await supabase.auth.getUser();
   const isOwner = user?.id === author.userId;
   const previewing = isOwner && preview === "visitor";
+  const path = authorPath(author.handle);
+  if (!author.sitePublic && (!isOwner || previewing)) {
+    return <SiteHolding authorName={author.name} previewBackHref={previewing ? path : null} />;
+  }
 
   const [books, studio] = await Promise.all([listLaunchBooks(admin, author.userId), userHasStudio(author.userId)]);
   const { aiOffSince, noAiProjectIds } = await loadTrustBadges(
@@ -104,13 +110,13 @@ export default async function AuthorSitePage({
   );
   const featured = books.find((b) => b.id === author.featuredProjectId) || null;
   const rest = books.filter((b) => b.id !== featured?.id);
-  const path = authorPath(author.handle);
 
   return (
     <div className="min-h-screen" style={themeStyle(author.theme)}>
       <ShareVisitBeacon />
       <PublicHeader />
-      {isOwner && !previewing && (
+      {isOwner && !author.sitePublic && <SitePrivateBar previewHref={`${path}?preview=visitor`} />}
+      {isOwner && author.sitePublic && !previewing && (
         <OwnerBar
           label="This is your author site."
           editHref="/dashboard/profile"

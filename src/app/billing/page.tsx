@@ -211,8 +211,9 @@ function BillingInner() {
       <section className="mt-6 border border-accent p-6">
         <h2 className="font-display text-xl">Optional subscription</h2>
         <p className="mt-1 text-sm text-muted">
-          Pro adds unlimited projects and monthly AI credits. Studio adds the beta and ARC desks, reader
-          feedback beside the editor, and reader insights. Cancel anytime in the Stripe portal.
+          Pro adds your author site and launch pages, unlimited projects, and monthly AI credits. Studio
+          adds the beta and ARC desks, email signups, reader feedback beside the editor, and reader
+          insights. Cancel anytime in the Stripe portal.
         </p>
 
         <div className="mt-6 grid gap-6 md:grid-cols-2">

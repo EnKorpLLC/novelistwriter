@@ -4,6 +4,7 @@ import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel } from "@/lib/beta-platform";
 import { normalizeBuyLinks, normalizeTropes } from "@/lib/arc";
 import { bookPath } from "@/lib/handles";
+import { authorsWithPublicSites } from "@/lib/credits";
 
 export type PublishedBook = {
   id: string;
@@ -76,5 +77,10 @@ export async function listPublishedBooks(
   if (opts.authorUserId) q = q.eq("user_id", opts.authorUserId);
   const { data, error } = await q;
   if (error || !data) return [];
-  return shapeRows(admin, data as Row[]);
+  // Only authors whose site and launch pages are public (Pro and up)
+  const listed = await authorsWithPublicSites((data as Row[]).map((r) => r.user_id));
+  return shapeRows(
+    admin,
+    (data as Row[]).filter((r) => listed.has(r.user_id))
+  );
 }

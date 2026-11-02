@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
+import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 
 export const metadata = {
   title: "For readers — Novelist Writer",
@@ -58,6 +59,7 @@ export default function ReadersPage() {
   return (
     <div className="min-h-screen">
       <PublicHeader />
+      <ShareVisitBeacon />
       <main>
         <section className="hero-wash border-b border-line px-6 py-20 md:px-10">
           <div className="mx-auto max-w-5xl">

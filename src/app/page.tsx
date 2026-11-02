@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { JOB_META } from "@/lib/ai/jobs";
+import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 
 const AI_ACTIONS = Object.values(JOB_META);
 
@@ -85,6 +86,7 @@ export default function HomePage() {
         </nav>
       </header>
 
+      <ShareVisitBeacon />
       <main>
         <section className="hero-wash relative min-h-[88vh] overflow-hidden border-b border-line">
           <div className="relative z-10 mx-auto flex max-w-5xl flex-col justify-center px-6 pb-24 pt-16 md:px-10 md:pt-24">
@@ -138,9 +140,9 @@ export default function HomePage() {
           <h2 className="font-display mt-2 text-3xl text-ink">Your writing history is your proof</h2>
           <p className="mt-3 max-w-2xl text-muted">
             Readers are asking whether a person really wrote the book. Novelist Writer keeps a record
-            of how yours came together, session by session, from the day you start writing here, and
-            you can publish it right next to your book with a &ldquo;Written in Novelist Writer&rdquo;
-            badge.
+            of how yours came together, session by session, from the day you start writing here. On
+            Pro and Studio, publish it right next to your book with a &ldquo;Written in Novelist
+            Writer&rdquo; badge.
           </p>
           <ul className="mt-10 grid gap-8 md:grid-cols-2">
             {PROOF_POINTS.map((item, i) => (
@@ -219,12 +221,12 @@ export default function HomePage() {
 
         <section id="launch" className="scroll-mt-24 border-t border-line bg-paper-deep/30 px-6 py-20 md:px-10">
           <div className="mx-auto max-w-5xl">
-            <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Launch</p>
+            <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Launch · Pro and Studio</p>
             <h2 className="font-display mt-2 text-3xl text-ink">A launch page and an author site, built in</h2>
             <p className="mt-3 max-w-2xl text-muted">
-              Every book gets a page that grows with it: cover reveal and preorders, then beta and ARC
-              calls, then buy buttons on release day. Your author site gathers every book, your bio,
-              and your links at one short address you can put anywhere.
+              On Pro, every book gets a page that grows with it: cover reveal and preorders, then buy
+              buttons on release day, with beta and ARC calls on Studio. Your author site gathers every
+              book, your bio, and your links at one short address you can put anywhere.
             </p>
             <ul className="mt-10 grid gap-8 md:grid-cols-3">
               {[

@@ -28,6 +28,7 @@ export default function PublicProfilePage() {
   const [extra, setExtra] = useState<LabeledLink[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [sitePublic, setSitePublic] = useState(true);
 
   function apply(links: PublicLinks) {
     const { extra: ex, ...rest } = links;
@@ -49,6 +50,7 @@ export default function PublicProfilePage() {
         setProjects(data.projects || []);
         setAvatarUrl(data.avatarUrl || null);
         setBannerUrl(data.bannerUrl || null);
+        setSitePublic(data.sitePublic !== false);
         apply(data.links || {});
       })
       .catch((err) => setNote(err instanceof Error ? err.message : "Could not load"));
@@ -121,6 +123,17 @@ export default function PublicProfilePage() {
         Your author site: photo, bio, links, and every book you&apos;ve made public. The same links
         appear on your beta, ARC, and launch pages.
       </p>
+      {!sitePublic && (
+        <div className="font-ui mt-4 border border-accent p-4 text-sm">
+          <p className="text-ink">
+            Your author site and launch pages are part of <strong>Pro</strong> and <strong>Studio</strong>.
+            Set them up now; visitors see a holding page until you upgrade.
+          </p>
+          <Link href="/billing" className="mt-3 inline-block bg-accent px-4 py-2 text-xs text-paper">
+            Publish with Pro
+          </Link>
+        </div>
+      )}
       {sitePath && (
         <div className="font-ui mt-4 flex flex-wrap gap-3">
           <a
@@ -455,7 +468,7 @@ function BadgeOverview() {
                         ))}
                       </>
                     ) : (
-                      "Not public yet. Badges appear once its launch page is public (Launch tab), or while beta or ARC reading is open."
+                      "Not public yet. Badges appear once its launch page is public (Launch tab, on Pro or Studio), or while beta or ARC reading is open."
                     )}
                   </p>
                   <div className="mt-3 border-t border-line pt-3">

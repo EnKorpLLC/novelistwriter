@@ -22,6 +22,46 @@ export function rowHasStudio(row: { subscription_tier?: string | null; pass_acti
   return row.subscription_tier === "studio" || Boolean(row.pass_active_until && Date.parse(row.pass_active_until) > Date.now());
 }
 
+/** Days an author site and launch pages stay public after Pro, Studio, or a Studio pass ends. */
+export const SITE_GRACE_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type TierRow = {
+  subscription_tier?: string | null;
+  pass_active_until?: string | null;
+  site_grace_until?: string | null;
+} | null;
+
+/** Pro and up: paid Pro, paid Studio, or a running Studio pass. */
+export function rowHasPro(row: TierRow) {
+  if (!row) return false;
+  return row.subscription_tier === "pro" || rowHasStudio(row);
+}
+
+/**
+ * Author site and launch pages are public on Pro and up, and for SITE_GRACE_DAYS after a paid plan
+ * (site_grace_until, set when the subscription ends) or a Studio pass runs out.
+ */
+export function rowSitePublic(row: TierRow, now = Date.now()) {
+  if (rowHasPro(row)) return true;
+  if (!row) return false;
+  if (row.site_grace_until && Date.parse(row.site_grace_until) > now) return true;
+  const passEnd = row.pass_active_until ? Date.parse(row.pass_active_until) : NaN;
+  return Number.isFinite(passEnd) && passEnd + SITE_GRACE_DAYS * DAY_MS > now;
+}
+
+export async function authorSitePublic(userId: string): Promise<boolean> {
+  return rowSitePublic((await getCreditBalance(userId)) as TierRow);
+}
+
+/** Of these authors, the ones whose site and launch pages are public. */
+export async function authorsWithPublicSites(userIds: string[]): Promise<Set<string>> {
+  const ids = [...new Set(userIds)];
+  if (!ids.length) return new Set();
+  const { data } = await createServiceClient().from("credit_balances").select("*").in("user_id", ids);
+  return new Set((data || []).filter((r) => rowSitePublic(r)).map((r) => r.user_id as string));
+}
+
 function passRunning(bal: CreditBalance | null): boolean {
   const until = (bal as (CreditBalance & { pass_active_until?: string | null }) | null)?.pass_active_until;
   return Boolean(until && Date.parse(until) > Date.now());

@@ -16,7 +16,7 @@ export async function bookShareImage(handle: string, slug: string, size: { width
   const admin = createServiceClient();
   const author = await resolveAuthor(admin, handle);
   const book = author ? await getLaunchBook(admin, author.userId, slug) : null;
-  if (!author || !book) {
+  if (!author || !book || !author.sitePublic) {
     return renderShareImage({ ...size, title: "Novelist Writer", subtitle: "Write it yourself. Prove it.", kicker: "", image: null });
   }
   const [cover, trust, { data: recordFlag }] = await Promise.all([

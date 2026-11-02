@@ -22,11 +22,20 @@ type LaunchState = {
   slug: string | null;
   launchPath: string | null;
   launchVisible: boolean;
+  sitePublic?: boolean;
 };
 
 const SUGGESTED_STORES = ["Amazon", "Kindle", "Barnes & Noble", "Apple Books", "Kobo", "Bookshop.org"];
 
-function WritingRecordSection({ projectId, launchPath }: { projectId: string; launchPath: string | null }) {
+function WritingRecordSection({
+  projectId,
+  launchPath,
+  sitePublic,
+}: {
+  projectId: string;
+  launchPath: string | null;
+  sitePublic: boolean;
+}) {
   const [record, setRecord] = useState<WritingRecordData | null>(null);
   const [isPublic, setIsPublic] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -81,7 +90,8 @@ function WritingRecordSection({ projectId, launchPath }: { projectId: string; la
         />
         <span>
           Show the writing record on the launch page
-          {launchPath && isPublic && (
+          {!sitePublic && <span className="block text-xs text-muted">Visitors see it once your launch page is public on Pro.</span>}
+          {launchPath && isPublic && sitePublic && (
             <a href={`${launchPath}/record`} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs text-accent underline">
               View it
             </a>
@@ -188,12 +198,33 @@ export function PublishPanel({ projectId }: { projectId: string }) {
             </p>
           </div>
 
+          {state.sitePublic === false && (
+            <div className="border border-accent bg-paper p-4 text-sm">
+              <p className="text-ink">
+                Launch pages and your author site are part of <strong>Pro</strong> and{" "}
+                <strong>Studio</strong>: buy and preorder buttons, themes, the share kit, link previews,
+                your public writing record, and a spot in the published books catalog.
+              </p>
+              <p className="mt-1 text-muted">
+                Set everything up now. It stays private, and visitors see a holding page, until you
+                upgrade.
+              </p>
+              <a href="/billing" className="mt-3 inline-block bg-accent px-4 py-2 text-xs text-paper">
+                Publish with Pro
+              </a>
+            </div>
+          )}
+
           {note && <p className="text-sm text-ink">{note}</p>}
 
           <section className="border border-line p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="font-display text-lg">
-                {state.launchVisible ? `Live · ${stage}` : "Not visible to visitors yet"}
+                {state.launchVisible
+                  ? `Live · ${stage}`
+                  : state.sitePublic === false
+                    ? "Private until you upgrade to Pro"
+                    : "Not visible to visitors yet"}
               </h3>
               {state.launchPath && (
                 <span className="flex gap-3 text-sm">
@@ -389,7 +420,7 @@ export function PublishPanel({ projectId }: { projectId: string }) {
             </div>
           </section>
 
-          <WritingRecordSection projectId={projectId} launchPath={state.launchPath} />
+          <WritingRecordSection projectId={projectId} launchPath={state.launchPath} sitePublic={state.sitePublic !== false} />
 
           {state.launchVisible && state.launchPath && (
             <section className="border border-line p-4">

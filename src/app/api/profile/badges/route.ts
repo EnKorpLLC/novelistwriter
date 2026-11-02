@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { loadTrustBadges } from "@/lib/trust-badges";
 import { aiActionCounts } from "@/lib/ai-usage";
 import { isArcWindowOpen } from "@/lib/arc";
-import { userHasStudio } from "@/lib/credits";
+import { authorSitePublic, userHasStudio } from "@/lib/credits";
 import { ensureHandle } from "@/lib/public-site";
 import { bookPath } from "@/lib/handles";
 import { computeWritingRecord } from "@/lib/writing-record";
@@ -35,9 +35,10 @@ export async function GET(req: Request) {
     : { data: [] as { id: string; ai_disclosure_public: boolean; ai_deleted_job_counts: unknown }[] };
   const disclosureById = new Map((disclosure || []).map((d) => [d.id, d]));
 
-  const [{ aiOffSince, noAiProjectIds }, studio, { data: jobs }, actions] = await Promise.all([
+  const [{ aiOffSince, noAiProjectIds }, studio, sitePublic, { data: jobs }, actions] = await Promise.all([
     loadTrustBadges(admin, user.id, ids),
     userHasStudio(user.id),
+    authorSitePublic(user.id),
     ids.length
       ? admin
           .from("ai_jobs")
@@ -73,7 +74,7 @@ export async function GET(req: Request) {
       const shownOn: { label: string; href: string }[] = [];
       const betaOpen = studio && Boolean(p.beta_ready);
       const arcOpen = studio && isArcWindowOpen(p);
-      if (handle && p.slug && (p.published || p.launch_public || betaOpen || arcOpen)) {
+      if (sitePublic && handle && p.slug && (p.published || p.launch_public || betaOpen || arcOpen)) {
         shownOn.push({ label: "Launch page", href: bookPath(handle, p.slug) });
       }
       if (betaOpen) shownOn.push({ label: "Beta page", href: `/beta/book/${p.id}` });

@@ -49,7 +49,11 @@ export default function ShareAndEarnPage() {
       return;
     }
     setData(pass);
-    if (profileRes.ok) setHandle((await profileRes.json()).handle || null);
+    if (profileRes.ok) {
+      const profile = await profileRes.json();
+      // Free authors' sites aren't public, so their earning links point at Novelist Writer itself
+      setHandle(profile.sitePublic === false ? null : profile.handle || null);
+    }
   }, []);
 
   useEffect(() => {
@@ -144,7 +148,7 @@ export default function ShareAndEarnPage() {
           </section>
 
           <section className="space-y-6">
-            {handle && (
+            {handle ? (
               <div className="border border-line p-4">
                 <ShareKit
                   heading="Share your author site"
@@ -153,6 +157,41 @@ export default function ShareAndEarnPage() {
                   posts={[{ label: "Profile", text: "All my books, beta reads, and advance copies in one place:" }]}
                 />
               </div>
+            ) : (
+              <>
+                <div className="border border-line p-4">
+                  <ShareKit
+                    heading="Invite readers"
+                    path="/readers"
+                    title="Read books before anyone else, free"
+                    posts={[
+                      {
+                        label: "Readers",
+                        text: "Love reading? Beta read and get advance copies from indie authors, free, on Novelist Writer:",
+                      },
+                    ]}
+                  />
+                </div>
+                <div className="border border-line p-4">
+                  <ShareKit
+                    heading="Share Novelist Writer"
+                    path="/"
+                    title="Novelist Writer"
+                    posts={[
+                      {
+                        label: "General",
+                        text: "The writing studio that proves you wrote your book, and runs beta readers and ARCs too:",
+                      },
+                    ]}
+                  />
+                </div>
+                <p className="text-xs text-muted">
+                  Your own author site and launch pages come with Pro and Studio.{" "}
+                  <Link href="/billing" className="text-accent underline">
+                    See plans
+                  </Link>
+                </p>
+              </>
             )}
             <div className="border border-line p-4">
               <ShareKit

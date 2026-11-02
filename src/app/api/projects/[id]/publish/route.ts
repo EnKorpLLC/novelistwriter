@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { isArcWindowOpen, normalizeBuyLinks, normalizeTropes } from "@/lib/arc";
 import { bookPath, slugProblem, slugify } from "@/lib/handles";
 import { ensureHandle, ensureSlug } from "@/lib/public-site";
-import { userHasStudio } from "@/lib/credits";
+import { authorSitePublic, userHasStudio } from "@/lib/credits";
 import { projectLockedMessage } from "@/lib/studio-access";
 
 const FIELDS =
@@ -46,10 +46,11 @@ async function load(projectId: string) {
 
 async function shape(project: ProjectRow) {
   const admin = createServiceClient();
-  const [handle, slug, studio] = await Promise.all([
+  const [handle, slug, studio, sitePublic] = await Promise.all([
     ensureHandle(admin, project.user_id),
     ensureSlug(admin, project),
     userHasStudio(project.user_id),
+    authorSitePublic(project.user_id),
   ]);
   const arcLive = isArcWindowOpen(project as { arc_open?: boolean; arc_deadline?: string | null });
   const betaOpen = studio && Boolean(project.beta_ready);
@@ -71,8 +72,10 @@ async function shape(project: ProjectRow) {
     handle,
     slug,
     launchPath,
-    // Visitors can see the page when any of these is true
-    launchVisible: published || Boolean(project.launch_public) || betaOpen || (studio && arcLive),
+    // Author sites and launch pages are public on Pro and up
+    sitePublic,
+    // Visitors can see the page when the site is public and any of these is true
+    launchVisible: sitePublic && (published || Boolean(project.launch_public) || betaOpen || (studio && arcLive)),
   };
 }
 

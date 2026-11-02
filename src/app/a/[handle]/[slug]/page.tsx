@@ -12,7 +12,8 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { AuthorLinks } from "@/components/AuthorConnect";
 import { TrustBadges } from "@/components/TrustBadges";
 import { GuestListSignup } from "@/components/GuestListSignup";
-import { OwnerBar, PreviewBar } from "@/components/OwnerBar";
+import { OwnerBar, PreviewBar, SitePrivateBar } from "@/components/OwnerBar";
+import { SiteHolding } from "@/components/SiteHolding";
 import { VisitorShareButton } from "@/components/ShareKit";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { RecordBadge } from "@/components/WritingRecordView";
@@ -37,6 +38,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   const author = await resolveAuthor(admin, handle);
   const book = author ? await getLaunchBook(admin, author.userId, slug) : null;
   if (!author || !book) return { title: "Book not found" };
+  if (!author.sitePublic) return { title: "Novelist Writer", robots: { index: false } };
   const title = `${book.title} by ${author.name}`;
   const description = (book.tagline || book.blurb).slice(0, 200) || `A novel by ${author.name}.`;
   return { title, description, openGraph: { title, description, type: "book" }, twitter: { card: "summary_large_image", title, description } };
@@ -63,6 +65,14 @@ export default async function LaunchPage({
   } = await supabase.auth.getUser();
   const isOwner = user?.id === author.userId;
   const previewing = isOwner && preview === "visitor";
+  if (!author.sitePublic && (!isOwner || previewing)) {
+    return (
+      <SiteHolding
+        authorName={author.name}
+        previewBackHref={previewing ? bookPath(author.handle, book.slug) : null}
+      />
+    );
+  }
   const [trust, studio, { data: recordFlag }] = await Promise.all([
     trustBadgesForBook(admin, author.userId, book.id),
     userHasStudio(author.userId),
@@ -104,7 +114,8 @@ export default async function LaunchPage({
     <div className="min-h-screen" style={themeStyle(author.theme)}>
       <ShareVisitBeacon />
       <PublicHeader />
-      {isOwner && !previewing && (
+      {isOwner && !author.sitePublic && <SitePrivateBar previewHref={`${path}?preview=visitor`} />}
+      {isOwner && author.sitePublic && !previewing && (
         <OwnerBar
           label="This is your book's launch page."
           editHref={`/project/${book.id}?tab=publish`}

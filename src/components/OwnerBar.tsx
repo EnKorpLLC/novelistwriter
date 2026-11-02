@@ -56,6 +56,28 @@ export function OwnerBar({
   );
 }
 
+/** Shown to the owner instead of the share tools while their site is private (Free plan). */
+export function SitePrivateBar({ previewHref }: { previewHref: string }) {
+  return (
+    <div className="font-ui border-b border-danger/40 bg-paper-deep/60 px-6 py-3 text-xs md:px-10">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
+        <span className="text-ink">
+          Only you can see this. Author sites and launch pages are public on Pro and Studio; visitors see
+          a holding page for now.
+        </span>
+        <span className="flex gap-3">
+          <Link href={previewHref} className="text-accent underline">
+            See what visitors see
+          </Link>
+          <Link href="/billing" className="bg-accent px-3 py-1 text-paper">
+            Publish with Pro
+          </Link>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function PreviewBar({ backHref }: { backHref: string }) {
   return (
     <div className="font-ui border-b border-accent bg-paper-deep/60 px-6 py-2 text-xs md:px-10">
