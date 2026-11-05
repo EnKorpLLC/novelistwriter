@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { accessMessageForStatus, BETA_PERIOD_ENDED_REASON, isBetaClosedToNew } from "@/lib/beta-access";
+import {
+  accessMessageForStatus,
+  BETA_PERIOD_ENDED_REASON,
+  isBetaClosedToNew,
+  publicReaderName,
+} from "@/lib/beta-access";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel, linkInvitesForEmail } from "@/lib/beta-platform";
@@ -80,12 +85,8 @@ export async function GET(
   const { data: reviewInvites } = reviewInviteIds.length
     ? await admin.from("beta_invites").select("id, display_name, email").in("id", reviewInviteIds)
     : { data: [] as { id: string; display_name: string | null; email: string }[] };
-  const inviteLabel = new Map(
-    (reviewInvites || []).map((i) => [
-      i.id,
-      i.display_name?.trim() || i.email.split("@")[0] || "Reader",
-    ])
-  );
+  // This page is public, so reviewers never show by email or email prefix
+  const inviteLabel = new Map((reviewInvites || []).map((i) => [i.id, publicReaderName(i.display_name, i.email)]));
 
   const form = normalizeBetaApplicationForm(project.beta_application_form);
   const base: Record<string, unknown> & { subscribed?: boolean } = {

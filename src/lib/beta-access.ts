@@ -58,6 +58,22 @@ export function shouldAutoApprove(
   return settings.rules.every(ruleMatches);
 }
 
+/**
+ * A reader's name for anyone other than the author or an admin: never their email, and never the
+ * part before the @ (which signup uses as a default display name).
+ */
+export function publicReaderName(
+  name: string | null | undefined,
+  email: string | null | undefined,
+  fallback = "Beta reader"
+): string {
+  const n = String(name || "").trim();
+  if (!n || n.includes("@")) return fallback;
+  const local = String(email || "").split("@")[0].trim().toLowerCase();
+  if (local && n.toLowerCase() === local) return fallback;
+  return n;
+}
+
 export function sanitizeDisplayName(raw: unknown): string {
   const text = typeof raw === "string" ? raw.trim() : raw == null ? "" : String(raw).trim();
   return text.slice(0, 80);

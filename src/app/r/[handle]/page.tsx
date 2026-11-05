@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { safeSegment } from "@/lib/public-site";
+import { publicReaderName } from "@/lib/beta-access";
 import { readerBadgeStatsFor } from "@/lib/beta-social";
 import { PublicHeader } from "@/components/PublicHeader";
 import { ReaderBadgeList } from "@/components/TrustBadges";
@@ -16,14 +17,14 @@ async function loadReader(rawHandle: string) {
   const admin = createServiceClient();
   const { data: p, error } = await admin
     .from("profiles")
-    .select("id, handle, display_name, created_at, reader_profile_public")
+    .select("id, handle, display_name, email, created_at, reader_profile_public")
     .ilike("handle", handle)
     .maybeSingle();
   if (error || !p?.reader_profile_public) return null;
   const badgeMap = await readerBadgeStatsFor(admin, [{ userId: p.id }]);
   const mine = badgeMap.get(p.id);
   return {
-    name: p.display_name?.trim() || "Reader",
+    name: publicReaderName(p.display_name, p.email, "Reader"),
     since: p.created_at as string | null,
     badges: mine?.badges || [],
     stats: mine?.stats || null,

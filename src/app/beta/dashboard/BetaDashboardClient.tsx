@@ -277,7 +277,7 @@ function ReaderBadgesBox() {
         )}
         {!data.hasDisplayName && !data.public && (
           <p className="mt-2 text-muted">
-            Add a display name in{" "}
+            Add a display name (not your email) in{" "}
             <Link href="/settings" className="text-accent underline">
               Settings
             </Link>{" "}

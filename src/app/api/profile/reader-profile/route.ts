@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { ensureHandle } from "@/lib/public-site";
+import { slugify } from "@/lib/handles";
+import { publicReaderName } from "@/lib/beta-access";
 import { READER_BADGE_RULES, readerBadgeStatsFor } from "@/lib/beta-social";
 
 /** The signed-in reader's badges, badge stats, and whether their reader profile is public. */
@@ -25,7 +27,7 @@ export async function GET() {
     rules: READER_BADGE_RULES,
     public: isPublic,
     url: isPublic && profile?.handle ? `/r/${profile.handle}` : null,
-    hasDisplayName: Boolean(profile?.display_name?.trim()),
+    hasDisplayName: publicReaderName(profile?.display_name, user.email, "") !== "",
     migrationNeeded: Boolean(error),
   });
 }
@@ -44,13 +46,26 @@ export async function PATCH(req: Request) {
   const admin = createServiceClient();
   let handle: string | null = null;
   if (body.public) {
-    const { data: profile } = await admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
-    // The profile address is built from the display name, never the email
-    if (!profile?.display_name?.trim()) {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("display_name, handle, is_author")
+      .eq("id", user.id)
+      .maybeSingle();
+    // The profile name and address come from the display name, never the email or its first half
+    const fallback = "__none__";
+    if (publicReaderName(profile?.display_name, user.email, fallback) === fallback) {
       return NextResponse.json(
-        { error: "Add a display name in Settings first. It's the name shown on your public profile." },
+        {
+          error:
+            "Add a display name in Settings first, one that isn't your email. It's the name shown on your public profile.",
+        },
         { status: 400 }
       );
+    }
+    const emailSlug = slugify(String(user.email || "").split("@")[0], 30);
+    if (profile?.handle && emailSlug && profile.handle.toLowerCase().startsWith(emailSlug) && !profile.is_author) {
+      // An old address made from the email: replace it with one from the display name
+      await admin.from("profiles").update({ handle: null }).eq("id", user.id);
     }
     handle = await ensureHandle(admin, user.id);
   }
