@@ -27,7 +27,7 @@ export default function AuthorsPage() {
             <p className="mt-6 max-w-2xl text-lg text-muted">
               One studio from first draft to release day: a record of how you wrote it, beta readers
               and ARCs that live where your book does, their feedback right beside each chapter as you
-              revise, and, from Pro up, polished ebook formatting plus an author site and launch pages
+              revise, and, from Pro up, polished ebook and paperback formatting plus an author site and launch pages
               you can share anywhere. AI
               critiques and never writes, and it turns off with one switch.
             </p>

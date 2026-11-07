@@ -4,6 +4,8 @@ export type ChapterKind = "chapter" | "unnumbered" | "part";
 export type HeadingFormat = "chapter_word" | "chapter_number" | "number" | "word_upper" | "title_only";
 export type FirstLine = "style" | "dropcap" | "smallcaps" | "none";
 export type TrimSize = "5x8" | "5.06x7.81" | "5.25x8" | "5.5x8.5" | "6x9";
+export type PrintSize = "small" | "standard" | "large" | "largeprint";
+export type Paper = "cream" | "white";
 
 export type FormatSettings = {
   style: string;
@@ -18,6 +20,11 @@ export type FormatSettings = {
   autoCopyright: boolean;
   autoAlsoBy: boolean;
   trim: TrimSize;
+  printSize: PrintSize;
+  chapterStartRight: boolean;
+  runningHeads: boolean;
+  paper: Paper;
+  /** From the last print layout; the cover calculator uses it */
   lastPageCount: number | null;
 };
 
@@ -52,6 +59,13 @@ export const TRIM_SIZES: { id: TrimSize; label: string }[] = [
   { id: "6x9", label: '6" x 9"' },
 ];
 
+export const PRINT_SIZES: { id: PrintSize; label: string; pt: number }[] = [
+  { id: "small", label: "Compact (10 pt)", pt: 10 },
+  { id: "standard", label: "Standard (11 pt)", pt: 11 },
+  { id: "large", label: "Roomy (12 pt)", pt: 12 },
+  { id: "largeprint", label: "Large print (16 pt)", pt: 16 },
+];
+
 export const DEFAULT_FORMAT: FormatSettings = {
   style: "classic",
   headingFormat: null,
@@ -63,6 +77,10 @@ export const DEFAULT_FORMAT: FormatSettings = {
   autoCopyright: true,
   autoAlsoBy: true,
   trim: "6x9",
+  printSize: "standard",
+  chapterStartRight: false,
+  runningHeads: true,
+  paper: "cream",
   lastPageCount: null,
 };
 
@@ -105,7 +123,12 @@ export function normalizeFormat(raw: unknown): FormatSettings {
     autoCopyright: o.autoCopyright !== false,
     autoAlsoBy: o.autoAlsoBy !== false,
     trim,
-    lastPageCount: Number.isFinite(Number(o.lastPageCount)) && Number(o.lastPageCount) > 0 ? Number(o.lastPageCount) : null,
+    printSize: PRINT_SIZES.some((p) => p.id === o.printSize) ? (o.printSize as PrintSize) : DEFAULT_FORMAT.printSize,
+    chapterStartRight: o.chapterStartRight === true,
+    runningHeads: o.runningHeads !== false,
+    paper: o.paper === "white" ? "white" : "cream",
+    lastPageCount:
+      Number.isFinite(Number(o.lastPageCount)) && Number(o.lastPageCount) > 0 ? Math.round(Number(o.lastPageCount)) : null,
   };
 }
 

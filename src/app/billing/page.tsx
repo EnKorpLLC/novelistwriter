@@ -10,6 +10,10 @@ function planItems(id: PlanCopy["id"]) {
   return PLANS.find((p) => p.id === id)?.items || [];
 }
 
+function planPrice(id: PlanCopy["id"]) {
+  return PLANS.find((p) => p.id === id)?.price || "";
+}
+
 const REFERRAL_REWARD_CREDITS = 50;
 
 function BillingInner() {
@@ -211,7 +215,8 @@ function BillingInner() {
       <section className="mt-6 border border-accent p-6">
         <h2 className="font-display text-xl">Optional subscription</h2>
         <p className="mt-1 text-sm text-muted">
-          Pro adds your author site and launch pages, unlimited projects, and monthly AI credits. Studio
+          Pro adds book formatting for ebooks and paperbacks, your author site and launch pages, unlimited
+          projects, and monthly AI credits. Studio
           adds the beta and ARC desks, email signups, reader feedback beside the editor, and reader
           insights. Cancel anytime in the Stripe portal.
         </p>
@@ -220,7 +225,7 @@ function BillingInner() {
           <div className="border border-line p-4">
             <h3 className="font-display text-lg">Pro</h3>
             <p className="mt-1 text-2xl text-ink">
-              $16<span className="text-sm text-muted">/mo</span>
+              {planPrice("pro")}<span className="text-sm text-muted">/mo</span>
             </p>
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
@@ -235,7 +240,7 @@ function BillingInner() {
                 onClick={() => checkout({ kind: "subscribe", tier: "pro", interval: "monthly" })}
                 className="bg-ink px-3 py-2 text-sm text-paper disabled:opacity-50"
               >
-                Pro monthly — $16
+                Pro monthly — {planPrice("pro")}
               </button>
               <button
                 type="button"
@@ -251,7 +256,7 @@ function BillingInner() {
           <div className="border border-accent p-4">
             <h3 className="font-display text-lg">Studio</h3>
             <p className="mt-1 text-2xl text-ink">
-              $32<span className="text-sm text-muted">/mo</span>
+              {planPrice("studio")}<span className="text-sm text-muted">/mo</span>
             </p>
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
@@ -268,7 +273,7 @@ function BillingInner() {
                 }
                 className="bg-accent px-3 py-2 text-sm text-paper disabled:opacity-50"
               >
-                Studio monthly — $32
+                Studio monthly — {planPrice("studio")}
               </button>
               <button
                 type="button"

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Chapter, Project } from "@/lib/types";
-import { KDP_CHECKLIST } from "@/lib/kdp-checklist";
+import { kdpChecklist } from "@/lib/kdp-checklist";
 import { coverPublicUrl } from "@/lib/cover";
 import {
   BOOK_KEYWORDS,
@@ -26,7 +26,7 @@ type Matter = {
 type Props = {
   project: Project;
   chapters: Chapter[];
-  /** Front and back matter are edited in the Format tab now */
+  /** Read-only here: front and back matter are edited in the Format tab */
   matter?: Matter[];
   coverPath: string | null;
   onCoverChange: (path: string | null, version?: number) => void;
@@ -35,6 +35,7 @@ type Props = {
 export function ProjectTools({
   project,
   chapters,
+  matter = [],
   coverPath,
   onCoverChange,
 }: Props) {
@@ -340,10 +341,21 @@ export function ProjectTools({
       <section>
         <h3 className="font-display text-xl">KDP checklist</h3>
         <ul className="mt-3 space-y-2 text-sm">
-          {KDP_CHECKLIST.map((item) => (
-            <li key={item.id} className="flex items-center gap-2">
-              <span className="text-accent">○</span>
-              {item.label}
+          {kdpChecklist({
+            formatSettings: (project as Project & { format_settings?: unknown }).format_settings,
+            matter,
+            blurb,
+            categories,
+            keywordCount: keywordIds.length,
+          }).map((item) => (
+            <li key={item.id} className="flex items-start gap-2">
+              <span className={item.ok ? "text-accent" : item.ok === false ? "text-danger" : "text-muted"}>
+                {item.ok ? "✓" : item.ok === false ? "✗" : "○"}
+              </span>
+              <span>
+                {item.label}
+                {item.detail && <span className="block text-xs text-muted">{item.detail}</span>}
+              </span>
             </li>
           ))}
         </ul>

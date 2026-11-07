@@ -71,6 +71,18 @@ const FORMAT_POINTS = [
     t: "Smart chapters",
     d: "Prologues, epilogues, and part pages are spotted for you and numbered the way real books are, in the chapter heading style you choose.",
   },
+  {
+    t: "Print-ready paperbacks",
+    d: "Five trim sizes, running heads, page numbers, a contents page with real page numbers, and inside margins that grow with your page count the way KDP requires.",
+  },
+  {
+    t: "Checked before you upload",
+    d: "A checklist covers page count limits, margins, fonts, and your copyright page, and the page count is saved for your cover.",
+  },
+  {
+    t: "Large print in one click",
+    d: "Switch to 16 pt large print, or a compact or roomy size, and the whole book lays itself out again.",
+  },
 ];
 
 export default function HomePage() {
@@ -242,11 +254,12 @@ export default function HomePage() {
         <section id="format" className="scroll-mt-24 border-t border-line px-6 py-20 md:px-10">
           <div className="mx-auto max-w-5xl">
             <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Format · Pro and Studio</p>
-            <h2 className="font-display mt-2 text-3xl text-ink">A beautiful ebook without another app</h2>
+            <h2 className="font-display mt-2 text-3xl text-ink">A beautiful ebook and paperback, without another app</h2>
             <p className="mt-3 max-w-2xl text-muted">
               Pick a book style, see your book on Kindle, phone, and tablet screens as you go, and
-              download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play. No Vellum,
-              no Mac, no extra license. Print-ready PDFs and cover tools are coming next.
+              download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play. Then lay it
+              out as printed pages and save a paperback PDF ready for KDP. No Vellum, no Mac, no extra
+              license. Cover tools are coming next.
             </p>
             <ul className="mt-10 grid gap-8 md:grid-cols-3">
               {FORMAT_POINTS.map((item) => (

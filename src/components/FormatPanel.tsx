@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Chapter, Project } from "@/lib/types";
 import {
   HEADING_FORMATS,
+  PRINT_SIZES,
   SCENE_BREAKS,
+  TRIM_SIZES,
   detectChapterKind,
   normalizeDetails,
   normalizeFormat,
@@ -294,7 +296,7 @@ a{color:inherit}
             <h2 className="font-display text-2xl">Format</h2>
             <p className="mt-1 text-sm text-muted">
               Choose a book style, set up your title, copyright, and back pages, preview it on devices, and download a
-              polished ebook ready for Kindle, Apple Books, Kobo, and other stores.
+              polished ebook for Kindle, Apple Books, Kobo, and other stores, plus a print-ready paperback PDF.
             </p>
             {info?.migrationNeeded && (
               <p className="mt-2 text-sm text-danger">
@@ -566,11 +568,26 @@ a{color:inherit}
                       {downloading ? "Building…" : "Download ebook (EPUB)"}
                     </button>
                     <p className="mt-2 text-[11px] text-muted">
-                      Upload it to Kindle Direct Publishing, Apple Books, Kobo, Barnes &amp; Noble, and Google Play. Print-ready
-                      paperback PDFs are coming next.
+                      Upload it to Kindle Direct Publishing, Apple Books, Kobo, Barnes &amp; Noble, and Google Play.
                     </p>
                   </div>
                 )}
+              </section>
+
+              <section className="mt-4 border border-line p-4">
+                <h3 className="font-display text-lg">Paperback</h3>
+                <p className="mt-1 text-xs text-muted">
+                  Lay out your book as printed pages in this style, with page numbers, running heads, and margins set for KDP,
+                  then save a print-ready PDF.
+                </p>
+                <p className="mt-2 text-xs text-ink">
+                  {TRIM_SIZES.find((t) => t.id === format.trim)?.label} · {PRINT_SIZES.find((p) => p.id === format.printSize)?.label}
+                  {format.lastPageCount ? ` · ${format.lastPageCount} pages` : ""}
+                </p>
+                <a href={`/project/${projectId}/print`} className="mt-3 inline-block border border-accent px-4 py-2 text-sm text-accent">
+                  Open print layout
+                </a>
+                {info && !info.pro && <p className="mt-2 text-[11px] text-muted">Free plans see the first chapters. Full PDFs are on Pro.</p>}
               </section>
             </div>
           </div>

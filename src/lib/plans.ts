@@ -24,7 +24,7 @@ export const PLANS: PlanCopy[] = [
       "A private writing record of how every book came together",
       "One switch to turn every AI tool off",
       "Basic DOCX and EPUB export, front and back matter, KDP readiness checklist",
-      "Set up book styles and preview your ebook on Kindle, phone, and tablet screens",
+      "Set up book styles, preview your ebook on Kindle, phone, and tablet screens, and see the first chapters as printed pages",
       "AI critique pay as you go, with credit packs from $5",
     ],
   },
@@ -38,6 +38,7 @@ export const PLANS: PlanCopy[] = [
       "Everything in Free",
       "Unlimited projects",
       "Book formatting: 8 book styles with drop caps, chapter openings, and scene-break ornaments, downloaded as a polished, store-ready ebook",
+      "Print-ready paperback PDFs: 5 trim sizes, running heads and page numbers, margins that follow KDP's page-count rules, and a checklist before you upload",
       "Book details and auto pages: title page, copyright with your ISBN, contents, also-by with links, and a review request",
       "Your own author site: photo, bio, links, themes, and every book in one place",
       "A launch page for every book that grows with it: cover reveal, preorders, then buy buttons on release day",
@@ -103,7 +104,7 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Do I still need Vellum or Atticus?",
-    a: "For ebooks, not anymore. Pro formats your book in the browser with 8 book styles, chapter openings, scene breaks, and front and back pages built from your book details, then downloads a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play. Print-ready PDFs and cover tools are coming next.",
+    a: "For formatting, not anymore, and it works on Windows too. Pro formats your book in the browser with 8 book styles, chapter openings, scene breaks, and front and back pages built from your book details. Download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play, and save a print-ready paperback PDF with running heads, page numbers, and margins set for KDP. Cover tools are coming next.",
   },
   {
     q: "Is my manuscript used to train AI?",
