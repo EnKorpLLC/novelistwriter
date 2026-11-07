@@ -31,7 +31,7 @@ export const PLANS: PlanCopy[] = [
   {
     id: "pro",
     name: "Pro",
-    price: "$16",
+    price: "$19",
     note: "per month",
     lead: "Write more books and put them in front of readers.",
     items: [
@@ -52,7 +52,7 @@ export const PLANS: PlanCopy[] = [
   {
     id: "studio",
     name: "Studio",
-    price: "$32",
+    price: "$39",
     note: "per month",
     lead: "Run beta readers, ARCs, and your audience from one place.",
     items: [
@@ -90,6 +90,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "What happens when Studio ends?",
     a: "Your beta and ARC listings, applications, and invites pause right away, and current readers get 7 days to finish. Reader comments, reviews, and insights are kept and unlock again when you're back on Studio. Any banked free Studio days start on their own first.",
+  },
+  {
+    q: "Will my price go up when you add features?",
+    a: "Not while you stay subscribed. When prices change, current subscribers keep the price they signed up at for as long as their subscription stays active.",
   },
   {
     q: "What happens when Pro ends?",
