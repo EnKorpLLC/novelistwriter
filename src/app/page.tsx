@@ -80,8 +80,8 @@ const FORMAT_POINTS = [
     d: "A checklist covers page count limits, margins, fonts, and your copyright page, and the page count flows straight into your cover size.",
   },
   {
-    t: "Covers that fit",
-    d: "Your ebook cover is checked against store sizes, and the paperback wrap, spine width, bleed, and barcode area are worked out from your page count, with a template to design on.",
+    t: "A cover builder that fits",
+    d: "Design the front, spine, and back on the exact wrap for your page count, with your own art and our fonts. It warns about the safe area and blurry art, then saves your ebook cover and paperback cover PDF.",
   },
 ];
 
@@ -258,8 +258,8 @@ export default function HomePage() {
             <p className="mt-3 max-w-2xl text-muted">
               Pick a book style, see your book on Kindle, phone, and tablet screens as you go, and
               download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play. Then lay it
-              out as printed pages and save a paperback PDF ready for KDP, and get your cover&apos;s exact
-              wrap size and spine width. No Vellum, no Mac, no extra license.
+              out as printed pages and save a paperback PDF ready for KDP, and design a cover that fits
+              your exact spine. No Vellum, no Mac, no extra license.
             </p>
             <ul className="mt-10 grid gap-8 md:grid-cols-3">
               {FORMAT_POINTS.map((item) => (

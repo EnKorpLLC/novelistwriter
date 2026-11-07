@@ -39,7 +39,8 @@ export const PLANS: PlanCopy[] = [
       "Unlimited projects",
       "Book formatting: 8 book styles with drop caps, chapter openings, and scene-break ornaments, downloaded as a polished, store-ready ebook",
       "Print-ready paperback PDFs: 5 trim sizes, running heads and page numbers, margins that follow KDP's page-count rules, and a checklist before you upload",
-      "Cover tools: ebook cover checks, the exact paperback wrap size and spine width for KDP or IngramSpark, and a cover template to design on",
+      "Cover builder: design your front, spine, and back cover with your own art and our fonts, then save the ebook cover and a print-ready paperback cover PDF",
+      "Cover tools: ebook cover checks, the exact paperback wrap size and spine width for KDP or IngramSpark, and a cover template for your designer",
       "Book details and auto pages: title page, copyright with your ISBN, contents, also-by with links, and a review request",
       "Your own author site: photo, bio, links, themes, and every book in one place",
       "A launch page for every book that grows with it: cover reveal, preorders, then buy buttons on release day",
@@ -109,7 +110,7 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Do I still need Vellum or Atticus?",
-    a: "For formatting, not anymore, and it works on Windows too. Pro formats your book in the browser with 8 book styles, chapter openings, scene breaks, and front and back pages built from your book details. Download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play, and save a print-ready paperback PDF with running heads, page numbers, and margins set for KDP. The Cover tab checks your ebook cover and gives you the exact paperback wrap, spine width, and a template. A cover builder is coming next.",
+    a: "For formatting, not anymore, and it works on Windows too. Pro formats your book in the browser with 8 book styles, chapter openings, scene breaks, and front and back pages built from your book details. Download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play, and save a print-ready paperback PDF with running heads, page numbers, and margins set for KDP. The cover builder designs your front, spine, and back cover on the exact wrap for your page count and saves both the ebook cover and the paperback cover PDF.",
   },
   {
     q: "Is my manuscript used to train AI?",

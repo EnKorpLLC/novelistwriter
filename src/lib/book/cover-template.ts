@@ -73,7 +73,7 @@ function drawGuides(ctx: CanvasRenderingContext2D, wrap: CoverWrap, s: number) {
   ctx.restore();
 }
 
-function canvasBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
+export function canvasBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not create the image"))), type, quality));
 }
 

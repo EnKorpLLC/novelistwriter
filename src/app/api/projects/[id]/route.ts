@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { projectLockedMessage } from "@/lib/studio-access";
 import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
+import { normalizeCoverDesign } from "@/lib/book/cover-design";
 
 export async function PATCH(
   req: Request,
@@ -39,6 +40,7 @@ export async function PATCH(
     patch.format_settings = normalizeFormat({ ...stored, ...incoming });
   }
   if ("book_details" in body) patch.book_details = normalizeDetails(body.book_details);
+  if ("cover_design" in body) patch.cover_design = normalizeCoverDesign(body.cover_design);
 
   const { data, error } = await supabase
     .from("projects")
@@ -49,7 +51,7 @@ export async function PATCH(
     .single();
 
   if (error) {
-    const hint = /format_settings|book_details/.test(error.message)
+    const hint = /format_settings|book_details|cover_design/.test(error.message)
       ? "Database needs an update. Run supabase/migration_formatting.sql in the Supabase SQL editor."
       : error.message;
     return NextResponse.json({ error: hint }, { status: 500 });

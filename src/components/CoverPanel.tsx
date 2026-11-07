@@ -171,6 +171,18 @@ export function CoverPanel({
             {note && <p className="mt-2 text-sm text-ink">{note}</p>}
           </div>
 
+          <section className="border border-accent/50 bg-accent/5 p-4">
+            <h3 className="font-display text-lg">Cover builder</h3>
+            <p className="mt-1 text-xs text-muted">
+              Design the whole cover here: your art, title, author, back cover blurb, and a spine sized to your page count.
+              It checks the safe area and print sharpness, then saves your ebook cover and a print-ready paperback PDF.
+            </p>
+            <a href={`/project/${projectId}/cover-builder`} className="mt-3 inline-block bg-accent px-4 py-2 text-sm text-paper">
+              Open the cover builder
+            </a>
+            {pro === false && <p className="mt-2 text-[11px] text-muted">Try it free. Uploading art and exporting are part of Pro.</p>}
+          </section>
+
           <section className="border border-line p-4">
             <h3 className="font-display text-lg">Ebook cover</h3>
             <div className="mt-3 flex flex-wrap gap-6">
@@ -355,7 +367,6 @@ export function CoverPanel({
                   </div>
                 </div>
               )}
-              <p className="mt-3 text-[11px] text-muted">A cover builder that designs on this template is coming next.</p>
             </div>
           </section>
         </div>
