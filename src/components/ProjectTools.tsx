@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Chapter, Project } from "@/lib/types";
 import { kdpChecklist } from "@/lib/kdp-checklist";
-import { coverPublicUrl } from "@/lib/cover";
 import {
   BOOK_KEYWORDS,
   MAX_BOOK_KEYWORDS,
@@ -28,16 +27,12 @@ type Props = {
   chapters: Chapter[];
   /** Read-only here: front and back matter are edited in the Format tab */
   matter?: Matter[];
-  coverPath: string | null;
-  onCoverChange: (path: string | null, version?: number) => void;
 };
 
 export function ProjectTools({
   project,
   chapters,
   matter = [],
-  coverPath,
-  onCoverChange,
 }: Props) {
   const [title, setTitle] = useState(project.title);
   const [blurb, setBlurb] = useState(project.blurb || "");
@@ -57,10 +52,6 @@ export function ProjectTools({
   const [buildFormat, setBuildFormat] = useState<"docx" | "epub">("docx");
   const [includeIds, setIncludeIds] = useState<string[]>(() => chapters.map((c) => c.id));
   const [building, setBuilding] = useState(false);
-  const [coverVersion, setCoverVersion] = useState(() => Date.now());
-  const [coverBusy, setCoverBusy] = useState(false);
-  const coverUrl = coverPath ? coverPublicUrl(coverPath, coverVersion) : null;
-
   async function saveMeta() {
     const ids = normalizeKeywordIds(keywordIds);
     const labels = keywordLabels(ids);
@@ -150,41 +141,6 @@ export function ProjectTools({
     }
   }
 
-  async function uploadCover(file: File) {
-    setCoverBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(`/api/projects/${project.id}/cover`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "Cover upload failed");
-        return;
-      }
-      setCoverVersion(data.version ?? Date.now());
-      onCoverChange(data.path, data.version);
-    } finally {
-      setCoverBusy(false);
-    }
-  }
-
-  async function removeCover() {
-    if (!confirm("Remove this project’s cover image?")) return;
-    setCoverBusy(true);
-    try {
-      const res = await fetch(`/api/projects/${project.id}/cover`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || "Could not remove cover");
-        return;
-      }
-      onCoverChange(null);
-      setCoverVersion(Date.now());
-    } finally {
-      setCoverBusy(false);
-    }
-  }
-
   async function snapshot() {
     const res = await fetch(`/api/projects/${project.id}/versions`, { method: "POST" });
     const data = await res.json();
@@ -241,53 +197,14 @@ export function ProjectTools({
             placeholder="Blurb (critique only — we won't write it for you)"
             rows={4}
           />
-          <div className="flex flex-wrap items-start gap-4 border border-line p-3">
-            <div className="relative h-28 w-20 shrink-0 overflow-hidden border border-line bg-paper-deep">
-              {coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverUrl} alt="Cover" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-muted">
-                  No cover
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1 space-y-2 text-sm">
-              <p className="font-medium">Book cover</p>
-              <p className="text-xs text-muted">
-                Shows on the projects list and is embedded in DOCX/EPUB exports. JPG, PNG, or WebP
-                under 5MB.
-              </p>
-              <label className="inline-block cursor-pointer border border-line px-3 py-1.5 text-xs hover:border-accent">
-                {coverBusy ? "Working…" : coverUrl ? "Replace cover" : "Upload cover"}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  disabled={coverBusy}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    if (f) void uploadCover(f);
-                  }}
-                />
-              </label>
-              {coverUrl && (
-                <button
-                  type="button"
-                  disabled={coverBusy}
-                  onClick={() => void removeCover()}
-                  className="ml-2 border border-line px-3 py-1.5 text-xs disabled:opacity-50"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
           <p className="text-xs text-muted">
             Book style, fonts, and trim size are in the{" "}
             <a href="?tab=format" className="text-accent underline">
               Format tab
+            </a>
+            , and your cover is in the{" "}
+            <a href="?tab=cover" className="text-accent underline">
+              Cover tab
             </a>
             .
           </p>

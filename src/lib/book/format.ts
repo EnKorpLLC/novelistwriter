@@ -6,6 +6,7 @@ export type FirstLine = "style" | "dropcap" | "smallcaps" | "none";
 export type TrimSize = "5x8" | "5.06x7.81" | "5.25x8" | "5.5x8.5" | "6x9";
 export type PrintSize = "small" | "standard" | "large" | "largeprint";
 export type Paper = "cream" | "white";
+export type Printer = "kdp" | "ingram";
 
 export type FormatSettings = {
   style: string;
@@ -24,6 +25,7 @@ export type FormatSettings = {
   chapterStartRight: boolean;
   runningHeads: boolean;
   paper: Paper;
+  printer: Printer;
   /** From the last print layout; the cover calculator uses it */
   lastPageCount: number | null;
 };
@@ -81,6 +83,7 @@ export const DEFAULT_FORMAT: FormatSettings = {
   chapterStartRight: false,
   runningHeads: true,
   paper: "cream",
+  printer: "kdp",
   lastPageCount: null,
 };
 
@@ -127,6 +130,7 @@ export function normalizeFormat(raw: unknown): FormatSettings {
     chapterStartRight: o.chapterStartRight === true,
     runningHeads: o.runningHeads !== false,
     paper: o.paper === "white" ? "white" : "cream",
+    printer: o.printer === "ingram" ? "ingram" : "kdp",
     lastPageCount:
       Number.isFinite(Number(o.lastPageCount)) && Number(o.lastPageCount) > 0 ? Math.round(Number(o.lastPageCount)) : null,
   };

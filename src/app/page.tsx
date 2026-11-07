@@ -73,15 +73,15 @@ const FORMAT_POINTS = [
   },
   {
     t: "Print-ready paperbacks",
-    d: "Five trim sizes, running heads, page numbers, a contents page with real page numbers, and inside margins that grow with your page count the way KDP requires.",
+    d: "Five trim sizes, large print in one click, running heads, a contents page with real page numbers, and inside margins that grow with your page count the way KDP requires.",
   },
   {
     t: "Checked before you upload",
-    d: "A checklist covers page count limits, margins, fonts, and your copyright page, and the page count is saved for your cover.",
+    d: "A checklist covers page count limits, margins, fonts, and your copyright page, and the page count flows straight into your cover size.",
   },
   {
-    t: "Large print in one click",
-    d: "Switch to 16 pt large print, or a compact or roomy size, and the whole book lays itself out again.",
+    t: "Covers that fit",
+    d: "Your ebook cover is checked against store sizes, and the paperback wrap, spine width, bleed, and barcode area are worked out from your page count, with a template to design on.",
   },
 ];
 
@@ -258,8 +258,8 @@ export default function HomePage() {
             <p className="mt-3 max-w-2xl text-muted">
               Pick a book style, see your book on Kindle, phone, and tablet screens as you go, and
               download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play. Then lay it
-              out as printed pages and save a paperback PDF ready for KDP. No Vellum, no Mac, no extra
-              license. Cover tools are coming next.
+              out as printed pages and save a paperback PDF ready for KDP, and get your cover&apos;s exact
+              wrap size and spine width. No Vellum, no Mac, no extra license.
             </p>
             <ul className="mt-10 grid gap-8 md:grid-cols-3">
               {FORMAT_POINTS.map((item) => (

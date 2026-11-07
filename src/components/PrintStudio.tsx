@@ -80,11 +80,11 @@ export function PrintStudio(props: {
     setChromium(/Chrome\/|Edg\//.test(navigator.userAgent) && !/OPR\/|Firefox\//.test(navigator.userAgent));
   }, []);
 
-  async function saveFormat(next: FormatSettings, pages: number | null) {
+  async function saveFormat(patch: Partial<FormatSettings>) {
     const res = await fetch(`/api/projects/${props.projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ format_settings: { ...next, lastPageCount: pages } }),
+      body: JSON.stringify({ format_settings: patch }),
     });
     if (!res.ok) setNote((await res.json().catch(() => ({}))).error || "Could not save");
   }
@@ -110,7 +110,7 @@ export function PrintStudio(props: {
         setStatus({ doc: forDoc, state: "done", pages });
         if (!sample && pages !== savedPages) {
           setSavedPages(pages);
-          void saveFormat(format, pages);
+          void saveFormat({ lastPageCount: pages });
         }
       }
     }
@@ -140,7 +140,7 @@ export function PrintStudio(props: {
     passes.current = 0;
     setFormat(next);
     setNote(null);
-    void saveFormat(next, savedPages);
+    void saveFormat(patch);
   }
 
   const checks =

@@ -31,7 +31,13 @@ export async function PATCH(
   ]) {
     if (key in body) patch[key] = body[key];
   }
-  if ("format_settings" in body) patch.format_settings = normalizeFormat(body.format_settings);
+  if ("format_settings" in body) {
+    // Merged onto what's stored: the Format tab, Cover tab, and print page each send only what they changed
+    const { data: current } = await supabase.from("projects").select("format_settings").eq("id", id).eq("user_id", user.id).maybeSingle();
+    const stored = current?.format_settings && typeof current.format_settings === "object" ? current.format_settings : {};
+    const incoming = body.format_settings && typeof body.format_settings === "object" ? body.format_settings : {};
+    patch.format_settings = normalizeFormat({ ...stored, ...incoming });
+  }
   if ("book_details" in body) patch.book_details = normalizeDetails(body.book_details);
 
   const { data, error } = await supabase

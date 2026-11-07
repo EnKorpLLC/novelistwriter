@@ -26,16 +26,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const auth = await owner(id);
   if (!auth) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const admin = createServiceClient();
-  const [pro, { data: profile }, extras] = await Promise.all([
+  const [pro, { data: profile }, extras, { data: matter }] = await Promise.all([
     userHasPro(auth.user.id),
     admin.from("profiles").select("display_name").eq("id", auth.user.id).maybeSingle(),
     loadBookExtras(admin, auth.project),
+    auth.supabase.from("matter_blocks").select("*").eq("project_id", id).order("sort_order"),
   ]);
+  // The workspace's project props are from page load, so tabs re-read the saved state from here
   return NextResponse.json({
     pro,
     authorName: profile?.display_name || "",
     extras,
     migrationNeeded: !("format_settings" in auth.project),
+    formatSettings: auth.project.format_settings ?? null,
+    bookDetails: auth.project.book_details ?? null,
+    subtitle: auth.project.subtitle || "",
+    matter: matter || [],
   });
 }
 

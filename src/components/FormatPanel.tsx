@@ -78,7 +78,15 @@ export function FormatPanel({
 
   useEffect(() => {
     void fetch(`/api/projects/${projectId}/format`)
-      .then(async (r) => (r.ok ? setInfo(await r.json()) : null))
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = await r.json();
+        setInfo(json);
+        if (json.formatSettings) setFormat(normalizeFormat(json.formatSettings));
+        if (json.bookDetails) setDetails(normalizeDetails(json.bookDetails));
+        setSubtitle(json.subtitle || "");
+        if (Array.isArray(json.matter)) setMatter([...json.matter].sort((a: Matter, b: Matter) => a.sort_order - b.sort_order));
+      })
       .catch(() => null);
   }, [projectId]);
 
@@ -101,7 +109,7 @@ export function FormatPanel({
     setFormat(next);
     setNote(null);
     try {
-      await saveProject({ format_settings: next });
+      await saveProject({ format_settings: patch });
     } catch (err) {
       setNote(err instanceof Error ? err.message : "Could not save");
     }

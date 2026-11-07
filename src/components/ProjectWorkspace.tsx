@@ -12,6 +12,7 @@ import { BetaPanel } from "@/components/BetaPanel";
 import { ArcPanel } from "@/components/ArcPanel";
 import { PublishPanel } from "@/components/PublishPanel";
 import { FormatPanel } from "@/components/FormatPanel";
+import { CoverPanel } from "@/components/CoverPanel";
 import { WORKSPACE_TABS, isWorkspaceTab, type WorkspaceTab } from "@/lib/workspace-tabs";
 import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
@@ -912,15 +913,9 @@ export function ProjectWorkspace({
           <FormatPanel projectId={project.id} project={project} chapters={chapters} matter={matter} />
         )}
 
-        {tab === "tools" && (
-          <ProjectTools
-            project={project}
-            chapters={chapters}
-            matter={matter}
-            coverPath={coverPath}
-            onCoverChange={setCoverPath}
-          />
-        )}
+        {tab === "cover" && <CoverPanel projectId={project.id} coverPath={coverPath} onCoverChange={setCoverPath} />}
+
+        {tab === "tools" && <ProjectTools project={project} chapters={chapters} matter={matter} />}
       </div>
     </div>
   );
