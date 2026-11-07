@@ -1,6 +1,7 @@
 import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
 import { appUrl } from "@/lib/stripe";
+import { createServiceClient } from "@/lib/supabase/admin";
 
 type SendOpts = {
   to: string;
@@ -49,11 +50,22 @@ export async function sendEmail(opts: SendOpts): Promise<SendResult> {
       html: opts.html,
       replyTo: opts.replyTo || undefined,
     });
+    await logSend(true);
     return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Send failed";
     console.error("[email] send failed", { to, subject: opts.subject, message });
+    await logSend(false);
     return { ok: false, error: message };
+  }
+}
+
+/** Counts sends for the Money tab's daily Gmail alarm. Never blocks or fails a send. */
+async function logSend(ok: boolean) {
+  try {
+    await createServiceClient().from("email_sends").insert({ ok });
+  } catch {
+    // table missing before migration_money.sql
   }
 }
 

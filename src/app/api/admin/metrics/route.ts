@@ -106,6 +106,23 @@ async function traffic(admin: SupabaseClient, sinceDay: string, newProfiles: New
     }
   }
 
+  // Visitors and signups that came from AI answer engines
+  const aiByTool = new Map<string, { arrivals: number; signups: number }>();
+  for (const v of views) {
+    const tool = aiSearchTool(v.referrer_host);
+    if (!tool) continue;
+    const a = aiByTool.get(tool) || { arrivals: 0, signups: 0 };
+    a.arrivals += 1;
+    aiByTool.set(tool, a);
+  }
+  for (const p of newProfiles) {
+    const tool = aiSearchTool(p.signup_source?.referrer_host);
+    if (!tool) continue;
+    const a = aiByTool.get(tool) || { arrivals: 0, signups: 0 };
+    a.signups += 1;
+    aiByTool.set(tool, a);
+  }
+
   const arrivals = views.filter((v) => v.referrer_host || v.utm_source).length;
   return {
     pageviews: views.length,
@@ -126,7 +143,28 @@ async function traffic(admin: SupabaseClient, sinceDay: string, newProfiles: New
       conversion: c.arrivals ? c.signups / c.arrivals : 0,
     })),
     signupSources: top(signupSources, (n) => n).map(([source, n]) => ({ source, signups: n })),
+    aiSearch: [...aiByTool.entries()]
+      .sort(([, a], [, b]) => b.arrivals + b.signups * 10 - (a.arrivals + a.signups * 10))
+      .map(([tool, a]) => ({ tool, arrivals: a.arrivals, signups: a.signups })),
   };
+}
+
+const AI_SEARCH_HOSTS: [RegExp, string][] = [
+  [/(^|\.)chatgpt\.com$|(^|\.)openai\.com$/, "ChatGPT"],
+  [/(^|\.)perplexity\.ai$/, "Perplexity"],
+  [/(^|\.)gemini\.google\.com$|(^|\.)bard\.google\.com$/, "Gemini"],
+  [/(^|\.)copilot\.microsoft\.com$/, "Copilot"],
+  [/(^|\.)claude\.ai$/, "Claude"],
+  [/(^|\.)you\.com$/, "You.com"],
+  [/(^|\.)phind\.com$/, "Phind"],
+  [/(^|\.)meta\.ai$/, "Meta AI"],
+  [/(^|\.)deepseek\.com$/, "DeepSeek"],
+];
+
+function aiSearchTool(host: string | null | undefined): string | null {
+  const h = String(host || "").toLowerCase();
+  if (!h) return null;
+  return AI_SEARCH_HOSTS.find(([re]) => re.test(h))?.[1] || null;
 }
 
 export async function GET(req: Request) {

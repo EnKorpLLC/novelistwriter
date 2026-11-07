@@ -5,6 +5,7 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { grantReferralRewardForPurchase } from "@/lib/referral";
 import { onSubscriptionTierChange } from "@/lib/studio-pass";
+import { recordCheckout } from "@/lib/money";
 
 async function resolveUserId(session: Stripe.Checkout.Session): Promise<string | null> {
   if (session.metadata?.supabase_user_id) return session.metadata.supabase_user_id;
@@ -69,6 +70,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
   const kind = session.metadata?.kind;
   const admin = createServiceClient();
   const eventId = session.id;
+  await recordCheckout(admin, session, userId);
 
   if (kind === "project_unlock") {
     const { data: existing } = await admin

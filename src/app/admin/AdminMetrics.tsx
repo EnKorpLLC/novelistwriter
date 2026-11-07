@@ -17,6 +17,7 @@ type Metrics = {
     topReferrers: { host: string; arrivals: number }[];
     campaigns: { name: string; arrivals: number; signups: number; conversion: number }[];
     signupSources: { source: string; signups: number }[];
+    aiSearch?: { tool: string; arrivals: number; signups: number }[];
   };
   authors: Record<string, number> & {
     plans: { free: number; pro: number; studio: number; passRunning: number };
@@ -163,6 +164,18 @@ export function AdminMetrics({ onNote }: { onNote: (msg: string | null) => void 
                 head={["Site", "Arrivals"]}
                 rows={t.topReferrers.map((r) => [r.host, r.arrivals])}
                 empty="No outside referrers yet."
+              />
+            </div>
+            <div>
+              <h3 className="font-display text-lg">AI search</h3>
+              <p className="mt-1 text-[11px] text-muted">
+                Visitors and signups arriving from ChatGPT, Perplexity, Gemini, Copilot, Claude, and other AI answer
+                engines.
+              </p>
+              <Table
+                head={["AI tool", "Arrivals", "Signups"]}
+                rows={(t.aiSearch || []).map((a) => [a.tool, a.arrivals, a.signups])}
+                empty="No visitors from AI answers yet."
               />
             </div>
             <div>

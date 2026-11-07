@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { SUB_ALLOWANCE } from "@/lib/types";
 import { grantReferralRewardForPurchase } from "@/lib/referral";
 import { onSubscriptionTierChange } from "@/lib/studio-pass";
+import { recordInvoice, recordRefund } from "@/lib/money";
 import Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -78,6 +79,7 @@ export async function POST(req: Request) {
           : invoice.subscription?.id;
       if (subId) {
         const sub = await stripe.subscriptions.retrieve(subId);
+        await recordInvoice(admin, invoice, sub);
         const userId = sub.metadata?.supabase_user_id;
         const tier = (sub.metadata?.tier as "pro" | "studio") || "pro";
         if (userId && (tier === "pro" || tier === "studio")) {
@@ -105,6 +107,16 @@ export async function POST(req: Request) {
             console.error("referral renewal reward failed", invoice.id, err);
           }
         }
+      }
+    }
+    if (event.type === "charge.refunded") {
+      const charge = event.data.object as Stripe.Charge;
+      try {
+        const refunds = await stripe.refunds.list({ charge: charge.id, limit: 100 });
+        for (const r of refunds.data) await recordRefund(admin, r);
+      } catch (err) {
+        // Money tracking never fails the webhook; "Sync from Stripe" catches up later
+        console.error("refund record failed", charge.id, err);
       }
     }
   } catch (err) {

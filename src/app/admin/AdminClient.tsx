@@ -6,6 +6,7 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { AdminModeration } from "./AdminModeration";
 import { GiftForm } from "./GiftForm";
 import { AdminMetrics } from "./AdminMetrics";
+import { AdminMoney } from "./AdminMoney";
 
 type Message = {
   id: string;
@@ -34,6 +35,7 @@ type AdminUser = {
 
 const TABS = [
   { id: "metrics", label: "Metrics" },
+  { id: "money", label: "Money" },
   { id: "messages", label: "Messages" },
   { id: "users", label: "Users" },
   { id: "moderation", label: "Moderation" },
@@ -49,6 +51,12 @@ function when(iso: string | null | undefined) {
 export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   const [tab, setTab] = useState<TabId>("metrics");
   const [note, setNote] = useState<string | null>(null);
+
+  // Links like /admin?tab=money (from the first-sale and alarm emails) open that tab
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    if (wanted && TABS.some((t) => t.id === wanted)) setTab(wanted as TabId);
+  }, []);
 
   const [filter, setFilter] = useState<"open" | "archived">("open");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -487,6 +495,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
         )}
 
         {tab === "metrics" && <AdminMetrics onNote={setNote} />}
+
+        {tab === "money" && <AdminMoney onNote={setNote} />}
 
         {tab === "moderation" && <AdminModeration onNote={setNote} />}
 

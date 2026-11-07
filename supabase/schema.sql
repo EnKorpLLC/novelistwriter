@@ -412,6 +412,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- See migration_reader_badges.sql for: projects.reader_show_badges and projects.reader_show_record
 -- See migration_reader_profile.sql for: profiles.reader_profile_public
 -- See migration_site_plans.sql for: credit_balances.site_grace_until
+-- See migration_money.sql for: revenue_events, admin_costs, admin_settings, email_sends, admin_db_size(), admin_storage_size()
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
 -- Optional private bucket `manuscripts` for raw uploads if needed later
