@@ -1,4 +1,4 @@
-export type WorkspaceTab = "write" | "bible" | "beta" | "arc" | "publish" | "tools";
+export type WorkspaceTab = "write" | "bible" | "beta" | "arc" | "publish" | "format" | "tools";
 
 export const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "write", label: "Write" },
@@ -6,6 +6,7 @@ export const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "beta", label: "Beta" },
   { id: "arc", label: "ARC" },
   { id: "publish", label: "Launch" },
+  { id: "format", label: "Format" },
   { id: "tools", label: "Tools" },
 ];
 

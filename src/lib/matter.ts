@@ -1,3 +1,22 @@
+/** Every front and back matter page type, with what the auto version does when the page is left empty. */
+export const MATTER_TYPES: { type: string; label: string; auto?: string }[] = [
+  { type: "front_copyright", label: "Copyright", auto: "Built from your book details when left empty" },
+  { type: "front_dedication", label: "Dedication" },
+  { type: "front_epigraph", label: "Epigraph" },
+  { type: "front_toc", label: "Contents", auto: "Always built from your chapters" },
+  { type: "front_foreword", label: "Foreword" },
+  { type: "front_authors_note", label: "Author's note" },
+  { type: "front_custom", label: "Custom page (front)" },
+  { type: "back_acknowledgments", label: "Acknowledgments" },
+  { type: "back_authors_note", label: "Author's note" },
+  { type: "back_about_author", label: "About the author" },
+  { type: "back_also_by", label: "Also by", auto: "Lists your other public books when left empty" },
+  { type: "back_review_request", label: "Please leave a review", auto: "Links to your first store when left empty" },
+  { type: "back_newsletter", label: "Stay in touch", auto: "Links to your author site when left empty" },
+  { type: "back_sample", label: "Sample chapter" },
+  { type: "back_custom", label: "Custom page (back)" },
+];
+
 export const DEFAULT_MATTER = [
   {
     matter_type: "front_copyright",

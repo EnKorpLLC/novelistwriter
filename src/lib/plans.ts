@@ -23,7 +23,8 @@ export const PLANS: PlanCopy[] = [
       "1 project (add more for $9 each, one time)",
       "A private writing record of how every book came together",
       "One switch to turn every AI tool off",
-      "DOCX and EPUB export, front and back matter, KDP readiness checklist",
+      "Basic DOCX and EPUB export, front and back matter, KDP readiness checklist",
+      "Set up book styles and preview your ebook on Kindle, phone, and tablet screens",
       "AI critique pay as you go, with credit packs from $5",
     ],
   },
@@ -36,6 +37,8 @@ export const PLANS: PlanCopy[] = [
     items: [
       "Everything in Free",
       "Unlimited projects",
+      "Book formatting: 8 book styles with drop caps, chapter openings, and scene-break ornaments, downloaded as a polished, store-ready ebook",
+      "Book details and auto pages: title page, copyright with your ISBN, contents, also-by with links, and a review request",
       "Your own author site: photo, bio, links, themes, and every book in one place",
       "A launch page for every book that grows with it: cover reveal, preorders, then buy buttons on release day",
       "Your public writing record and badges, like “Written in Novelist Writer” and “No AI used on this book”",
@@ -97,6 +100,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "Will AI companies train on my author site or book pages?",
     a: "We block AI training crawlers from author sites, launch pages, writing records, and reader profiles. AI search tools (like ChatGPT search and Perplexity) can still find and link to your pages, so readers asking AI for book recommendations can discover you.",
+  },
+  {
+    q: "Do I still need Vellum or Atticus?",
+    a: "For ebooks, not anymore. Pro formats your book in the browser with 8 book styles, chapter openings, scene breaks, and front and back pages built from your book details, then downloads a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play. Print-ready PDFs and cover tools are coming next.",
   },
   {
     q: "Is my manuscript used to train AI?",

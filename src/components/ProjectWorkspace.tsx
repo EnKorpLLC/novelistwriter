@@ -11,6 +11,7 @@ import { ProjectTools } from "@/components/ProjectTools";
 import { BetaPanel } from "@/components/BetaPanel";
 import { ArcPanel } from "@/components/ArcPanel";
 import { PublishPanel } from "@/components/PublishPanel";
+import { FormatPanel } from "@/components/FormatPanel";
 import { WORKSPACE_TABS, isWorkspaceTab, type WorkspaceTab } from "@/lib/workspace-tabs";
 import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
@@ -906,6 +907,10 @@ export function ProjectWorkspace({
         {tab === "arc" && <ArcPanel projectId={project.id} />}
 
         {tab === "publish" && <PublishPanel projectId={project.id} />}
+
+        {tab === "format" && (
+          <FormatPanel projectId={project.id} project={project} chapters={chapters} matter={matter} />
+        )}
 
         {tab === "tools" && (
           <ProjectTools

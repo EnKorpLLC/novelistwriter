@@ -50,6 +50,11 @@ export function rowSitePublic(row: TierRow, now = Date.now()) {
   return Number.isFinite(passEnd) && passEnd + SITE_GRACE_DAYS * DAY_MS > now;
 }
 
+/** Pro and up: paid Pro, paid Studio, or a running Studio pass. */
+export async function userHasPro(userId: string): Promise<boolean> {
+  return rowHasPro((await getCreditBalance(userId)) as TierRow);
+}
+
 export async function authorSitePublic(userId: string): Promise<boolean> {
   return rowSitePublic((await getCreditBalance(userId)) as TierRow);
 }

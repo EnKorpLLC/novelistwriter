@@ -20,6 +20,7 @@ import { VisitorShareButton } from "@/components/ShareKit";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { RecordBadge } from "@/components/WritingRecordView";
 import { computeWritingRecord } from "@/lib/writing-record";
+import { normalizeDetails } from "@/lib/book/format";
 
 export const dynamic = "force-dynamic";
 
@@ -84,10 +85,11 @@ export default async function LaunchPage({
   const [trust, studio, { data: recordFlag }] = await Promise.all([
     trustBadgesForBook(admin, author.userId, book.id),
     userHasStudio(author.userId),
-    admin.from("projects").select("record_public").eq("id", book.id).maybeSingle(),
+    admin.from("projects").select("*").eq("id", book.id).maybeSingle(),
   ]);
   const path = bookPath(author.handle, book.slug);
   const recordPublic = Boolean(recordFlag?.record_public);
+  const isbn = normalizeDetails(recordFlag?.book_details).isbnEbook || null;
   const record = recordPublic ? await computeWritingRecord(admin, book.id) : null;
 
   const stageLine =
@@ -134,6 +136,7 @@ export default async function LaunchPage({
               coverUrl: book.coverUrl,
               genre: book.genre,
               releaseDate: book.releaseDate,
+              isbn,
               buyLinks: book.stage === "published" ? book.buyLinks : book.preorderLinks,
               published: book.stage === "published",
             }),

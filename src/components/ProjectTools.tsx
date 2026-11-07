@@ -14,25 +14,6 @@ import {
 } from "@/lib/book-keywords";
 import { saveAs } from "file-saver";
 
-function htmlToEditable(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .trim();
-}
-
-function plainToHtml(text: string): string {
-  return text
-    .split(/\n\n+/)
-    .map((p) => `<p>${p.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</p>`)
-    .join("");
-}
-
 type Matter = {
   id: string;
   matter_type: string;
@@ -45,7 +26,8 @@ type Matter = {
 type Props = {
   project: Project;
   chapters: Chapter[];
-  matter: Matter[];
+  /** Front and back matter are edited in the Format tab now */
+  matter?: Matter[];
   coverPath: string | null;
   onCoverChange: (path: string | null, version?: number) => void;
 };
@@ -53,16 +35,11 @@ type Props = {
 export function ProjectTools({
   project,
   chapters,
-  matter: initialMatter,
   coverPath,
   onCoverChange,
 }: Props) {
-  const [matter, setMatter] = useState(initialMatter);
   const [title, setTitle] = useState(project.title);
   const [blurb, setBlurb] = useState(project.blurb || "");
-  const [trim, setTrim] = useState(project.kdp_settings?.trim || "6x9");
-  const [font, setFont] = useState(project.kdp_settings?.font || "Garamond");
-  const [margins, setMargins] = useState(project.kdp_settings?.margins || "standard");
   const [keywordIds, setKeywordIds] = useState<string[]>(() =>
     normalizeKeywordIds(
       (project.metadata as { keywordIds?: unknown; keywords?: unknown })?.keywordIds ??
@@ -96,7 +73,6 @@ export function ProjectTools({
         title,
         blurb,
         genre: labels[0] || "",
-        kdp_settings: { trim, font, margins },
         metadata: {
           ...prevMeta,
           categories: bisac,
@@ -112,18 +88,6 @@ export function ProjectTools({
       if (prev.includes(id)) return prev.filter((x) => x !== id);
       if (prev.length >= MAX_BOOK_KEYWORDS) return prev;
       return [...prev, id];
-    });
-  }
-
-  async function saveMatter(
-    id: string,
-    patch: { enabled?: boolean; title?: string; content_html?: string }
-  ) {
-    setMatter((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
-    await fetch(`/api/matter/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
     });
   }
 
@@ -319,43 +283,13 @@ export function ProjectTools({
               )}
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <label className="text-xs">
-              Trim
-              <select
-                className="mt-1 w-full border border-line px-2 py-1"
-                value={trim}
-                onChange={(e) => setTrim(e.target.value)}
-              >
-                <option value="5x8">5×8</option>
-                <option value="6x9">6×9</option>
-                <option value="5.5x8.5">5.5×8.5</option>
-              </select>
-            </label>
-            <label className="text-xs">
-              Font
-              <select
-                className="mt-1 w-full border border-line px-2 py-1"
-                value={font}
-                onChange={(e) => setFont(e.target.value)}
-              >
-                <option>Garamond</option>
-                <option>Times New Roman</option>
-                <option>Palatino</option>
-              </select>
-            </label>
-            <label className="text-xs">
-              Margins
-              <select
-                className="mt-1 w-full border border-line px-2 py-1"
-                value={margins}
-                onChange={(e) => setMargins(e.target.value)}
-              >
-                <option value="standard">Standard</option>
-                <option value="wide">Wide</option>
-              </select>
-            </label>
-          </div>
+          <p className="text-xs text-muted">
+            Book style, fonts, and trim size are in the{" "}
+            <a href="?tab=format" className="text-accent underline">
+              Format tab
+            </a>
+            .
+          </p>
           <div className="space-y-2">
             <p className="text-xs text-muted">
               Genre keywords (choose up to {MAX_BOOK_KEYWORDS}). These group your book in the beta
@@ -418,58 +352,13 @@ export function ProjectTools({
       <section>
         <h3 className="font-display text-xl">Front / back matter</h3>
         <p className="mt-1 text-sm text-muted">
-          Write your own copyright, dedication, about the author, etc. Toggle Include for export.
-          New projects start with empty templates. DOCX import fills a section only when that
-          heading exists in the file (e.g. Dedication, Copyright, About the Author).
+          Copyright, dedication, about the author, and your other front and back pages are now edited in the{" "}
+          <a href="?tab=format" className="text-accent underline">
+            Format tab
+          </a>
+          , with italics and centering kept, reordering, and pages built for you. DOCX import still fills a page when
+          its heading exists in the file.
         </p>
-        <ul className="mt-3 space-y-4">
-          {matter.map((m) => (
-            <li key={m.id} className="font-ui border border-line p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <input
-                  className="min-w-[12rem] flex-1 border border-line bg-paper px-2 py-1 text-sm"
-                  value={m.title}
-                  onChange={(e) =>
-                    setMatter((prev) =>
-                      prev.map((x) => (x.id === m.id ? { ...x, title: e.target.value } : x))
-                    )
-                  }
-                  onBlur={(e) => void saveMatter(m.id, { title: e.target.value })}
-                  placeholder="Section title"
-                />
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={m.enabled}
-                    onChange={(e) => void saveMatter(m.id, { enabled: e.target.checked })}
-                  />
-                  Include in export
-                </label>
-              </div>
-              <p className="mt-1 text-[10px] uppercase tracking-wide text-muted">
-                {m.matter_type.replace(/_/g, " ")}
-              </p>
-              <textarea
-                className="mt-2 w-full border border-line bg-paper px-3 py-2 text-sm"
-                rows={5}
-                value={htmlToEditable(m.content_html)}
-                onChange={(e) =>
-                  setMatter((prev) =>
-                    prev.map((x) =>
-                      x.id === m.id
-                        ? { ...x, content_html: plainToHtml(e.target.value) }
-                        : x
-                    )
-                  )
-                }
-                onBlur={(e) =>
-                  void saveMatter(m.id, { content_html: plainToHtml(e.target.value) })
-                }
-                placeholder="Write this page’s text…"
-              />
-            </li>
-          ))}
-        </ul>
       </section>
 
       <section>

@@ -58,6 +58,21 @@ const DESK_POINTS = [
   },
 ];
 
+const FORMAT_POINTS = [
+  {
+    t: "8 book styles",
+    d: "Classic, literary, romance, thriller, fantasy, cozy, modern, and YA, each with matched fonts, drop caps or small caps, chapter openings, and scene-break ornaments.",
+  },
+  {
+    t: "Pages built for you",
+    d: "Fill in your book details once to get a title page, a copyright page with your ISBN, contents, an also-by page that links your other books, and a review request.",
+  },
+  {
+    t: "Smart chapters",
+    d: "Prologues, epilogues, and part pages are spotted for you and numbered the way real books are, in the chapter heading style you choose.",
+  },
+];
+
 export default function HomePage() {
   return (
     <div className="min-h-screen">
@@ -107,8 +122,8 @@ export default function HomePage() {
               className="animate-fade-up mt-6 max-w-2xl text-lg text-muted md:text-xl"
               style={{ animationDelay: "0.15s" }}
             >
-              The writing studio that takes your novel from first draft through beta readers and ARCs
-              to launch. AI critiques, never writes, and turns off with one switch.
+              The writing studio that takes your novel from first draft through beta readers, ARCs,
+              and a beautifully formatted ebook to launch. AI critiques, never writes, and turns off with one switch.
             </p>
             <div
               className="animate-fade-up mt-10 flex flex-wrap gap-3 font-ui"
@@ -221,6 +236,26 @@ export default function HomePage() {
             >
               Start free — upgrade when ready
             </Link>
+          </div>
+        </section>
+
+        <section id="format" className="scroll-mt-24 border-t border-line px-6 py-20 md:px-10">
+          <div className="mx-auto max-w-5xl">
+            <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Format · Pro and Studio</p>
+            <h2 className="font-display mt-2 text-3xl text-ink">A beautiful ebook without another app</h2>
+            <p className="mt-3 max-w-2xl text-muted">
+              Pick a book style, see your book on Kindle, phone, and tablet screens as you go, and
+              download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play. No Vellum,
+              no Mac, no extra license. Print-ready PDFs and cover tools are coming next.
+            </p>
+            <ul className="mt-10 grid gap-8 md:grid-cols-3">
+              {FORMAT_POINTS.map((item) => (
+                <li key={item.t} className="border-t border-line pt-4">
+                  <h3 className="font-display text-xl">{item.t}</h3>
+                  <p className="mt-2 text-sm text-muted">{item.d}</p>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 

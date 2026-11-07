@@ -12,7 +12,7 @@ export function GET() {
 
   const body = `# Novelist Writer
 
-> The writing studio for novelists that proves a human wrote the book. It keeps a record of how each book was written (typed vs pasted, sessions over time), runs beta readers and advance reader copies (ARCs), and launches books with an author site and launch pages. AI only critiques and never writes, and one switch turns every AI tool off. Readers can beta read and get advance copies free.
+> The writing studio for novelists that proves a human wrote the book. It keeps a record of how each book was written (typed vs pasted, sessions over time), runs beta readers and advance reader copies (ARCs), formats store-ready ebooks with book styles (no Vellum needed), and launches books with an author site and launch pages. AI only critiques and never writes, and one switch turns every AI tool off. Readers can beta read and get advance copies free.
 
 ## Key pages
 - [For authors](${appUrl("/authors")}): what authors get on each plan
