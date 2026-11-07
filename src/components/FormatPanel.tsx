@@ -19,6 +19,7 @@ import { buildBook, type BookExtras } from "@/lib/book/model";
 import { renderChapter, renderSection } from "@/lib/book/render";
 import { MATTER_TYPES } from "@/lib/matter";
 import { MatterEditor } from "@/components/MatterEditor";
+import { STORES, type StoreId } from "@/lib/book/stores";
 
 type Matter = { id: string; matter_type: string; title: string; content_html: string; enabled: boolean; sort_order: number };
 
@@ -66,7 +67,15 @@ export function FormatPanel({
   const [details, setDetails] = useState<BookDetails>(() => normalizeDetails(project.book_details));
   const [subtitle, setSubtitle] = useState(project.subtitle || "");
   const [matter, setMatter] = useState<Matter[]>(() => [...initialMatter].sort((a, b) => a.sort_order - b.sort_order));
-  const [info, setInfo] = useState<{ pro: boolean; authorName: string; extras: BookExtras; migrationNeeded?: boolean } | null>(null);
+  const [info, setInfo] = useState<{
+    pro: boolean;
+    studio?: boolean;
+    linkedStores?: StoreId[];
+    authorName: string;
+    extras: BookExtras;
+    migrationNeeded?: boolean;
+  } | null>(null);
+  const [storePick, setStorePick] = useState<StoreId>("kindle");
   const [note, setNote] = useState<string | null>(null);
   const [savingDetails, setSavingDetails] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -182,14 +191,18 @@ export function FormatPanel({
     await fetch(`/api/matter/${m.id}`, { method: "DELETE" });
   }
 
-  async function downloadEpub() {
+  async function downloadEpub(store?: StoreId | "all") {
     setDownloading(true);
     setNote(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/format`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const res = await fetch(`/api/projects/${projectId}/format`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(store ? { store } : {}),
+      });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not build the ebook");
       const blob = await res.blob();
-      const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "")?.[1] || "book.epub";
+      const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "")?.[1] || (store === "all" ? "ebooks.zip" : "book.epub");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = name;
@@ -577,6 +590,54 @@ a{color:inherit}
                     </button>
                     <p className="mt-2 text-[11px] text-muted">
                       Upload it to Kindle Direct Publishing, Apple Books, Kobo, Barnes &amp; Noble, and Google Play.
+                    </p>
+                  </div>
+                )}
+              </section>
+
+              <section className="mt-4 border border-line p-4">
+                <h3 className="font-display text-lg">An ebook for each store</h3>
+                <p className="mt-1 text-xs text-muted">
+                  Stores don&apos;t like ebooks that send readers to rival stores. Each build points your review request and
+                  &ldquo;Also by&rdquo; links at that store only, using the buy links on your Launch tab.
+                </p>
+                {info && !info.studio ? (
+                  <div className="mt-2 text-sm">
+                    <p className="text-xs text-ink">Per-store ebooks are part of Studio.</p>
+                    <a href="/billing" className="mt-2 inline-block bg-accent px-3 py-1.5 text-xs text-paper">
+                      Get Studio
+                    </a>
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <select value={storePick} onChange={(e) => setStorePick(e.target.value as StoreId)} className="border border-line bg-paper px-2 py-1.5 text-xs">
+                        {STORES.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.label}
+                            {s.id !== "generic" && info?.linkedStores && !info.linkedStores.includes(s.id) ? " (no link yet)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={downloading || !info}
+                        onClick={() => void downloadEpub(storePick)}
+                        className="border border-accent px-3 py-1.5 text-xs text-accent disabled:opacity-50"
+                      >
+                        Download
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={downloading || !info}
+                      onClick={() => void downloadEpub("all")}
+                      className="text-xs text-accent underline disabled:opacity-50"
+                    >
+                      Download every store as a zip
+                    </button>
+                    <p className="text-[11px] text-muted">
+                      Without a link for a store, &ldquo;Also by&rdquo; uses your launch pages and the review page is left out.
                     </p>
                   </div>
                 )}

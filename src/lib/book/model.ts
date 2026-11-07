@@ -182,7 +182,15 @@ export function blocksAreEmpty(blocks: Block[]) {
 /* ---------- The whole book ---------- */
 
 export type MatterInput = { id?: string; matter_type: string; title: string; content_html: string; enabled: boolean; sort_order: number };
-export type ChapterInput = { id: string; title: string; content_html: string | null; content_text?: string | null; sort_order: number };
+export type ChapterInput = {
+  id: string;
+  title: string;
+  content_html: string | null;
+  content_text?: string | null;
+  sort_order: number;
+  /** Box sets: chapter numbers start again at this chapter (the first chapter of each book) */
+  restartNumbering?: boolean;
+};
 
 export type BookChapter = {
   id: string;
@@ -246,6 +254,7 @@ export function buildBook(input: {
   const chapters: BookChapter[] = [...input.chapters]
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((c) => {
+      if (c.restartNumbering) n = 0;
       const kind = format.chapterKinds[c.id] || detectChapterKind(c.title);
       const name = kind === "chapter" ? chapterName(c.title) : c.title.trim();
       const number = kind === "chapter" ? ++n : null;

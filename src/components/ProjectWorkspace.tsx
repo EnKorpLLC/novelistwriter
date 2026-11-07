@@ -913,7 +913,19 @@ export function ProjectWorkspace({
           <FormatPanel projectId={project.id} project={project} chapters={chapters} matter={matter} />
         )}
 
-        {tab === "cover" && <CoverPanel projectId={project.id} coverPath={coverPath} onCoverChange={setCoverPath} />}
+        {tab === "cover" && (
+          <CoverPanel
+            projectId={project.id}
+            coverPath={coverPath}
+            onCoverChange={setCoverPath}
+            book={{
+              title: project.title || "Untitled",
+              tagline: (project as { tagline?: string | null }).tagline || "",
+              published: Boolean((project as { published?: boolean | null }).published),
+              releaseDate: (project as { release_date?: string | null }).release_date || null,
+            }}
+          />
+        )}
 
         {tab === "tools" && <ProjectTools project={project} chapters={chapters} matter={matter} />}
       </div>

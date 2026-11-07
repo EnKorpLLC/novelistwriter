@@ -258,8 +258,9 @@ export default function HomePage() {
             <p className="mt-3 max-w-2xl text-muted">
               Pick a book style, see your book on Kindle, phone, and tablet screens as you go, and
               download a store-ready EPUB for Kindle, Apple Books, Kobo, and Google Play. Then lay it
-              out as printed pages and save a paperback PDF ready for KDP, and design a cover that fits
-              your exact spine. No Vellum, no Mac, no extra license.
+              out as printed pages and save a paperback PDF ready for KDP, design a cover that fits
+              your exact spine, and turn it into a 3D book and ready-sized ads. Studio adds an ebook
+              for each store and box sets. No Vellum, no Mac, no extra license.
             </p>
             <ul className="mt-10 grid gap-8 md:grid-cols-3">
               {FORMAT_POINTS.map((item) => (

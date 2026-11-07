@@ -11,8 +11,18 @@ export type EpubCover = { data: Uint8Array; type: "jpg" | "png" | "webp" | "gif"
 
 const MEDIA: Record<string, string> = { jpg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
 
+const fontCache = new Map<string, Uint8Array>();
+
 /** Bundled fonts live in public/; read from disk locally, or from the site itself when deployed. */
 async function loadFont(publicPath: string): Promise<Uint8Array | null> {
+  const cached = fontCache.get(publicPath);
+  if (cached) return cached;
+  const data = await readFontFile(publicPath);
+  if (data) fontCache.set(publicPath, data);
+  return data;
+}
+
+async function readFontFile(publicPath: string): Promise<Uint8Array | null> {
   try {
     return new Uint8Array(await readFile(path.join(process.cwd(), "public", publicPath)));
   } catch {

@@ -29,7 +29,13 @@ export function PrintStudio(props: {
   matter: MatterInput[];
   extras: BookExtras;
   pro: boolean;
+  /** Box sets lay out several projects at once, so they don't save settings to any one of them */
+  persist?: boolean;
+  backHref?: string;
+  backLabel?: string;
 }) {
+  const persist = props.persist !== false;
+  const backHref = props.backHref || `/project/${props.projectId}?tab=format`;
   const initial = useMemo(() => normalizeFormat(props.formatSettings), [props.formatSettings]);
   // The saved page count lives apart from the layout settings so saving it doesn't trigger another layout
   const [format, setFormat] = useState<FormatSettings>(() => ({ ...initial, lastPageCount: null }));
@@ -81,6 +87,7 @@ export function PrintStudio(props: {
   }, []);
 
   async function saveFormat(patch: Partial<FormatSettings>) {
+    if (!persist) return;
     const res = await fetch(`/api/projects/${props.projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -160,8 +167,8 @@ export function PrintStudio(props: {
     <div className="font-ui flex h-screen flex-col bg-paper">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-2.5 text-sm">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href={`/project/${props.projectId}?tab=format`} className="text-accent hover:underline">
-            ← Format
+          <Link href={backHref} className="text-accent hover:underline">
+            ← {props.backLabel || "Format"}
           </Link>
           <span className="truncate font-display text-lg text-ink">{props.title}</span>
           <span className="text-muted">Print layout</span>
@@ -239,8 +246,8 @@ export function PrintStudio(props: {
             <h2 className="font-display text-lg">Paperback settings</h2>
             <p className="mt-1 text-xs text-muted">
               Style: {style.name}.{" "}
-              <Link href={`/project/${props.projectId}?tab=format`} className="text-accent underline">
-                Change it in Format
+              <Link href={backHref} className="text-accent underline">
+                Change it in {props.backLabel || "Format"}
               </Link>
             </p>
             <label className="mt-3 block text-xs text-muted">
@@ -319,7 +326,7 @@ export function PrintStudio(props: {
               <li>Save, then upload the file to KDP as your manuscript with &ldquo;No bleed&rdquo;.</li>
               <li>Check it in KDP&apos;s print previewer before you publish.</li>
             </ol>
-            {!sample && current.state === "done" && (
+            {!sample && persist && current.state === "done" && (
               <p className="mt-2 text-xs text-muted">
                 The page count ({current.pages}) is saved for the cover calculator.
               </p>

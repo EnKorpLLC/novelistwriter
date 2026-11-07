@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { userHasPro } from "@/lib/credits";
+import JSZip from "jszip";
+import { userHasPro, userHasStudio } from "@/lib/credits";
+import { STORES, isStoreId, storeOfLink, type StoreId } from "@/lib/book/stores";
+import { normalizeBuyLinks } from "@/lib/arc";
 import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { buildBook } from "@/lib/book/model";
 import { getStyle } from "@/lib/book/styles";
@@ -26,15 +29,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const auth = await owner(id);
   if (!auth) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const admin = createServiceClient();
-  const [pro, { data: profile }, extras, { data: matter }] = await Promise.all([
+  const [pro, studio, { data: profile }, extras, { data: matter }] = await Promise.all([
     userHasPro(auth.user.id),
+    userHasStudio(auth.user.id),
     admin.from("profiles").select("display_name").eq("id", auth.user.id).maybeSingle(),
     loadBookExtras(admin, auth.project),
     auth.supabase.from("matter_blocks").select("*").eq("project_id", id).order("sort_order"),
   ]);
+  const linkedStores = normalizeBuyLinks(auth.project.buy_links)
+    .filter((l) => !l.preorder)
+    .map(storeOfLink)
+    .filter((s): s is StoreId => !!s);
   // The workspace's project props are from page load, so tabs re-read the saved state from here
   return NextResponse.json({
     pro,
+    studio,
+    linkedStores,
     authorName: profile?.display_name || "",
     extras,
     migrationNeeded: !("format_settings" in auth.project),
@@ -56,14 +66,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       { status: 403 }
     );
   }
-  const body = (await req.json().catch(() => ({}))) as { includeChapterIds?: string[] };
+  const body = (await req.json().catch(() => ({}))) as { includeChapterIds?: string[]; store?: string };
+  const storeChoice = body.store === "all" ? "all" : isStoreId(body.store) ? body.store : null;
+  if (storeChoice && !(await userHasStudio(auth.user.id))) {
+    return NextResponse.json(
+      { error: "Per-store ebooks are part of Studio. Upgrade on the Billing page.", code: "studio_required" },
+      { status: 403 }
+    );
+  }
   const project = auth.project;
   const admin = createServiceClient();
-  const [{ data: chapters }, { data: matter }, { data: profile }, extras, cover] = await Promise.all([
+  const [{ data: chapters }, { data: matter }, { data: profile }, cover] = await Promise.all([
     admin.from("chapters").select("id, title, content_html, content_text, sort_order").eq("project_id", id).order("sort_order"),
     admin.from("matter_blocks").select("*").eq("project_id", id).order("sort_order"),
     admin.from("profiles").select("display_name").eq("id", auth.user.id).maybeSingle(),
-    loadBookExtras(admin, project),
     loadCover(auth.supabase, project),
   ]);
 
@@ -76,29 +92,36 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const format = normalizeFormat(project.format_settings);
   const style = getStyle(format.style);
-  const book = buildBook({
-    title: project.title || "Untitled",
-    subtitle: project.subtitle || "",
-    author: profile?.display_name || auth.user.email || "Author",
-    details: normalizeDetails(project.book_details),
-    format,
-    styleHeadingFormat: style.headingFormat,
-    chapters: selected,
-    matter: matter || [],
-    extras,
-  });
-  const buf = await buildStyledEpub({
-    book,
-    style,
-    identifier: `urn:uuid:${project.id}`,
-    cover,
-    recordUrl: extras.recordUrl,
-  });
+  const build = async (store?: StoreId) => {
+    const extras = await loadBookExtras(admin, project, { store });
+    const book = buildBook({
+      title: project.title || "Untitled",
+      subtitle: project.subtitle || "",
+      author: profile?.display_name || auth.user.email || "Author",
+      details: normalizeDetails(project.book_details),
+      format,
+      styleHeadingFormat: style.headingFormat,
+      chapters: selected,
+      matter: matter || [],
+      extras,
+    });
+    return buildStyledEpub({ book, style, identifier: `urn:uuid:${project.id}`, cover, recordUrl: extras.recordUrl });
+  };
+
   const safeName = (project.title || "book").replace(/[^\w\- ]+/g, "").trim() || "book";
+  if (storeChoice === "all") {
+    const zip = new JSZip();
+    for (const s of STORES) zip.file(`${safeName} - ${s.id}.epub`, await build(s.id));
+    const buf = await zip.generateAsync({ type: "nodebuffer", compression: "STORE" });
+    return new NextResponse(new Uint8Array(buf), {
+      headers: { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${safeName} - all stores.zip"` },
+    });
+  }
+  const buf = await build(storeChoice || undefined);
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/epub+zip",
-      "Content-Disposition": `attachment; filename="${safeName}.epub"`,
+      "Content-Disposition": `attachment; filename="${safeName}${storeChoice ? ` - ${storeChoice}` : ""}.epub"`,
     },
   });
 }

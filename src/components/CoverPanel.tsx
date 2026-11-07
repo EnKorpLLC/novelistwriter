@@ -5,6 +5,8 @@ import { coverPublicUrl } from "@/lib/cover";
 import { TRIM_SIZES, normalizeFormat, type FormatSettings } from "@/lib/book/format";
 import { checkEbookCover, coverWrap, type CoverWrap, type EbookCoverCheck } from "@/lib/book/cover-math";
 import { downloadBlob, loadImage, prepareCoverUpload, templatePdf, templatePng } from "@/lib/book/cover-template";
+import { getStyle } from "@/lib/book/styles";
+import { MarketingImages } from "@/components/MarketingImages";
 
 const MAX_UPLOAD = 5 * 1024 * 1024;
 
@@ -37,13 +39,16 @@ export function CoverPanel({
   projectId,
   coverPath,
   onCoverChange,
+  book,
 }: {
   projectId: string;
   coverPath: string | null;
   onCoverChange: (path: string | null, version?: number) => void;
+  book: { title: string; tagline: string; published: boolean; releaseDate: string | null };
 }) {
   const [format, setFormat] = useState<FormatSettings>(() => normalizeFormat(null));
   const [pro, setPro] = useState<boolean | null>(null);
+  const [authorName, setAuthorName] = useState("");
   const [pagesInput, setPagesInput] = useState("");
   const [version, setVersion] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
@@ -59,6 +64,7 @@ export function CoverPanel({
         const json = await r.json();
         const f = normalizeFormat(json.formatSettings);
         setFormat(f);
+        setAuthorName(json.authorName || "");
         setPro(Boolean(json.pro));
         if (f.lastPageCount) setPagesInput(String(f.lastPageCount));
       })
@@ -369,6 +375,20 @@ export function CoverPanel({
               )}
             </div>
           </section>
+
+          {pro !== null && (
+            <MarketingImages
+              coverUrl={coverUrl}
+              pro={pro}
+              title={book.title}
+              font={getStyle(format.style).heading}
+              defaults={{
+                headline: book.tagline || book.title,
+                subline: authorName ? `by ${authorName}` : "",
+                button: book.published ? "Read it now" : book.releaseDate ? "Preorder now" : "",
+              }}
+            />
+          )}
         </div>
       </div>
     </div>
