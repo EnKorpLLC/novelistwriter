@@ -3,7 +3,11 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { listPublishedBooks } from "@/lib/public-books";
 import { PublicHeader } from "@/components/PublicHeader";
 
-export const metadata = { title: "Published books — Novelist Writer" };
+export const metadata = {
+  title: "Published books — Novelist Writer",
+  description: "Novels by Novelist Writer authors, with a record of how each one was written.",
+  alternates: { canonical: "/books" },
+};
 export const dynamic = "force-dynamic";
 
 export default async function PublishedBooksPage({

@@ -24,6 +24,7 @@ async function loadReader(rawHandle: string) {
   const badgeMap = await readerBadgeStatsFor(admin, [{ userId: p.id }]);
   const mine = badgeMap.get(p.id);
   return {
+    handle: p.handle as string,
     name: publicReaderName(p.display_name, p.email, "Reader"),
     since: p.created_at as string | null,
     badges: mine?.badges || [],
@@ -39,7 +40,12 @@ export async function generateMetadata({ params }: { params: Promise<{ handle: s
   const description = reader.badges.length
     ? `Badges: ${reader.badges.map((b) => b.label).join(", ")}.`
     : `${reader.name} beta reads and reviews advance copies on Novelist Writer.`;
-  return { title, description, openGraph: { title, description, type: "profile" } };
+  return {
+    title,
+    description,
+    alternates: { canonical: `/r/${reader.handle}` },
+    openGraph: { title, description, type: "profile" },
+  };
 }
 
 export default async function ReaderProfilePage({ params }: { params: Promise<{ handle: string }> }) {

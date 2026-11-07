@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { ensureHandle } from "@/lib/public-site";
 import { slugify } from "@/lib/handles";
 import { publicReaderName } from "@/lib/beta-access";
+import { pingIndexNow } from "@/lib/seo";
 import { READER_BADGE_RULES, readerBadgeStatsFor } from "@/lib/beta-social";
 
 /** The signed-in reader's badges, badge stats, and whether their reader profile is public. */
@@ -79,5 +80,6 @@ export async function PATCH(req: Request) {
       : error.message;
     return NextResponse.json({ error: hint }, { status: 500 });
   }
+  if (body.public && handle) await pingIndexNow([`/r/${handle}`]);
   return NextResponse.json({ public: body.public, url: body.public && handle ? `/r/${handle}` : null });
 }

@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { computeWritingRecord } from "@/lib/writing-record";
+import { authorSitePublic } from "@/lib/credits";
+import { ensureHandle, ensureSlug } from "@/lib/public-site";
+import { bookPath } from "@/lib/handles";
+import { pingIndexNow } from "@/lib/seo";
 
 async function owner(projectId: string) {
   const supabase = await createClient();
@@ -43,6 +47,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ? "Database needs an update. Run supabase/migration_writing_record.sql in the Supabase SQL editor."
       : error.message;
     return NextResponse.json({ error: hint }, { status: 500 });
+  }
+  if (body.public && (await authorSitePublic(auth.user.id))) {
+    const admin = createServiceClient();
+    const { data: proj } = await admin.from("projects").select("id, user_id, title, slug").eq("id", id).maybeSingle();
+    const [handle, slug] = proj ? await Promise.all([ensureHandle(admin, auth.user.id), ensureSlug(admin, proj)]) : [null, null];
+    if (handle && slug) await pingIndexNow([`${bookPath(handle, slug)}/record`]);
   }
   return NextResponse.json({ ok: true, recordPublic: body.public });
 }

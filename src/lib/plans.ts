@@ -95,6 +95,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
     a: "No. AI only critiques and never writes your book. One switch in Settings turns every AI tool off, and your books can show that.",
   },
   {
+    q: "Will AI companies train on my author site or book pages?",
+    a: "We block AI training crawlers from author sites, launch pages, writing records, and reader profiles. AI search tools (like ChatGPT search and Perplexity) can still find and link to your pages, so readers asking AI for book recommendations can discover you.",
+  },
+  {
     q: "Is my manuscript used to train AI?",
     a: "Never. And your manuscript export is never held hostage: DOCX and EPUB export are on every plan.",
   },

@@ -3,6 +3,7 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 
 export const metadata = {
+  alternates: { canonical: "/readers" },
   title: "For readers — Novelist Writer",
   description:
     "Read books before anyone else, free. Beta read and get advance copies from indie authors, comment right on the page, and follow the writers you love.",

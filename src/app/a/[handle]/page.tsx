@@ -14,6 +14,8 @@ import { TrustBadges } from "@/components/TrustBadges";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { OwnerBar, PreviewBar, SitePrivateBar } from "@/components/OwnerBar";
 import { SiteHolding } from "@/components/SiteHolding";
+import { JsonLd } from "@/components/JsonLd";
+import { authorJsonLd } from "@/lib/seo";
 import { VisitorShareButton } from "@/components/ShareKit";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 
@@ -33,7 +35,13 @@ export async function generateMetadata({ params }: { params: Promise<{ handle: s
   if (!author.sitePublic) return { title: "Novelist Writer", robots: { index: false } };
   const title = `${author.name} — Novelist Writer`;
   const description = author.bio.slice(0, 200) || `Books by ${author.name}.`;
-  return { title, description, openGraph: { title, description, type: "profile" }, twitter: { card: "summary_large_image", title, description } };
+  return {
+    title,
+    description,
+    alternates: { canonical: authorPath(author.handle) },
+    openGraph: { title, description, type: "profile" },
+    twitter: { card: "summary_large_image", title, description },
+  };
 }
 
 function BookGrid({
@@ -115,6 +123,17 @@ export default async function AuthorSitePage({
     <div className="min-h-screen" style={themeStyle(author.theme)}>
       <ShareVisitBeacon />
       <PublicHeader />
+      {author.sitePublic && (
+        <JsonLd
+          data={authorJsonLd({
+            name: author.name,
+            bio: author.bio,
+            path,
+            avatarUrl: author.avatarUrl,
+            links: author.links,
+          })}
+        />
+      )}
       {isOwner && !author.sitePublic && <SitePrivateBar previewHref={`${path}?preview=visitor`} />}
       {isOwner && author.sitePublic && !previewing && (
         <OwnerBar

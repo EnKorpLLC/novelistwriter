@@ -27,6 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   return {
     title: `How ${book.title} was written`,
     description: `The writing record for ${book.title} by ${author.name}: sessions, dates, and typed vs pasted text.`,
+    alternates: { canonical: `${bookPath(author.handle, book.slug)}/record` },
   };
 }
 

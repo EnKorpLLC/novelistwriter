@@ -4,6 +4,7 @@ import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { PlanCards } from "@/components/PlanCards";
 
 export const metadata = {
+  alternates: { canonical: "/authors" },
   title: "For authors — Novelist Writer",
   description:
     "Write your novel, prove you wrote it, and take it from first draft through beta readers and ARCs to launch. Free to start; Pro and Studio when you're ready.",
@@ -67,6 +68,7 @@ export default function AuthorsPage() {
                 <li>Your book stays yours: we never train on your manuscript</li>
                 <li>Export your manuscript anytime; it&apos;s never held hostage</li>
                 <li>A private record of how you wrote every book</li>
+                <li>Public pages (Pro and up) show up in AI search answers, with AI training blocked on them</li>
                 <li>One switch to turn every AI tool off</li>
               </ul>
             </div>

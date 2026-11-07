@@ -2,8 +2,11 @@ import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PlanCards } from "@/components/PlanCards";
 import { PAY_AS_YOU_GO, PRICING_FAQ } from "@/lib/plans";
+import { JsonLd } from "@/components/JsonLd";
+import { faqJsonLd, softwareJsonLd } from "@/lib/seo";
 
 export const metadata = {
+  alternates: { canonical: "/pricing" },
   title: "Pricing — Novelist Writer",
   description:
     "Write free forever. Pro adds your author site, launch pages, unlimited projects, and AI critique credits; Studio adds beta readers, ARCs, reader feedback, and insights. Readers are always free.",
@@ -13,6 +16,7 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen">
       <PublicHeader />
+      <JsonLd data={[softwareJsonLd(), faqJsonLd()]} />
       <main className="mx-auto max-w-5xl px-6 py-16 md:px-10">
         <h1 className="font-display text-4xl">Pricing</h1>
         <p className="mt-3 max-w-2xl text-muted">

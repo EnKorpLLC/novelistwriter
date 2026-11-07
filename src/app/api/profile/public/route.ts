@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { normalizePublicLinks } from "@/lib/public-profile";
-import { handleProblem } from "@/lib/handles";
+import { authorPath, handleProblem } from "@/lib/handles";
+import { pingIndexNow } from "@/lib/seo";
 import { ensureHandle } from "@/lib/public-site";
 import { normalizeTheme } from "@/lib/site-themes";
 import { coverPublicUrl } from "@/lib/cover";
@@ -95,5 +96,9 @@ export async function PATCH(req: Request) {
 
   const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
+  if (await authorSitePublic(user.id)) {
+    const handle = (patch.handle as string | undefined) || (await ensureHandle(createServiceClient(), user.id));
+    if (handle) await pingIndexNow([authorPath(handle)]);
+  }
   return NextResponse.json({ ok: true, links, handle: patch.handle });
 }

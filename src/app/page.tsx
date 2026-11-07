@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { JOB_META } from "@/lib/ai/jobs";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
+import { JsonLd } from "@/components/JsonLd";
+import { organizationJsonLd, softwareJsonLd, websiteJsonLd } from "@/lib/seo";
+
+export const metadata = { alternates: { canonical: "/" } };
 
 const AI_ACTIONS = Object.values(JOB_META);
 
@@ -87,6 +91,7 @@ export default function HomePage() {
       </header>
 
       <ShareVisitBeacon />
+      <JsonLd data={[organizationJsonLd(), websiteJsonLd(), softwareJsonLd()]} />
       <main>
         <section className="hero-wash relative min-h-[88vh] overflow-hidden border-b border-line">
           <div className="relative z-10 mx-auto flex max-w-5xl flex-col justify-center px-6 pb-24 pt-16 md:px-10 md:pt-24">

@@ -14,6 +14,8 @@ import { TrustBadges } from "@/components/TrustBadges";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { OwnerBar, PreviewBar, SitePrivateBar } from "@/components/OwnerBar";
 import { SiteHolding } from "@/components/SiteHolding";
+import { JsonLd } from "@/components/JsonLd";
+import { bookJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 import { VisitorShareButton } from "@/components/ShareKit";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { RecordBadge } from "@/components/WritingRecordView";
@@ -41,7 +43,13 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!author.sitePublic) return { title: "Novelist Writer", robots: { index: false } };
   const title = `${book.title} by ${author.name}`;
   const description = (book.tagline || book.blurb).slice(0, 200) || `A novel by ${author.name}.`;
-  return { title, description, openGraph: { title, description, type: "book" }, twitter: { card: "summary_large_image", title, description } };
+  return {
+    title,
+    description,
+    alternates: { canonical: bookPath(author.handle, book.slug) },
+    openGraph: { title, description, type: "book" },
+    twitter: { card: "summary_large_image", title, description },
+  };
 }
 
 export default async function LaunchPage({
@@ -114,6 +122,28 @@ export default async function LaunchPage({
     <div className="min-h-screen" style={themeStyle(author.theme)}>
       <ShareVisitBeacon />
       <PublicHeader />
+      {author.sitePublic && (
+        <JsonLd
+          data={[
+            bookJsonLd({
+              title: book.title,
+              authorName: author.name,
+              authorPath: authorPath(author.handle),
+              path,
+              description: book.tagline || book.blurb,
+              coverUrl: book.coverUrl,
+              genre: book.genre,
+              releaseDate: book.releaseDate,
+              buyLinks: book.stage === "published" ? book.buyLinks : book.preorderLinks,
+              published: book.stage === "published",
+            }),
+            breadcrumbJsonLd([
+              { name: author.name, path: authorPath(author.handle) },
+              { name: book.title, path },
+            ]),
+          ]}
+        />
+      )}
       {isOwner && !author.sitePublic && <SitePrivateBar previewHref={`${path}?preview=visitor`} />}
       {isOwner && author.sitePublic && !previewing && (
         <OwnerBar

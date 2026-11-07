@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { isArcWindowOpen, normalizeBuyLinks, normalizeTropes } from "@/lib/arc";
-import { bookPath, slugProblem, slugify } from "@/lib/handles";
+import { authorPath, bookPath, slugProblem, slugify } from "@/lib/handles";
+import { pingIndexNow } from "@/lib/seo";
 import { ensureHandle, ensureSlug } from "@/lib/public-site";
 import { authorSitePublic, userHasStudio } from "@/lib/credits";
 import { projectLockedMessage } from "@/lib/studio-access";
@@ -156,5 +157,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .select(FIELDS)
     .single();
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
-  return NextResponse.json(await shape(data as unknown as ProjectRow));
+  const shaped = await shape(data as unknown as ProjectRow);
+  if (shaped.launchVisible && shaped.launchPath && shaped.handle) {
+    await pingIndexNow([shaped.launchPath, authorPath(shaped.handle)]);
+  }
+  return NextResponse.json(shaped);
 }
