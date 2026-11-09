@@ -283,7 +283,9 @@ export default function HomePage() {
             <p className="mt-3 max-w-2xl text-muted">
               On Pro, every book gets a page that grows with it: cover reveal and preorders, then buy
               buttons on release day, with beta and ARC calls on Studio. Your author site gathers every
-              book, your bio, and your links at one short address you can put anywhere.
+              book, your bio, and your links at one short address you can put anywhere. Studio adds a
+              launch plan that counts down from cover reveal to reviews, with every step one click away,
+              and a sample chapter right on the page.
             </p>
             <ul className="mt-10 grid gap-8 md:grid-cols-3">
               {[

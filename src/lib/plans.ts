@@ -68,6 +68,8 @@ export const PLANS: PlanCopy[] = [
       "Reader badges and author ratings on every applicant, so you pick readers with a track record",
       "Email signups on your author site and launch pages, audience lists across all your books, CSV export",
       "Beta and ARC calls on your launch pages, and your books listed in the reader catalog",
+      "Launch plan: a countdown from cover reveal to reviews, with one-click steps, countdown images, ready-to-edit posts, and a readiness score",
+      "A sample chapter on your launch page, styled like your book, right before the buy buttons",
       "An ebook for each store: Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble builds whose review and “Also by” links point only to that store",
       "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again",
       "Series tools",

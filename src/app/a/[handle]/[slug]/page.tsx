@@ -21,6 +21,7 @@ import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { RecordBadge } from "@/components/WritingRecordView";
 import { computeWritingRecord } from "@/lib/writing-record";
 import { normalizeDetails } from "@/lib/book/format";
+import { normalizeLaunchPlan } from "@/lib/launch-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,7 @@ export default async function LaunchPage({
   const path = bookPath(author.handle, book.slug);
   const recordPublic = Boolean(recordFlag?.record_public);
   const isbn = normalizeDetails(recordFlag?.book_details).isbnEbook || null;
+  const sampleOn = studio && normalizeLaunchPlan(recordFlag?.launch_plan).sample.on;
   const record = recordPublic ? await computeWritingRecord(admin, book.id) : null;
 
   const stageLine =
@@ -210,6 +212,11 @@ export default async function LaunchPage({
             )}
 
             <div className="font-ui mt-6 flex flex-wrap gap-3">
+              {sampleOn && (
+                <Link href={`${path}/sample`} className="border border-accent px-4 py-2 text-sm text-accent hover:bg-accent/5">
+                  Read the first chapter
+                </Link>
+              )}
               {book.stage === "published" &&
                 book.buyLinks.map((l) => (
                   <a

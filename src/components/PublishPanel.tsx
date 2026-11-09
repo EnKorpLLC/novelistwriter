@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MAX_TROPES, type BuyLink } from "@/lib/arc";
 import { ShareKit } from "@/components/ShareKit";
+import { LaunchPlan } from "@/components/LaunchPlan";
 import { RecordBadge, WritingRecordView, type WritingRecordData } from "@/components/WritingRecordView";
 
 type LaunchState = {
@@ -216,6 +217,8 @@ export function PublishPanel({ projectId }: { projectId: string }) {
           )}
 
           {note && <p className="text-sm text-ink">{note}</p>}
+
+          <LaunchPlan key={state.releaseDate || "none"} projectId={projectId} />
 
           <section className="border border-line p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
