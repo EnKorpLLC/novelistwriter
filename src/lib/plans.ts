@@ -55,7 +55,7 @@ export const PLANS: PlanCopy[] = [
   {
     id: "studio",
     name: "Studio",
-    price: "$39",
+    price: "$49",
     note: "per month",
     lead: "Run beta readers, ARCs, and your audience from one place.",
     items: [
