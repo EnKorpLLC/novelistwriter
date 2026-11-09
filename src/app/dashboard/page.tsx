@@ -128,6 +128,9 @@ export default async function DashboardPage() {
           <Link href="/dashboard/audience" className="text-muted hover:text-ink">
             Audience
           </Link>
+          <Link href="/dashboard/marketing" className="text-muted hover:text-ink">
+            Marketing
+          </Link>
           <Link href="/dashboard/box-sets" className="text-muted hover:text-ink">
             Box sets
           </Link>

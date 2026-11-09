@@ -6,7 +6,7 @@ import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { emailRedAlarms } from "@/lib/money";
 import { refreshActiveChallenges } from "@/lib/challenges";
-import { processEmailQueue } from "@/lib/email-queue";
+import { enqueueEmails, processEmailQueue, type QueuedEmail } from "@/lib/email-queue";
 
 export const maxDuration = 60;
 
@@ -29,6 +29,43 @@ const COPY: Record<Stage, { title: string; lead: string }> = {
   },
 };
 
+/** Posts planned for today on the marketing calendar: one reminder per author, emailed only if opted in. */
+async function remindMarketingPosts(admin: ReturnType<typeof createServiceClient>) {
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
+  const { data: posts, error } = await admin
+    .from("marketing_posts")
+    .select("id, user_id")
+    .eq("status", "planned")
+    .is("reminded_at", null)
+    .gte("post_on", yesterday)
+    .lte("post_on", today)
+    .limit(2000);
+  if (error || !posts?.length) return;
+  const byUser = new Map<string, string[]>();
+  for (const p of posts) byUser.set(p.user_id, [...(byUser.get(p.user_id) || []), p.id]);
+  const ids = [...byUser.keys()];
+  const [emailOk, { data: profiles }] = await Promise.all([optedInUserIds(admin, ids), admin.from("profiles").select("id, email").in("id", ids)]);
+  const emailById = new Map((profiles || []).map((p) => [p.id, p.email as string | null]));
+  const mails: QueuedEmail[] = [];
+  for (const [userId, postIds] of byUser) {
+    const title = postIds.length === 1 ? "You have a post planned for today" : `You have ${postIds.length} posts planned for today`;
+    await createNotification(admin, { userId, type: "marketing_reminder", title, body: "Your text is ready to copy or share.", href: "/dashboard/marketing" });
+    const to = emailById.get(userId);
+    if (to && emailOk.has(userId)) {
+      const mail = renderEmail({
+        heading: title,
+        paragraphs: ["Your marketing calendar has a post for today. Open it to copy the text, download your card, or share in one tap."],
+        button: { label: "Open your calendar", url: appUrl("/dashboard/marketing") },
+        notification: true,
+      });
+      mails.push({ to, subject: title, text: mail.text, html: mail.html });
+    }
+    await admin.from("marketing_posts").update({ reminded_at: new Date().toISOString() }).in("id", postIds);
+  }
+  if (mails.length) await enqueueEmails(admin, mails);
+}
+
 /** Daily Vercel Cron job: pass ending soon or just ended. In-app for everyone, email only if opted in. */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -41,7 +78,8 @@ export async function GET(req: Request) {
   // Rides along on this daily job (Hobby allows few crons): email the owner if a free plan is nearly full,
   // and bring challenge leaderboards up to date
   await emailRedAlarms(admin);
-  // Launch emails that didn't fit in yesterday's Gmail budget, then challenge leaderboards
+  // Marketing reminders join the queue, then launch emails that didn't fit in yesterday's Gmail budget, then challenge leaderboards
+  await remindMarketingPosts(admin).catch(() => null);
   await processEmailQueue(admin, { timeBudgetMs: 25_000 }).catch(() => null);
   await refreshActiveChallenges(admin, 120).catch(() => 0);
   const now = Date.now();

@@ -107,6 +107,42 @@ export function parseChallengeInput(body: Record<string, unknown>): { ok: true; 
  * Verified words for one participant. Each day counts the smaller of the words their books grew by
  * and the words they typed in the editor, so pasted, imported, and typed-then-deleted text never counts.
  */
+/**
+ * Verified words per local day between two dates: the smaller of the words a writer's books grew by and the
+ * words they typed in the editor, so pasted, imported, and typed-then-deleted text never counts.
+ */
+export async function verifiedWordsByDay(admin: SupabaseClient, userId: string, timeZone: string, fromDay: string, toDay: string): Promise<Map<string, number>> {
+  const tz = isValidTimeZone(timeZone) ? timeZone : "UTC";
+  // Sessions are stored in UTC; widen the window by a day on each side, then bucket by the writer's local day
+  const from = new Date(`${fromDay}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 1);
+  const to = new Date(`${toDay}T23:59:59Z`);
+  to.setUTCDate(to.getUTCDate() + 1);
+  const [{ data: sessions }, { data: writingDays }] = await Promise.all([
+    admin
+      .from("writing_sessions")
+      .select("started_at, typed_chars")
+      .eq("user_id", userId)
+      .eq("flagged", false)
+      .gte("started_at", from.toISOString())
+      .lte("started_at", to.toISOString())
+      .limit(5000),
+    admin.from("writing_days").select("day, words_written").eq("user_id", userId).gte("day", fromDay).lte("day", toDay),
+  ]);
+  const typedByDay = new Map<string, number>();
+  for (const s of sessions || []) {
+    const day = dayInTimeZone(tz, new Date(s.started_at));
+    typedByDay.set(day, (typedByDay.get(day) || 0) + (s.typed_chars || 0));
+  }
+  const out = new Map<string, number>();
+  for (const d of writingDays || []) {
+    const day = String(d.day);
+    const words = Math.max(0, Math.min(d.words_written || 0, Math.floor((typedByDay.get(day) || 0) / CHARS_PER_WORD)));
+    if (words > 0) out.set(day, words);
+  }
+  return out;
+}
+
 export async function computeProgress(admin: SupabaseClient, challenge: Challenge, p: Pick<Participant, "user_id" | "time_zone">) {
   const tz = isValidTimeZone(p.time_zone) ? p.time_zone : "UTC";
   const today = dayInTimeZone(tz);
@@ -114,37 +150,14 @@ export async function computeProgress(admin: SupabaseClient, challenge: Challeng
   const days = challenge.starts_on <= lastDay ? daysBetween(challenge.starts_on, lastDay) : [];
   const daily: Record<string, number> = {};
   if (!days.length) return { verified: 0, daily, daysWritten: 0, currentStreak: 0, bestStreak: 0 };
-
-  // Sessions are stored in UTC; widen the window by a day on each side, then bucket by the writer's local day
-  const from = new Date(`${challenge.starts_on}T00:00:00Z`);
-  from.setUTCDate(from.getUTCDate() - 1);
-  const to = new Date(`${lastDay}T23:59:59Z`);
-  to.setUTCDate(to.getUTCDate() + 1);
-  const [{ data: sessions }, { data: writingDays }] = await Promise.all([
-    admin
-      .from("writing_sessions")
-      .select("started_at, typed_chars")
-      .eq("user_id", p.user_id)
-      .eq("flagged", false)
-      .gte("started_at", from.toISOString())
-      .lte("started_at", to.toISOString())
-      .limit(5000),
-    admin.from("writing_days").select("day, words_written").eq("user_id", p.user_id).gte("day", challenge.starts_on).lte("day", lastDay),
-  ]);
-
-  const typedByDay = new Map<string, number>();
-  for (const s of sessions || []) {
-    const day = dayInTimeZone(tz, new Date(s.started_at));
-    typedByDay.set(day, (typedByDay.get(day) || 0) + (s.typed_chars || 0));
-  }
-  const netByDay = new Map((writingDays || []).map((d) => [String(d.day), d.words_written || 0]));
+  const byDay = await verifiedWordsByDay(admin, p.user_id, tz, challenge.starts_on, lastDay);
 
   let verified = 0;
   let daysWritten = 0;
   let run = 0;
   let bestStreak = 0;
   for (const day of days) {
-    const words = Math.max(0, Math.min(netByDay.get(day) || 0, Math.floor((typedByDay.get(day) || 0) / CHARS_PER_WORD)));
+    const words = byDay.get(day) || 0;
     if (words > 0) daily[day] = words;
     verified += words;
     if (words >= STREAK_MIN_WORDS) {

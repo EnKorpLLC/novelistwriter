@@ -135,13 +135,10 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string
   return out;
 }
 
-/** Fits text into a box, shrinking it until it takes at most `maxLines`. Returns the bottom edge. */
-function textBlock(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  o: { x: number; y: number; w: number; size: number; maxLines: number; align: CanvasTextAlign; font: string; color: string; weight?: number; italic?: boolean }
-): number {
-  if (!text.trim()) return o.y;
+type TextOpts = { x: number; y: number; w: number; size: number; maxLines: number; align: CanvasTextAlign; font: string; color: string; weight?: number; italic?: boolean };
+
+/** Shrinks text until it takes at most `maxLines`, without drawing; used to center blocks vertically. */
+function fitText(ctx: CanvasRenderingContext2D, text: string, o: TextOpts): { lines: string[]; size: number; height: number } {
   let size = o.size;
   let lines: string[] = [];
   for (; size > 8; size *= 0.92) {
@@ -149,6 +146,14 @@ function textBlock(
     lines = wrap(ctx, text, o.w);
     if (lines.length <= o.maxLines) break;
   }
+  return { lines, size, height: lines.length * size * 1.18 };
+}
+
+/** Fits text into a box, shrinking it until it takes at most `maxLines`. Returns the bottom edge. */
+function textBlock(ctx: CanvasRenderingContext2D, text: string, o: TextOpts): number {
+  if (!text.trim()) return o.y;
+  const { lines, size } = fitText(ctx, text, o);
+  ctx.font = `${o.italic ? "italic " : ""}${o.weight || 400} ${size}px ${o.font}`;
   ctx.fillStyle = o.color;
   ctx.textAlign = o.align;
   ctx.textBaseline = "top";
@@ -233,5 +238,96 @@ export function drawMarketing(ctx: CanvasRenderingContext2D, id: MarketingFormat
       button(ctx, text.button, x, Math.min(y + 12, h - 44), 12, "left", accent, body);
       break;
     }
+  }
+}
+
+/* ---------- Promo cards made from the author's own book (AM1) ---------- */
+
+export type PromoSize = "square" | "story" | "wide";
+export const PROMO_SIZES: Record<PromoSize, { w: number; h: number; label: string }> = {
+  square: { w: 1080, h: 1080, label: "Square (Instagram, Facebook, Threads)" },
+  story: { w: 1080, h: 1920, label: "Story (Instagram, TikTok)" },
+  wide: { w: 1200, h: 630, label: "Wide (X, Bluesky, LinkedIn, links)" },
+};
+
+export type PromoCard =
+  | { kind: "quote"; text: string; fromBook: boolean }
+  | { kind: "review"; text: string; attribution: string }
+  | { kind: "progress"; headline: string; detail: string; project: string };
+
+export type PromoLook = { bg: string; fg: string; accent: string; heading: FontId; body: FontId; title: string; author: string };
+
+function drawCoverThumb(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, h: number) {
+  const w = h * (img.naturalWidth / img.naturalHeight);
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = h * 0.06;
+  ctx.shadowOffsetY = h * 0.02;
+  ctx.drawImage(img, x, y, w, h);
+  ctx.restore();
+  return w;
+}
+
+/** Quote, review, and verified-progress cards in the book's own fonts. Nothing here is AI-written. */
+export function drawPromoCard(ctx: CanvasRenderingContext2D, size: PromoSize, card: PromoCard, look: PromoLook, cover: HTMLImageElement | null) {
+  const { w, h } = PROMO_SIZES[size];
+  const head = `"${coverFontFamily(look.heading)}", Georgia, serif`;
+  const body = `"${coverFontFamily(look.body)}", Georgia, serif`;
+  const pad = Math.round(Math.min(w, h) * 0.08);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = look.bg;
+  ctx.fillRect(0, 0, w, h);
+  const glow = ctx.createRadialGradient(w / 2, h * 0.4, 0, w / 2, h * 0.4, Math.max(w, h) * 0.7);
+  glow.addColorStop(0, "rgba(255,255,255,0.07)");
+  glow.addColorStop(1, "rgba(0,0,0,0.18)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+
+  // Wide cards put the cover on the left; tall ones put it at the bottom
+  const wide = size === "wide";
+  const coverH = cover ? (wide ? h - pad * 2 : size === "story" ? h * 0.24 : h * 0.22) : 0;
+  const coverW = cover ? coverH * (cover.naturalWidth / cover.naturalHeight) : 0;
+  const textX = wide && cover ? pad * 2 + coverW : pad;
+  const textW = w - textX - pad;
+  const bottom = wide || !cover ? h - pad : h - pad - coverH - pad * 0.6;
+  if (cover) {
+    if (wide) drawCoverThumb(ctx, cover, pad, pad, coverH);
+    else drawCoverThumb(ctx, cover, w / 2 - coverW / 2, h - pad - coverH, coverH);
+  }
+
+  const base = size === "story" ? 80 : size === "wide" ? 44 : 58;
+  let lines: { text: string; o: TextOpts }[] = [];
+  if (card.kind === "quote" || card.kind === "review") {
+    const quote = card.text.replace(/^["“]|["”]$/g, "").trim();
+    const credit = card.kind === "quote" ? `from ${look.title}` : `— ${card.attribution || "Advance reader"}`;
+    lines = [
+      { text: "“", o: { x: textX, y: 0, w: textW, size: base * 1.8, maxLines: 1, align: "center", font: head, color: look.accent } },
+      { text: quote, o: { x: textX, y: 0, w: textW, size: base, maxLines: size === "story" ? 12 : 8, align: "center", font: body, color: look.fg, italic: card.kind === "quote" } },
+      { text: credit, o: { x: textX, y: 0, w: textW, size: base * 0.5, maxLines: 2, align: "center", font: head, color: look.accent } },
+      {
+        text: card.kind === "quote" ? look.author : `${look.title} by ${look.author}`,
+        o: { x: textX, y: 0, w: textW, size: base * 0.42, maxLines: 2, align: "center", font: body, color: look.fg },
+      },
+    ];
+    if (card.kind === "quote" && card.fromBook) {
+      lines.push({ text: "FROM THE BOOK", o: { x: textX, y: 0, w: textW, size: base * 0.34, maxLines: 1, align: "center", font: body, color: look.accent, weight: 600 } });
+    }
+  } else {
+    lines = [
+      { text: "VERIFIED WRITING", o: { x: textX, y: 0, w: textW, size: base * 0.34, maxLines: 1, align: "center", font: body, color: look.accent, weight: 600 } },
+      { text: card.headline, o: { x: textX, y: 0, w: textW, size: base * 1.25, maxLines: 3, align: "center", font: head, color: look.fg, weight: 600 } },
+      { text: card.detail, o: { x: textX, y: 0, w: textW, size: base * 0.5, maxLines: 3, align: "center", font: body, color: look.fg, italic: true } },
+      { text: card.project ? `Writing ${card.project}` : "", o: { x: textX, y: 0, w: textW, size: base * 0.42, maxLines: 2, align: "center", font: head, color: look.accent } },
+      { text: "Every word typed, verified by Novelist Writer", o: { x: textX, y: 0, w: textW, size: base * 0.34, maxLines: 2, align: "center", font: body, color: look.fg } },
+    ];
+  }
+
+  // Center the stack in the space above the cover
+  const gap = base * 0.45;
+  const fitted = lines.filter((l) => l.text.trim()).map((l) => ({ ...l, fit: fitText(ctx, l.text, l.o) }));
+  const total = fitted.reduce((n, l) => n + l.fit.height, 0) + gap * (fitted.length - 1);
+  let y = Math.max(pad, (pad + bottom) / 2 - total / 2);
+  for (const l of fitted) {
+    y = textBlock(ctx, l.text, { ...l.o, y, size: l.fit.size }) + gap;
   }
 }

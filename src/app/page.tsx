@@ -345,6 +345,7 @@ export default async function HomePage() {
               { t: "Watch it happen", d: "A launch week dashboard shows visitors, buy clicks by store, new signups, and reviews as they arrive." },
               { t: "Readers feel the thanks", d: "ARC readers get a copy for any e-reader, and you thank them in one click. Authors who do earn a “Thanks readers” label." },
               { t: "Gentle on your inbox", d: "Launch email goes out in batches that stay inside Gmail's daily limit, with an unsubscribe link on every list email." },
+              { t: "Posts from your own book", d: "Quote cards in your book's fonts, ARC review cards, and verified writing progress, on a posting calendar that reminds you. Never written by AI." },
             ].map((item) => (
               <li key={item.t} className="border-t border-line pt-4">
                 <h3 className="font-display text-xl">{item.t}</h3>

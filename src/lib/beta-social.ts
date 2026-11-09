@@ -47,7 +47,8 @@ export type NotificationType =
   | "arc_review_push"
   | "launch_team"
   | "author_thanks"
-  | "reader_milestone";
+  | "reader_milestone"
+  | "marketing_reminder";
 
 export async function createNotification(
   admin: SupabaseClient,

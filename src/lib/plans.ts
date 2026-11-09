@@ -48,6 +48,8 @@ export const PLANS: PlanCopy[] = [
       "A launch page for every book that grows with it: cover reveal, preorders, then buy buttons on release day",
       "Your public writing record and badges, like “Written in Novelist Writer”, “No AI used on this book”, and writing challenge wins",
       "Share kit: ready-to-post copy for every network, a newsletter block, a square image, and link previews",
+      "Posts made from your book, not by AI: quote cards in your book's fonts (marked “From the book” when we find the line in your manuscript) and verified writing progress cards",
+      "A posting calendar with a reminder on the day, one-tap sharing to X, Threads, and Bluesky, and copy-and-download for Instagram, TikTok, and Facebook",
       "Your published books listed in the Novelist Writer catalog",
       `${SUB_ALLOWANCE.pro} AI critique credits every month for line edits, developmental notes, continuity, plotholes, pacing, and more`,
     ],
@@ -74,6 +76,7 @@ export const PLANS: PlanCopy[] = [
       "Launch week dashboard: visitors, buy clicks by store, new list signups, and reviews as they come in",
       "A sample chapter on your launch page, styled like your book, right before the buy buttons",
       "ARC readers download a copy marked with their name for Kindle or any e-reader, and you thank readers in one click",
+      "Review cards: turn ARC reviews into post images, credited to “Advance reader” or the reader's first name",
       "An ebook for each store: Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble builds whose review and “Also by” links point only to that store",
       "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again",
       "Series tools",
@@ -113,6 +116,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "What does Studio do for my launch?",
     a: "Set a release date and Studio builds your launch plan: cover reveal, advance copies, preorders, countdown posts, and launch day, each with a one-click step. On launch day one button marks the book out now, emails readers who asked to hear, notifies your followers, and asks ARC readers to post reviews. Your book appears in “Launching this week”, a launch team of readers helps spread the word, and a launch week dashboard shows visitors, buy clicks, signups, and reviews.",
+  },
+  {
+    q: "Will Novelist Writer write my marketing posts?",
+    a: "No. Readers can tell, and it's not what we're about. Instead the Marketing page turns things only you have into posts: lines from your book (on cards in your book's fonts), your real ARC reviews (Studio), and your verified writing progress. Plan them on the posting calendar and we remind you on the day. You write the words; we make it quick to share them.",
   },
   {
     q: "How do writing challenges work?",
