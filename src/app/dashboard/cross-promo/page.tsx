@@ -445,7 +445,7 @@ function Promos() {
       <p className="mt-1 text-xs text-muted">
         Hosted by {p.isHost ? "you" : p.hostName} · {p.approved} of {p.maxBooks} books
         {p.isHost && p.waiting ? ` · ${p.waiting} waiting for you` : ""} · apply by {fmt(p.applyBy)}
-        {p.status === "cancelled" ? " · cancelled" : ""}
+        {p.status === "cancelled" ? " · cancelled" : p.status === "hidden" ? " · hidden by Novelist Writer while we take a look" : ""}
       </p>
       {p.description && <p className="mt-2 text-muted">{p.description}</p>}
       {children}
