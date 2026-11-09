@@ -25,7 +25,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ projectI
       .update(`${day}|${ip}|${ua}|${process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-12) || ""}`)
       .digest("hex")
       .slice(0, 32);
-    await admin.from("buy_clicks").insert({ project_id: projectId, store: link.label.slice(0, 60), day, visitor_hash: visitorHash });
+    const row: Record<string, unknown> = { project_id: projectId, store: link.label.slice(0, 60), day, visitor_hash: visitorHash };
+    // A group promo page tags its buttons so the click is credited to the promo
+    const src = new URL(req.url).searchParams.get("src") || "";
+    const { error } = await admin.from("buy_clicks").insert(/^[a-z0-9-]{1,80}$/.test(src) ? { ...row, source: src } : row);
+    if (error && /source/.test(error.message)) await admin.from("buy_clicks").insert(row);
   }
   return NextResponse.redirect(link.url, 302);
 }

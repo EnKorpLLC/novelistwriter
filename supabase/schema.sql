@@ -416,6 +416,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- See migration_formatting.sql for: projects.format_settings, book_details, cover_design; more matter types; box_sets
 -- See migration_challenges.sql for: challenges, challenge_participants
 -- See migration_author_marketing.sql for: marketing_posts
+-- See migration_cross_promo.sql for: swap_listings, promo_swaps, group_promos, group_promo_books
 -- See migration_launch_engine.sql for: projects.launch_plan, author_subscribers.release_project_ids, email_queue, buy_clicks, launch_team, author_thanks
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)

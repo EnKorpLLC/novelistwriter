@@ -102,8 +102,15 @@ export async function GET(req: Request) {
   const bookIds = books.map((b) => b.id);
   const [clicks, subs, unsubs, listSize, { data: posts }] = await Promise.all([
     bookIds.length
-      ? fetchAll<{ project_id: string; store: string; day: string; visitor_hash: string }>((f, t) =>
-          admin.from("buy_clicks").select("project_id, store, day, visitor_hash").in("project_id", bookIds).gte("day", from).lte("day", today).order("id").range(f, t)
+      ? fetchAll<{ project_id: string; store: string; day: string; visitor_hash: string; source?: string | null }>((f, t) =>
+          admin.from("buy_clicks").select("project_id, store, day, visitor_hash, source").in("project_id", bookIds).gte("day", from).lte("day", today).order("id").range(f, t)
+        ).then(async (rows) =>
+          rows.length
+            ? rows
+            : // Before migration_cross_promo.sql there is no source column
+              fetchAll<{ project_id: string; store: string; day: string; visitor_hash: string; source?: string | null }>((f, t) =>
+                admin.from("buy_clicks").select("project_id, store, day, visitor_hash").in("project_id", bookIds).gte("day", from).lte("day", today).order("id").range(f, t)
+              )
         )
       : Promise.resolve([]),
     studio
@@ -160,7 +167,7 @@ export async function GET(req: Request) {
     const v = visits.get(`${c.day}|${c.visitor_hash}`);
     const b = bucketOf(String(c.day));
     if (b) b.clicks += 1;
-    src(v?.source || DIRECT).clicks += 1;
+    src((c.source && sourceLabel({ utm_source: c.source })) || v?.source || DIRECT).clicks += 1;
     if (v?.campaign) camp(v.campaign).clicks += 1;
     const pb = perBook.get(c.project_id);
     if (pb) {

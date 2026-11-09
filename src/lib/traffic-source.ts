@@ -55,6 +55,8 @@ export const NETWORK_LABEL: Record<string, string> = {
 
 export function sourceLabel(v: { utm_source?: string | null; referrer_host?: string | null }): string | null {
   const utm = String(v.utm_source || "").trim().toLowerCase();
+  if (utm.startsWith("swap-")) return "Newsletter swaps";
+  if (utm.startsWith("promo-")) return "Group promos";
   if (utm) return NETWORK_LABEL[utm] || utm.charAt(0).toUpperCase() + utm.slice(1);
   const host = String(v.referrer_host || "").trim().toLowerCase().replace(/^www\./, "");
   if (!host) return null;

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const LINKS = [
   { href: "/books", label: "Published books" },
+  { href: "/promos", label: "Book promotions" },
   { href: "/authors", label: "For authors" },
   { href: "/readers", label: "For readers" },
   { href: "/challenges", label: "Challenges" },

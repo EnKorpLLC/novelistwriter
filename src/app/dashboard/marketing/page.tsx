@@ -228,8 +228,10 @@ export default function MarketingPage() {
 
   const postRow = (p: Post) => {
     const net = NETWORKS.find((n) => n.id === p.network);
+    // Swap and promo posts already carry the partner's or the promo's link in their text
+    const partnered = /^(swap|promo):/.test(p.plan_key || "");
     const base = data.books.find((b) => b.id === p.project_id)?.url || data.siteUrl;
-    const link = base ? trackedUrl(base, p.network === "any" ? "other" : p.network, postCampaign(p.id)) : null;
+    const link = base && !partnered ? trackedUrl(base, p.network === "any" ? "other" : p.network, postCampaign(p.id)) : null;
     const full = [p.body, link].filter(Boolean).join("\n\n");
     return (
       <li key={p.id} className={`border border-line p-3 text-sm ${p.status !== "planned" ? "opacity-60" : ""}`}>
@@ -298,6 +300,9 @@ export default function MarketingPage() {
           <a href="#places" className="text-accent hover:underline">
             Where readers are
           </a>
+          <Link href="/dashboard/cross-promo" className="text-accent hover:underline">
+            Cross-promotion
+          </Link>
           <Link href="/dashboard/marketing/results" className="text-accent hover:underline">
             Results →
           </Link>

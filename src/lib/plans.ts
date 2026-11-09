@@ -53,6 +53,7 @@ export const PLANS: PlanCopy[] = [
       "A posting calendar with a reminder on the day, one-tap sharing to X, Threads, and Bluesky, and copy-and-download for Instagram, TikTok, and Facebook",
       "Your marketing year: a monthly newsletter, backlist spotlights, book birthdays, and seasonal reader moments for your genre, added to the calendar in one click",
       "Marketing results all year: visitors to your site and book pages, where they came from, buy clicks by book and store, your best posts, and tracked links for anywhere you share",
+      "Join group promos: put your book on a themed page with other authors in your genre, share it, and see the readers your share brought",
       "Your published books listed in the Novelist Writer catalog",
       `${SUB_ALLOWANCE.pro} AI critique credits every month for line edits, developmental notes, continuity, plotholes, pacing, and more`,
     ],
@@ -82,6 +83,8 @@ export const PLANS: PlanCopy[] = [
       "Review cards: turn ARC reviews into post images, credited to “Advance reader” or the reader's first name",
       "Series and deal planning: book one pushed before each new release, and price promotions spaced through the year, each matched to deal sites that fit",
       "List growth in your results: new signups and unsubscribes over time, and which sources bring readers who join",
+      "Newsletter swaps with real list sizes: find authors in your genre, agree on send days, and see how many readers each side's send brought",
+      "Host group promos: gather books around a theme on a public page, approve who's in, and see whose share brought readers",
       "An ebook for each store: Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble builds whose review and “Also by” links point only to that store",
       "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again",
       "Series tools",
@@ -125,6 +128,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "Will Novelist Writer write my marketing posts?",
     a: "No. Readers can tell, and it's not what we're about. Instead the Marketing page turns things only you have into posts: lines from your book (on cards in your book's fonts), your real ARC reviews (Studio), and your verified writing progress. Plan them on the posting calendar and we remind you on the day. Your marketing year suggests when to post (newsletters, backlist spotlights, book birthdays, seasonal moments for your genre), and the free “Where readers are” guide shows where, what it costs, and the rules. Results then show which posts and places actually brought readers and buy clicks. You write the words; we make it quick to share them.",
+  },
+  {
+    q: "How do newsletter swaps and group promos work?",
+    a: "In a newsletter swap (Studio), you feature another author's book in your newsletter and they feature yours. List sizes come from confirmed subscribers, so nobody can inflate them, and each swap's link is tagged so you both see how many readers the other side's send brought. In a group promo, authors in one genre put their books on a public page for a week or so, often on sale, and everyone shares it. Joining is on Pro; hosting is on Studio. Agreed send and share days go straight onto your marketing calendar.",
   },
   {
     q: "How do writing challenges work?",
