@@ -15,6 +15,16 @@ const LINKS = [
   { href: "/privacy", label: "Privacy" },
 ];
 
+/** Follow links appear once each account exists and its URL is set in the environment */
+const SOCIAL = [
+  { href: process.env.NEXT_PUBLIC_SOCIAL_BLUESKY, label: "Bluesky" },
+  { href: process.env.NEXT_PUBLIC_SOCIAL_MASTODON, label: "Mastodon" },
+  { href: process.env.NEXT_PUBLIC_SOCIAL_THREADS, label: "Threads" },
+  { href: process.env.NEXT_PUBLIC_SOCIAL_INSTAGRAM, label: "Instagram" },
+  { href: process.env.NEXT_PUBLIC_SOCIAL_TIKTOK, label: "TikTok" },
+  { href: process.env.NEXT_PUBLIC_SOCIAL_X, label: "X" },
+].filter((s): s is { href: string; label: string } => Boolean(s.href));
+
 /** Site footer. On authors' own pages it reads as a small "made with" credit instead. */
 export function PublicFooter({ credit }: { credit?: "author-site" | "launch-page" }) {
   if (credit) {
@@ -42,6 +52,16 @@ export function PublicFooter({ credit }: { credit?: "author-site" | "launch-page
           ))}
         </nav>
       </div>
+      {SOCIAL.length > 0 && (
+        <div className="mx-auto mt-4 flex max-w-5xl flex-wrap gap-4 text-xs">
+          <span>Follow us:</span>
+          {SOCIAL.map((s) => (
+            <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer me" className="hover:text-ink">
+              {s.label}
+            </a>
+          ))}
+        </div>
+      )}
     </footer>
   );
 }

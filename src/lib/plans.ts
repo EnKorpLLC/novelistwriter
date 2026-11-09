@@ -55,6 +55,7 @@ export const PLANS: PlanCopy[] = [
       "Marketing results all year: visitors to your site and book pages, where they came from, buy clicks by book and store, your best posts, and tracked links for anywhere you share",
       "Join group promos: put your book on a themed page with other authors in your genre, share it, and see the readers your share brought",
       "Your published books listed in the Novelist Writer catalog, and new releases featured in the weekly reader digest",
+      "Optional: your releases, launches, and reader calls featured on Novelist Writer's social accounts",
       `${SUB_ALLOWANCE.pro} AI critique credits every month for line edits, developmental notes, continuity, plotholes, pacing, and more`,
     ],
   },

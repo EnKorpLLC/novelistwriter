@@ -419,6 +419,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- See migration_cross_promo.sql for: swap_listings, promo_swaps, group_promos, group_promo_books
 -- See migration_affiliates.sql for: affiliates, affiliate_commissions, affiliate_payouts
 -- See migration_reader_digest.sql for: profiles.reader_digest, reader_digest_genres, reader_digest_sent_on
+-- See migration_social_engine.sql for: social_posts, profiles.feature_on_socials
 -- See migration_launch_engine.sql for: projects.launch_plan, author_subscribers.release_project_ids, email_queue, buy_clicks, launch_team, author_thanks
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)

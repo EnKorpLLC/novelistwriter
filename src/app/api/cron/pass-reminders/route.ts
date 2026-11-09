@@ -8,6 +8,7 @@ import { emailRedAlarms } from "@/lib/money";
 import { refreshActiveChallenges } from "@/lib/challenges";
 import { runAffiliatePayouts } from "@/lib/affiliates";
 import { DIGEST_WEEKDAY, queueWeeklyDigest } from "@/lib/reader-digest";
+import { fillSocialQueue } from "@/lib/social-engine";
 import { enqueueEmails, processEmailQueue, type QueuedEmail } from "@/lib/email-queue";
 
 export const maxDuration = 60;
@@ -82,6 +83,7 @@ export async function GET(req: Request) {
   await emailRedAlarms(admin);
   // Marketing reminders join the queue, then launch emails that didn't fit in yesterday's Gmail budget, then challenge leaderboards
   await remindMarketingPosts(admin).catch(() => null);
+  await fillSocialQueue(admin).catch(() => 0);
   if (new Date().getUTCDay() === DIGEST_WEEKDAY) await queueWeeklyDigest(admin, { timeBudgetMs: 10_000 }).catch(() => null);
   await processEmailQueue(admin, { timeBudgetMs: 25_000 }).catch(() => null);
   await refreshActiveChallenges(admin, 120).catch(() => 0);

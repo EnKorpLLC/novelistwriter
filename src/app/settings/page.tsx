@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [readerDigest, setReaderDigest] = useState(false);
   const [digestGenres, setDigestGenres] = useState("");
+  const [featureOnSocials, setFeatureOnSocials] = useState(false);
   const [trustMessage, setTrustMessage] = useState("");
   const [trustBusy, setTrustBusy] = useState(false);
 
@@ -32,10 +33,11 @@ export default function SettingsPage() {
         setEmailNotifications(Boolean(s.emailNotifications));
         setReaderDigest(Boolean(s.readerDigest));
         setDigestGenres(s.readerDigestGenres || "");
+        setFeatureOnSocials(Boolean(s.featureOnSocials));
       });
   }, []);
 
-  async function updateTrust(patch: { aiDisabled?: boolean; emailNotifications?: boolean; readerDigest?: boolean; readerDigestGenres?: string }) {
+  async function updateTrust(patch: { aiDisabled?: boolean; emailNotifications?: boolean; readerDigest?: boolean; readerDigestGenres?: string; featureOnSocials?: boolean }) {
     setTrustBusy(true);
     setTrustMessage("");
     try {
@@ -50,6 +52,7 @@ export default function SettingsPage() {
       setAiDisabledSince(data.aiDisabledSince || null);
       setEmailNotifications(Boolean(data.emailNotifications));
       setReaderDigest(Boolean(data.readerDigest));
+      setFeatureOnSocials(Boolean(data.featureOnSocials));
       if (patch.emailNotifications === true || patch.readerDigest === true) setTrustMessage(SPAM_TIP);
       else if (patch.aiDisabled === true) setTrustMessage("AI tools are off. Your books can now show the AI-off badge.");
       else setTrustMessage("Saved.");
@@ -226,6 +229,22 @@ export default function SettingsPage() {
             </span>
           </label>
         )}
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={featureOnSocials}
+            disabled={trustBusy}
+            onChange={(e) => void updateTrust({ featureOnSocials: e.target.checked })}
+          />
+          <span>
+            <span className="text-ink">Feature my books on Novelist Writer&apos;s social accounts</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              New releases, launches, advance copies, and beta reads may be shared from our accounts, using your cover, title,
+              tagline, and author page link. Needs a public author page. Every post is reviewed by a person first.
+            </span>
+          </span>
+        </label>
         {trustMessage && <p className="text-sm text-muted">{trustMessage}</p>}
       </section>
       <form onSubmit={(e) => void changePassword(e)} className="font-ui mt-12 space-y-4">
