@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { captureFirstTouch, externalReferrerHost, utmFromUrl } from "@/lib/first-touch";
+import { captureFirstTouch, captureVisitSource, externalReferrerHost, utmFromUrl } from "@/lib/first-touch";
 
 /** First-party page view counter for the admin Metrics tab. No cookies, nothing sent to third parties. */
 export function SiteAnalytics() {
@@ -13,7 +13,10 @@ export function SiteAnalytics() {
     if (!pathname || pathname.startsWith("/admin") || pathname.startsWith("/api")) return;
     const isFirst = firstLoad.current;
     firstLoad.current = false;
-    if (isFirst) captureFirstTouch();
+    if (isFirst) {
+      captureFirstTouch();
+      captureVisitSource();
+    }
     void fetch("/api/metrics/pageview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

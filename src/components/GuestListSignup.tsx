@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { readVisitSource } from "@/lib/first-touch";
 
 const MESSAGES: Record<string, string> = {
   subscribed: "You're on the list.",
@@ -36,7 +37,7 @@ export function GuestListSignup({
       const res = await fetch("/api/audience/guest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authorUserId, email, name, company, releaseProjectId }),
+        body: JSON.stringify({ authorUserId, email, name, company, releaseProjectId, cameFrom: readVisitSource() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not sign up");

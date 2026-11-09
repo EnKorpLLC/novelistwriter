@@ -9,8 +9,9 @@ import { PROMO_SIZES, averageColor, drawPromoCard, type PromoCard, type PromoSiz
 import type { PlanBook, PlanIdea, PlaceGoal } from "@/lib/marketing-year";
 import { MarketingYearPlan } from "@/components/MarketingYearPlan";
 import { ReaderPlacesDirectory } from "@/components/ReaderPlacesDirectory";
+import { postCampaign, trackedUrl } from "@/lib/traffic-source";
 
-type Book = { id: string; title: string; author: string; coverUrl: string | null; heading: FontId; body: FontId };
+type Book = { id: string; title: string; author: string; coverUrl: string | null; url: string | null; heading: FontId; body: FontId };
 type Post = {
   id: string;
   project_id: string | null;
@@ -30,6 +31,7 @@ type Data = {
   books: Book[];
   progress: { today: number; week: number; month: number; streak: number; challenge: { title: string; verified: number; goal: number } | null };
   planBooks: PlanBook[];
+  siteUrl: string | null;
   posts: Post[];
 };
 type Kind = "quote" | "review" | "progress";
@@ -226,6 +228,9 @@ export default function MarketingPage() {
 
   const postRow = (p: Post) => {
     const net = NETWORKS.find((n) => n.id === p.network);
+    const base = data.books.find((b) => b.id === p.project_id)?.url || data.siteUrl;
+    const link = base ? trackedUrl(base, p.network === "any" ? "other" : p.network, postCampaign(p.id)) : null;
+    const full = [p.body, link].filter(Boolean).join("\n\n");
     return (
       <li key={p.id} className={`border border-line p-3 text-sm ${p.status !== "planned" ? "opacity-60" : ""}`}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -240,13 +245,18 @@ export default function MarketingPage() {
         {p.body && <p className="mt-1 whitespace-pre-wrap text-muted">{p.body}</p>}
         <div className="mt-2 flex flex-wrap gap-3 text-xs">
           {net?.intent && p.body && (
-            <a href={net.intent(p.body)} target="_blank" rel="noopener noreferrer" className="text-accent underline" onClick={() => void patchPost(p.id, { status: "posted" })}>
+            <a href={net.intent(full)} target="_blank" rel="noopener noreferrer" className="text-accent underline" onClick={() => void patchPost(p.id, { status: "posted" })}>
               Post on {net.label}
             </a>
           )}
           {p.body && (
-            <button type="button" className="text-accent underline" onClick={() => void navigator.clipboard.writeText(p.body)}>
-              Copy text
+            <button type="button" className="text-accent underline" onClick={() => void navigator.clipboard.writeText(full)}>
+              {link ? "Copy text and link" : "Copy text"}
+            </button>
+          )}
+          {link && (
+            <button type="button" className="text-accent underline" title="This link shows up in your results, so you can see what this post brought in" onClick={() => void navigator.clipboard.writeText(link)}>
+              Copy tracked link
             </button>
           )}
           {p.status === "planned" ? (
@@ -276,7 +286,23 @@ export default function MarketingPage() {
       <Link href="/dashboard" className="text-sm text-accent hover:underline">
         ← Dashboard
       </Link>
-      <h1 className="font-display mt-3 text-3xl">Marketing</h1>
+      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
+        <h1 className="font-display text-3xl">Marketing</h1>
+        <nav className="flex flex-wrap gap-4 text-sm">
+          <a href="#calendar" className="text-accent hover:underline">
+            Calendar
+          </a>
+          <a href="#year" className="text-accent hover:underline">
+            Your year
+          </a>
+          <a href="#places" className="text-accent hover:underline">
+            Where readers are
+          </a>
+          <Link href="/dashboard/marketing/results" className="text-accent hover:underline">
+            Results →
+          </Link>
+        </nav>
+      </div>
       <p className="mt-2 max-w-2xl text-sm text-muted">
         Posts made from things only you have: lines from your book, real reader reviews, and writing progress we can verify.
         Nothing here is written by AI. Plan them on the calendar and we&apos;ll remind you on the day.

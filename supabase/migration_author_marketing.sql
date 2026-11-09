@@ -20,6 +20,12 @@ create table if not exists public.marketing_posts (
 alter table public.marketing_posts add column if not exists note text not null default '';
 alter table public.marketing_posts add column if not exists plan_key text;
 create index if not exists marketing_posts_user_day_idx on public.marketing_posts (user_id, post_on);
+
+-- Marketing results: where each list signup came from (a tracked link's source or the referring site)
+alter table public.author_subscribers add column if not exists came_from text;
+-- Results read one author's pages at a time
+create index if not exists idx_site_page_views_path_day on public.site_page_views (path text_pattern_ops, day);
+create index if not exists idx_site_page_views_day_visitor on public.site_page_views (day, visitor_hash);
 create index if not exists marketing_posts_due_idx on public.marketing_posts (post_on) where status = 'planned';
 alter table public.marketing_posts enable row level security;
 drop policy if exists marketing_posts_own on public.marketing_posts;

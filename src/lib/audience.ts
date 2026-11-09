@@ -19,6 +19,8 @@ export async function upsertAuthorSubscriber(
     source: SubscriberSource;
     /** "Notify me when this book is out" */
     releaseProjectId?: string | null;
+    /** Where the reader arrived from, for marketing results */
+    cameFrom?: string | null;
   }
 ): Promise<void> {
   const email = opts.email.trim().toLowerCase();
@@ -35,14 +37,16 @@ export async function upsertAuthorSubscriber(
       .maybeSingle();
 
     if (!existing) {
-      await admin.from("author_subscribers").insert({
+      const row: Record<string, unknown> = {
         author_user_id: opts.authorUserId,
         email,
         display_name: displayName,
         sources: [opts.source],
         // Signed-in opt-ins and book joins are already verified accounts
         confirmed_at: now,
-      });
+      };
+      const { error } = await admin.from("author_subscribers").insert(opts.cameFrom ? { ...row, came_from: opts.cameFrom } : row);
+      if (error && /came_from/.test(error.message)) await admin.from("author_subscribers").insert(row);
       if (opts.releaseProjectId) await addReleaseAlert(admin, opts.authorUserId, email, opts.releaseProjectId);
       return;
     }

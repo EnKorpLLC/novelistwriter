@@ -8,22 +8,9 @@ import {
   type InsightInvite,
   type InsightsPhase,
 } from "@/lib/reader-insights";
+import { fetchAll as fetchAllRows } from "@/lib/supabase/fetch-all";
 
-const PAGE = 1000;
-const MAX_ROWS = 20000;
-
-async function fetchAll<T>(
-  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; from < MAX_ROWS; from += PAGE) {
-    const { data, error } = await query(from, from + PAGE - 1);
-    if (error || !data?.length) break;
-    out.push(...data);
-    if (data.length < PAGE) break;
-  }
-  return out;
-}
+const fetchAll = <T,>(query: Parameters<typeof fetchAllRows<T>>[0]) => fetchAllRows<T>(query, 20000);
 
 function readerName(row: { display_name: string | null; email: string }) {
   return row.display_name?.trim() || row.email.split("@")[0] || "Reader";

@@ -55,6 +55,28 @@ export function captureFirstTouch() {
   }
 }
 
+const VISIT_KEY = "nw_visit_source";
+
+/** Where this visit (browser tab session) came from: a tracked link's source, or the referring site. */
+export function captureVisitSource() {
+  try {
+    const utm = utmFromUrl();
+    const source = utm.utm_source || externalReferrerHost();
+    if (source) sessionStorage.setItem(VISIT_KEY, JSON.stringify({ utm_source: utm.utm_source, referrer_host: utm.utm_source ? undefined : source }));
+  } catch {
+    /* storage blocked */
+  }
+}
+
+export function readVisitSource(): { utm_source?: string; referrer_host?: string } | null {
+  try {
+    const raw = sessionStorage.getItem(VISIT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function readFirstTouch(): FirstTouch | null {
   try {
     const raw = localStorage.getItem(KEY);

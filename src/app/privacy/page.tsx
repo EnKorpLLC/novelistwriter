@@ -21,6 +21,12 @@ export default function PrivacyPage() {
           entitlements and credit balances only.
         </p>
         <p>
+          To show authors (and us) how readers find their pages, we count visits ourselves, with no cookies and no
+          third-party trackers. Visitor ids change every day, so no one is followed from one day to the next. When you join
+          an author&apos;s email list, we note where you arrived from, such as “Instagram”, so the author can see what&apos;s
+          working. Authors see totals, never who you are from your visits.
+        </p>
+        <p>
           Optional BYOK (bring your own API key) lets Studio users send critique requests through
           their own provider credentials.
         </p>

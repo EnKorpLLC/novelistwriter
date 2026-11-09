@@ -52,6 +52,7 @@ export const PLANS: PlanCopy[] = [
       "Posts made from your book, not by AI: quote cards in your book's fonts (marked “From the book” when we find the line in your manuscript) and verified writing progress cards",
       "A posting calendar with a reminder on the day, one-tap sharing to X, Threads, and Bluesky, and copy-and-download for Instagram, TikTok, and Facebook",
       "Your marketing year: a monthly newsletter, backlist spotlights, book birthdays, and seasonal reader moments for your genre, added to the calendar in one click",
+      "Marketing results all year: visitors to your site and book pages, where they came from, buy clicks by book and store, your best posts, and tracked links for anywhere you share",
       "Your published books listed in the Novelist Writer catalog",
       `${SUB_ALLOWANCE.pro} AI critique credits every month for line edits, developmental notes, continuity, plotholes, pacing, and more`,
     ],
@@ -80,6 +81,7 @@ export const PLANS: PlanCopy[] = [
       "ARC readers download a copy marked with their name for Kindle or any e-reader, and you thank readers in one click",
       "Review cards: turn ARC reviews into post images, credited to “Advance reader” or the reader's first name",
       "Series and deal planning: book one pushed before each new release, and price promotions spaced through the year, each matched to deal sites that fit",
+      "List growth in your results: new signups and unsubscribes over time, and which sources bring readers who join",
       "An ebook for each store: Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble builds whose review and “Also by” links point only to that store",
       "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again",
       "Series tools",
@@ -122,7 +124,7 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Will Novelist Writer write my marketing posts?",
-    a: "No. Readers can tell, and it's not what we're about. Instead the Marketing page turns things only you have into posts: lines from your book (on cards in your book's fonts), your real ARC reviews (Studio), and your verified writing progress. Plan them on the posting calendar and we remind you on the day. Your marketing year suggests when to post (newsletters, backlist spotlights, book birthdays, seasonal moments for your genre), and the free “Where readers are” guide shows where, what it costs, and the rules. You write the words; we make it quick to share them.",
+    a: "No. Readers can tell, and it's not what we're about. Instead the Marketing page turns things only you have into posts: lines from your book (on cards in your book's fonts), your real ARC reviews (Studio), and your verified writing progress. Plan them on the posting calendar and we remind you on the day. Your marketing year suggests when to post (newsletters, backlist spotlights, book birthdays, seasonal moments for your genre), and the free “Where readers are” guide shows where, what it costs, and the rules. Results then show which posts and places actually brought readers and buy clicks. You write the words; we make it quick to share them.",
   },
   {
     q: "How do writing challenges work?",

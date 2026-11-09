@@ -10,6 +10,8 @@ import { TIMEZONE_COOKIE, dayInTimeZone, isValidTimeZone } from "@/lib/local-day
 import { STREAK_MIN_WORDS, daysBetween, verifiedWordsByDay } from "@/lib/challenges";
 import { addDays } from "@/lib/launch-plan";
 import type { PlanBook } from "@/lib/marketing-year";
+import { authorPath, bookPath } from "@/lib/handles";
+import { appUrl } from "@/lib/stripe";
 
 /** Everything the Marketing page needs: books for cards, verified writing progress, and the posting calendar. */
 export async function GET() {
@@ -27,10 +29,10 @@ export async function GET() {
   const [pro, studio, { data: profile }, { data: projects }, byDay, { data: posts, error: postsError }, { data: joined }] = await Promise.all([
     userHasPro(user.id),
     userHasStudio(user.id),
-    admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+    admin.from("profiles").select("display_name, handle").eq("id", user.id).maybeSingle(),
     admin
       .from("projects")
-      .select("id, title, subtitle, genre, series_id, published, release_date, format_settings, book_details, cover_path, metadata, updated_at")
+      .select("id, title, subtitle, slug, genre, series_id, published, launch_public, arc_open, beta_ready, release_date, format_settings, book_details, cover_path, metadata, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false }),
     verifiedWordsByDay(admin, user.id, tz, addDays(today, -60), today),
@@ -76,6 +78,7 @@ export async function GET() {
     };
   });
 
+  const handle = (profile?.handle as string | null) || null;
   const penName = (p: { book_details: unknown }) => normalizeDetails(p.book_details).penName || profile?.display_name || "Author";
   return NextResponse.json({
     pro,
@@ -89,12 +92,14 @@ export async function GET() {
         title: p.title || "Untitled",
         author: penName(p),
         coverUrl: coverPublicUrl(projectCoverPath(p), p.updated_at ? Date.parse(p.updated_at) : undefined),
+        url: handle && p.slug && (p.published || p.launch_public || p.arc_open || p.beta_ready) ? appUrl(bookPath(handle, p.slug)) : null,
         heading: style.heading,
         body: style.body,
       };
     }),
     progress: { today: byDay.get(today) || 0, week: sum(addDays(today, -6)), month: sum(addDays(today, -29)), streak, challenge },
     planBooks,
+    siteUrl: handle ? appUrl(authorPath(handle)) : null,
     posts: posts || [],
   });
 }

@@ -1,26 +1,12 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
+import { fetchAll } from "@/lib/supabase/fetch-all";
+import { aiSearchTool } from "@/lib/traffic-source";
 
 export const maxDuration = 60;
 
 const RANGES = [7, 30, 90];
-const PAGE = 1000;
-const MAX_ROWS = 50000;
-
-/** Supabase returns at most 1,000 rows per request, so read in pages. */
-async function fetchAll<T>(
-  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; from < MAX_ROWS; from += PAGE) {
-    const { data, error } = await query(from, from + PAGE - 1);
-    if (error || !data?.length) break;
-    out.push(...data);
-    if (data.length < PAGE) break;
-  }
-  return out;
-}
 
 async function count(q: PromiseLike<{ count: number | null }>) {
   return (await q).count || 0;
@@ -130,7 +116,7 @@ async function traffic(admin: SupabaseClient, sinceDay: string, newProfiles: New
     signups: newProfiles.length,
     conversion: visitorDays.size ? newProfiles.length / visitorDays.size : 0,
     externalArrivals: arrivals,
-    capped: views.length >= MAX_ROWS,
+    capped: views.length >= 50000,
     daily: [...daily.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([day, d]) => ({ day, visitors: d.visitors.size, pageviews: d.pageviews, signups: d.signups })),
@@ -147,24 +133,6 @@ async function traffic(admin: SupabaseClient, sinceDay: string, newProfiles: New
       .sort(([, a], [, b]) => b.arrivals + b.signups * 10 - (a.arrivals + a.signups * 10))
       .map(([tool, a]) => ({ tool, arrivals: a.arrivals, signups: a.signups })),
   };
-}
-
-const AI_SEARCH_HOSTS: [RegExp, string][] = [
-  [/(^|\.)chatgpt\.com$|(^|\.)openai\.com$/, "ChatGPT"],
-  [/(^|\.)perplexity\.ai$/, "Perplexity"],
-  [/(^|\.)gemini\.google\.com$|(^|\.)bard\.google\.com$/, "Gemini"],
-  [/(^|\.)copilot\.microsoft\.com$/, "Copilot"],
-  [/(^|\.)claude\.ai$/, "Claude"],
-  [/(^|\.)you\.com$/, "You.com"],
-  [/(^|\.)phind\.com$/, "Phind"],
-  [/(^|\.)meta\.ai$/, "Meta AI"],
-  [/(^|\.)deepseek\.com$/, "DeepSeek"],
-];
-
-function aiSearchTool(host: string | null | undefined): string | null {
-  const h = String(host || "").toLowerCase();
-  if (!h) return null;
-  return AI_SEARCH_HOSTS.find(([re]) => re.test(h))?.[1] || null;
 }
 
 export async function GET(req: Request) {
