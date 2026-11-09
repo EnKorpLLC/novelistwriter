@@ -22,6 +22,7 @@ export const PLANS: PlanCopy[] = [
       "Story bible for characters, places, lore, and timeline",
       "1 project (add more for $9 each, one time)",
       "A private writing record of how every book came together",
+      "Verified writing challenges: join one or start one with your group on any dates, with streaks and leaderboards",
       "One switch to turn every AI tool off",
       "Basic DOCX and EPUB export, front and back matter, KDP readiness checklist",
       "Set up book styles, preview your ebook on Kindle, phone, and tablet screens, and see the first chapters as printed pages",
@@ -45,7 +46,7 @@ export const PLANS: PlanCopy[] = [
       "Book details and auto pages: title page, copyright with your ISBN, contents, also-by with links, and a review request",
       "Your own author site: photo, bio, links, themes, and every book in one place",
       "A launch page for every book that grows with it: cover reveal, preorders, then buy buttons on release day",
-      "Your public writing record and badges, like “Written in Novelist Writer” and “No AI used on this book”",
+      "Your public writing record and badges, like “Written in Novelist Writer”, “No AI used on this book”, and writing challenge wins",
       "Share kit: ready-to-post copy for every network, a newsletter block, a square image, and link previews",
       "Your published books listed in the Novelist Writer catalog",
       `${SUB_ALLOWANCE.pro} AI critique credits every month for line edits, developmental notes, continuity, plotholes, pacing, and more`,
@@ -102,6 +103,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "What happens when Pro ends?",
     a: "Your author site and launch pages stay up for 7 more days, then visitors see a simple holding page until you're back. Nothing is deleted. On Free, your most recently edited book (plus any you paid $9 to unlock) stays open and the others can still be exported.",
+  },
+  {
+    q: "How do writing challenges work?",
+    a: "They're free on every plan. Join a public challenge or start a private one for your writing group, on any dates. Each day counts the words your books grew by, but never more than you typed in the editor, so pasted, imported, and deleted text never counts. Finish to earn a winner badge, shown on your author site on Pro.",
   },
   {
     q: "Do I have to use AI?",

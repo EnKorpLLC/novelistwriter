@@ -13,6 +13,7 @@ export const STATIC_PAGES = [
   { path: "/readers", priority: 0.9, changeFrequency: "weekly" as const },
   { path: "/pricing", priority: 0.9, changeFrequency: "weekly" as const },
   { path: "/books", priority: 0.8, changeFrequency: "daily" as const },
+  { path: "/challenges", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/contact", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/privacy", priority: 0.3, changeFrequency: "yearly" as const },
 ];
@@ -93,6 +94,12 @@ export async function publicSitemapEntries(admin: SupabaseClient): Promise<Sitem
     .limit(10000);
   for (const r of readers || []) {
     entries.push({ url: appUrl(`/r/${r.handle}`), lastModified: r.updated_at || undefined, priority: 0.3, changeFrequency: "monthly" });
+  }
+
+  // Public challenges (only after migration_challenges.sql)
+  const { data: challenges } = await admin.from("challenges").select("slug, updated_at").eq("is_public", true).limit(1000);
+  for (const c of challenges || []) {
+    entries.push({ url: appUrl(`/challenges/${c.slug}`), lastModified: c.updated_at || undefined, priority: 0.6, changeFrequency: "daily" });
   }
 
   return entries;

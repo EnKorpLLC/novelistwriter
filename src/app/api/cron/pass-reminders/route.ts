@@ -5,6 +5,9 @@ import { optedInUserIds } from "@/lib/notifications";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { emailRedAlarms } from "@/lib/money";
+import { refreshActiveChallenges } from "@/lib/challenges";
+
+export const maxDuration = 60;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -34,8 +37,10 @@ export async function GET(req: Request) {
   }
 
   const admin = createServiceClient();
-  // Rides along on this daily job (Hobby allows few crons): email the owner if a free plan is nearly full
+  // Rides along on this daily job (Hobby allows few crons): email the owner if a free plan is nearly full,
+  // and bring challenge leaderboards up to date
   await emailRedAlarms(admin);
+  await refreshActiveChallenges(admin, 200).catch(() => 0);
   const now = Date.now();
   const { data: rows, error } = await admin
     .from("credit_balances")

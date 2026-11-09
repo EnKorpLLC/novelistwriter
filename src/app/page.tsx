@@ -102,6 +102,9 @@ export default function HomePage() {
           <Link href="/readers" className="text-muted hover:text-ink">
             For readers
           </Link>
+          <Link href="/challenges" className="text-muted hover:text-ink">
+            Challenges
+          </Link>
           <Link href="/pricing" className="text-muted hover:text-ink">
             Pricing
           </Link>
@@ -306,6 +309,35 @@ export default function HomePage() {
           </div>
         </section>
 
+        <section id="challenges" className="border-t border-line px-6 py-20 md:px-10">
+          <div className="mx-auto max-w-5xl">
+            <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Challenges · Free</p>
+            <h2 className="font-display mt-2 text-3xl text-ink">Writing challenges where every word is real</h2>
+            <p className="mt-3 max-w-2xl text-muted">
+              Join a challenge or start one with your writing group, on any dates. Words are counted from your writing record,
+              so only what you type counts. No pasted chapters, no padded totals, and a winner badge that means something.
+            </p>
+            <ul className="mt-10 grid gap-8 md:grid-cols-3">
+              {[
+                { t: "Verified word counts", d: "Each day counts what your books grew by, never more than you typed. Pasted, imported, and deleted text never counts." },
+                { t: "Streaks and leaderboards", d: "Keep a daily streak, climb the leaderboard, and share progress cards as you go." },
+                { t: "Badges that travel", d: "Finish a challenge to earn a winner badge, shown on your author site on Pro." },
+              ].map((item) => (
+                <li key={item.t} className="border-t border-line pt-4">
+                  <h3 className="font-display text-xl">{item.t}</h3>
+                  <p className="mt-2 text-sm text-muted">{item.d}</p>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/challenges"
+              className="font-ui mt-8 inline-block rounded-sm border border-ink/20 px-6 py-3 text-ink transition hover:border-accent hover:text-accent"
+            >
+              See the challenges
+            </Link>
+          </div>
+        </section>
+
         <section id="earn" className="mx-auto max-w-5xl scroll-mt-24 px-6 py-20 md:px-10">
           <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Share &amp; earn</p>
           <h2 className="font-display mt-2 text-3xl text-ink">Bring readers, earn Studio for free</h2>
@@ -397,6 +429,9 @@ export default function HomePage() {
             </Link>
             <Link href="/readers" className="hover:text-ink">
               For readers
+            </Link>
+            <Link href="/challenges" className="hover:text-ink">
+              Challenges
             </Link>
             <Link href="/pricing" className="hover:text-ink">
               Pricing

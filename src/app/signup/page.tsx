@@ -66,7 +66,9 @@ export default function SignupPage() {
       if (signInErr) throw signInErr;
 
       await claimPendingReferral();
-      router.push("/dashboard");
+      // Back to where they came from (for example a challenge they wanted to join), same-site paths only
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { listLaunchBooks, resolveAuthor, type LaunchBook } from "@/lib/public-site";
 import { loadTrustBadges } from "@/lib/trust-badges";
+import { challengeWins } from "@/lib/challenges";
 import { userHasStudio } from "@/lib/credits";
 import { authorPath, bookPath } from "@/lib/handles";
 import { themeStyle } from "@/lib/site-themes";
@@ -110,7 +111,11 @@ export default async function AuthorSitePage({
     return <SiteHolding authorName={author.name} previewBackHref={previewing ? path : null} />;
   }
 
-  const [books, studio] = await Promise.all([listLaunchBooks(admin, author.userId), userHasStudio(author.userId)]);
+  const [books, studio, wins] = await Promise.all([
+    listLaunchBooks(admin, author.userId),
+    userHasStudio(author.userId),
+    challengeWins(admin, author.userId),
+  ]);
   const { aiOffSince, noAiProjectIds } = await loadTrustBadges(
     admin,
     author.userId,
@@ -176,6 +181,22 @@ export default async function AuthorSitePage({
           {(!isOwner || previewing) && <VisitorShareButton path={path} title={`${author.name}'s books`} />}
         </div>
         <TrustBadges aiOffSince={aiOffSince} className="mt-3" />
+        {wins.length > 0 && (
+          <ul className="font-ui mt-3 flex flex-wrap gap-2 text-xs" aria-label="Writing challenges won">
+            {wins.slice(0, 6).map((w) => (
+              <li key={w.slug} className="border border-accent/50 px-2 py-1 text-accent">
+                {w.isPublic ? (
+                  <Link href={`/challenges/${w.slug}`} className="hover:underline">
+                    Challenge winner: {w.title}
+                  </Link>
+                ) : (
+                  <>Challenge winner: {w.title}</>
+                )}
+                <span className="text-muted"> · {w.goal.toLocaleString()} verified words</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {author.bio && <p className="mt-4 max-w-2xl whitespace-pre-wrap text-ink">{author.bio}</p>}
         <AuthorLinks links={author.links} className="mt-3" />
 
