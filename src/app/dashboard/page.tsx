@@ -137,6 +137,9 @@ export default async function DashboardPage() {
           <Link href="/dashboard/challenges" className="text-muted hover:text-ink">
             Challenges
           </Link>
+          <Link href="/dashboard/affiliate" className="text-muted hover:text-ink">
+            Affiliate
+          </Link>
           <Link href="/dashboard/share" className="text-muted hover:text-ink">
             Share &amp; earn
           </Link>

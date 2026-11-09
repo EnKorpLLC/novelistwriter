@@ -6,6 +6,7 @@ import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { emailRedAlarms } from "@/lib/money";
 import { refreshActiveChallenges } from "@/lib/challenges";
+import { runAffiliatePayouts } from "@/lib/affiliates";
 import { enqueueEmails, processEmailQueue, type QueuedEmail } from "@/lib/email-queue";
 
 export const maxDuration = 60;
@@ -82,6 +83,8 @@ export async function GET(req: Request) {
   await remindMarketingPosts(admin).catch(() => null);
   await processEmailQueue(admin, { timeBudgetMs: 25_000 }).catch(() => null);
   await refreshActiveChallenges(admin, 120).catch(() => 0);
+  // Affiliate commissions go out once a month
+  if (new Date().getUTCDate() === 1) await runAffiliatePayouts(admin, { timeBudgetMs: 15_000 }).catch(() => null);
   const now = Date.now();
   const { data: rows, error } = await admin
     .from("credit_balances")

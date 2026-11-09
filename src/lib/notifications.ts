@@ -1,6 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { renderEmail, sendEmail } from "@/lib/email";
+import { createNotification, type NotificationType } from "@/lib/beta-social";
+import { appUrl } from "@/lib/stripe";
 
 export type EmailConsent = {
   userId: string | null;
@@ -68,6 +70,22 @@ export async function optedInUserIds(admin: SupabaseClient, userIds: string[]): 
     .in("id", userIds)
     .eq("email_notifications", true);
   return new Set((data || []).map((p) => p.id));
+}
+
+/** In-app always; email too when the person turned on notification emails. */
+export async function notifyUser(
+  admin: SupabaseClient,
+  userId: string,
+  n: { type: NotificationType; title: string; body: string; href: string }
+) {
+  await createNotification(admin, { userId, type: n.type, title: n.title, body: n.body, href: n.href }).catch(() => null);
+  const [ok, { data: profile }] = await Promise.all([
+    optedInUserIds(admin, [userId]),
+    admin.from("profiles").select("email").eq("id", userId).maybeSingle(),
+  ]);
+  if (!ok.has(userId) || !profile?.email) return;
+  const mail = renderEmail({ heading: n.title, paragraphs: [n.body], button: { label: "Open", url: appUrl(n.href) }, notification: true });
+  await sendEmail({ to: profile.email, subject: n.title, text: mail.text, html: mail.html }).catch(() => null);
 }
 
 export async function sendWelcomeEmail(to: string) {

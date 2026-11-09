@@ -9,6 +9,7 @@ import { AdminMetrics } from "./AdminMetrics";
 import { AdminMoney } from "./AdminMoney";
 import { AdminChallenges } from "./AdminChallenges";
 import { AdminPromos } from "./AdminPromos";
+import { AdminAffiliates } from "./AdminAffiliates";
 
 type Message = {
   id: string;
@@ -43,6 +44,7 @@ const TABS = [
   { id: "moderation", label: "Moderation" },
   { id: "challenges", label: "Challenges" },
   { id: "promos", label: "Promos" },
+  { id: "affiliates", label: "Affiliates" },
   { id: "gifts", label: "Studio days" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -507,6 +509,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
         {tab === "challenges" && <AdminChallenges onNote={setNote} />}
 
         {tab === "promos" && <AdminPromos onNote={setNote} />}
+
+        {tab === "affiliates" && <AdminAffiliates onNote={setNote} />}
 
         {tab === "gifts" && (
           <section className="mt-6 max-w-xl space-y-4">

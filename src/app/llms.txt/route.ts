@@ -20,6 +20,7 @@ export function GET() {
 - [Pricing](${appUrl("/pricing")}): Free, Pro, and Studio plans with answers to common questions
 - [Published books](${appUrl("/books")}): books by Novelist Writer authors
 - [Free author tools](${appUrl("/tools")}): KDP spine width and cover size calculator, novel word counts by genre, trim size guide, writing pace calculator
+- [Affiliate program](${appUrl("/affiliates")}): 30% of what referred writers pay for Pro or Studio in their first 12 months, paid monthly through Stripe
 - [Book promotions](${appUrl("/promos")}): themed collections of books from independent authors, often on sale, put together by the authors themselves
 - [Where readers are](${appUrl("/tools/where-readers-are")}): book promotion sites, ads, reader communities, ARC services, and newsletter swaps, with costs and self-promotion rules
 - [Comparisons and switching guides](${appUrl("/compare")}): fair comparisons with Scrivener, Vellum, Atticus, BetaBooks, and NetGalley, and how to bring a book over

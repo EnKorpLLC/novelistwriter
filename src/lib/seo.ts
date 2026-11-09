@@ -14,6 +14,7 @@ export const STATIC_PAGES = [
   { path: "/pricing", priority: 0.9, changeFrequency: "weekly" as const },
   { path: "/books", priority: 0.8, changeFrequency: "daily" as const },
   { path: "/promos", priority: 0.7, changeFrequency: "daily" as const },
+  { path: "/affiliates", priority: 0.5, changeFrequency: "monthly" as const },
   { path: "/challenges", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/tools", priority: 0.8, changeFrequency: "monthly" as const },
   { path: "/tools/spine-calculator", priority: 0.8, changeFrequency: "monthly" as const },

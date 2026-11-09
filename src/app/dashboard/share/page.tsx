@@ -90,6 +90,13 @@ export default function ShareAndEarnPage() {
         desk, and audience lists. Pass days don&apos;t include AI credits. You can bank up to{" "}
         {data?.cap ?? 28} days.
       </p>
+      <p className="font-ui mt-2 text-sm text-muted">
+        Have a writer audience? The{" "}
+        <Link href="/dashboard/affiliate" className="text-accent underline">
+          affiliate program
+        </Link>{" "}
+        pays 30% in cash for a year on writers who subscribe, on top of these days.
+      </p>
       {error && <p className="font-ui mt-4 text-sm text-danger">{error}</p>}
       {!data && !error && <p className="font-ui mt-6 text-sm text-muted">Loading…</p>}
 

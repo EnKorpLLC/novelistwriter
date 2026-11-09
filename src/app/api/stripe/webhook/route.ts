@@ -6,6 +6,7 @@ import { SUB_ALLOWANCE } from "@/lib/types";
 import { grantReferralRewardForPurchase } from "@/lib/referral";
 import { onSubscriptionTierChange } from "@/lib/studio-pass";
 import { recordInvoice, recordRefund } from "@/lib/money";
+import { adjustForCharge, recordCommissionForInvoice } from "@/lib/affiliates";
 import Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -92,6 +93,13 @@ export async function POST(req: Request) {
             .eq("user_id", userId);
           if (error) throw new Error(error.message);
         }
+        if (userId) {
+          try {
+            await recordCommissionForInvoice(admin, invoice, userId);
+          } catch (err) {
+            console.error("affiliate commission failed", invoice.id, err);
+          }
+        }
         // Renewals only — first payment already rewarded via checkout.session.completed
         if (
           userId &&
@@ -117,6 +125,20 @@ export async function POST(req: Request) {
       } catch (err) {
         // Money tracking never fails the webhook; "Sync from Stripe" catches up later
         console.error("refund record failed", charge.id, err);
+      }
+      try {
+        await adjustForCharge(admin, charge.id, charge.amount ? charge.amount_refunded / charge.amount : 1, "Refunded");
+      } catch (err) {
+        console.error("affiliate refund adjustment failed", charge.id, err);
+      }
+    }
+    if (event.type === "charge.dispute.created") {
+      const dispute = event.data.object as Stripe.Dispute;
+      const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge.id;
+      try {
+        await adjustForCharge(admin, chargeId, 1, "Disputed");
+      } catch (err) {
+        console.error("affiliate dispute adjustment failed", chargeId, err);
       }
     }
   } catch (err) {

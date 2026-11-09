@@ -49,7 +49,8 @@ export type NotificationType =
   | "author_thanks"
   | "reader_milestone"
   | "marketing_reminder"
-  | "cross_promo";
+  | "cross_promo"
+  | "affiliate";
 
 export async function createNotification(
   admin: SupabaseClient,

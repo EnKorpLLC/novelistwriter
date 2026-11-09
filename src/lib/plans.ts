@@ -134,6 +134,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
     a: "In a newsletter swap (Studio), you feature another author's book in your newsletter and they feature yours. List sizes come from confirmed subscribers, so nobody can inflate them, and each swap's link is tagged so you both see how many readers the other side's send brought. In a group promo, authors in one genre put their books on a public page for a week or so, often on sale, and everyone shares it. Joining is on Pro; hosting is on Studio. Agreed send and share days go straight onto your marketing calendar.",
   },
   {
+    q: "Do you have an affiliate program?",
+    a: "Yes. Approved affiliates earn 30% of what each writer they refer pays for Pro or Studio in their first 12 months. Commissions are held 60 days for refunds, then paid on the 1st of each month through Stripe once they reach $25. Anyone can also keep earning free Studio days by sharing their link.",
+  },
+  {
     q: "How do writing challenges work?",
     a: "They're free on every plan. Join a public challenge or start a private one for your writing group, on any dates. Each day counts the words your books grew by, but never more than you typed in the editor, so pasted, imported, and deleted text never counts. Finish to earn a winner badge, shown on your author site on Pro.",
   },
