@@ -21,6 +21,8 @@ function fields(body: Record<string, unknown>) {
   if (typeof body.network === "string" && NETWORKS.includes(body.network)) out.network = body.network;
   if (typeof body.body === "string") out.body = body.body.slice(0, 3000);
   if (typeof body.card === "string" && CARDS.includes(body.card)) out.card = body.card;
+  if (typeof body.note === "string") out.note = body.note.slice(0, 200);
+  if (typeof body.plan_key === "string") out.plan_key = body.plan_key.slice(0, 200);
   if ("project_id" in body) out.project_id = typeof body.project_id === "string" && body.project_id ? body.project_id : null;
   if (body.status === "planned" || body.status === "posted" || body.status === "skipped") {
     out.status = body.status;

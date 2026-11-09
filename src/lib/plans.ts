@@ -26,6 +26,7 @@ export const PLANS: PlanCopy[] = [
       "One switch to turn every AI tool off",
       "Basic DOCX and EPUB export, front and back matter, KDP readiness checklist",
       "Set up book styles, preview your ebook on Kindle, phone, and tablet screens, and see the first chapters as printed pages",
+      "“Where readers are”: promotion sites, ads, reader communities, and ARC services, with costs and self-promotion rules",
       "AI critique pay as you go, with credit packs from $5",
     ],
   },
@@ -50,6 +51,7 @@ export const PLANS: PlanCopy[] = [
       "Share kit: ready-to-post copy for every network, a newsletter block, a square image, and link previews",
       "Posts made from your book, not by AI: quote cards in your book's fonts (marked “From the book” when we find the line in your manuscript) and verified writing progress cards",
       "A posting calendar with a reminder on the day, one-tap sharing to X, Threads, and Bluesky, and copy-and-download for Instagram, TikTok, and Facebook",
+      "Your marketing year: a monthly newsletter, backlist spotlights, book birthdays, and seasonal reader moments for your genre, added to the calendar in one click",
       "Your published books listed in the Novelist Writer catalog",
       `${SUB_ALLOWANCE.pro} AI critique credits every month for line edits, developmental notes, continuity, plotholes, pacing, and more`,
     ],
@@ -77,6 +79,7 @@ export const PLANS: PlanCopy[] = [
       "A sample chapter on your launch page, styled like your book, right before the buy buttons",
       "ARC readers download a copy marked with their name for Kindle or any e-reader, and you thank readers in one click",
       "Review cards: turn ARC reviews into post images, credited to “Advance reader” or the reader's first name",
+      "Series and deal planning: book one pushed before each new release, and price promotions spaced through the year, each matched to deal sites that fit",
       "An ebook for each store: Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble builds whose review and “Also by” links point only to that store",
       "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again",
       "Series tools",
@@ -119,7 +122,7 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Will Novelist Writer write my marketing posts?",
-    a: "No. Readers can tell, and it's not what we're about. Instead the Marketing page turns things only you have into posts: lines from your book (on cards in your book's fonts), your real ARC reviews (Studio), and your verified writing progress. Plan them on the posting calendar and we remind you on the day. You write the words; we make it quick to share them.",
+    a: "No. Readers can tell, and it's not what we're about. Instead the Marketing page turns things only you have into posts: lines from your book (on cards in your book's fonts), your real ARC reviews (Studio), and your verified writing progress. Plan them on the posting calendar and we remind you on the day. Your marketing year suggests when to post (newsletters, backlist spotlights, book birthdays, seasonal moments for your genre), and the free “Where readers are” guide shows where, what it costs, and the rules. You write the words; we make it quick to share them.",
   },
   {
     q: "How do writing challenges work?",

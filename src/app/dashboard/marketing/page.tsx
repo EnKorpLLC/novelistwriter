@@ -6,9 +6,22 @@ import type { FontId } from "@/lib/book/styles";
 import { loadCoverFonts } from "@/lib/book/cover-design";
 import { canvasBlob, downloadBlob } from "@/lib/book/cover-template";
 import { PROMO_SIZES, averageColor, drawPromoCard, type PromoCard, type PromoSize } from "@/lib/book/marketing";
+import type { PlanBook, PlanIdea, PlaceGoal } from "@/lib/marketing-year";
+import { MarketingYearPlan } from "@/components/MarketingYearPlan";
+import { ReaderPlacesDirectory } from "@/components/ReaderPlacesDirectory";
 
 type Book = { id: string; title: string; author: string; coverUrl: string | null; heading: FontId; body: FontId };
-type Post = { id: string; project_id: string | null; post_on: string; network: string; body: string; card: string; status: "planned" | "posted" | "skipped" };
+type Post = {
+  id: string;
+  project_id: string | null;
+  post_on: string;
+  network: string;
+  body: string;
+  card: string;
+  note?: string;
+  plan_key?: string | null;
+  status: "planned" | "posted" | "skipped";
+};
 type Data = {
   pro: boolean;
   studio: boolean;
@@ -16,6 +29,7 @@ type Data = {
   migrationNeeded: boolean;
   books: Book[];
   progress: { today: number; week: number; month: number; streak: number; challenge: { title: string; verified: number; goal: number } | null };
+  planBooks: PlanBook[];
   posts: Post[];
 };
 type Kind = "quote" | "review" | "progress";
@@ -58,6 +72,7 @@ export default function MarketingPage() {
   const [fontsReady, setFontsReady] = useState(false);
   const [draft, setDraft] = useState({ post_on: "", network: "instagram", body: "", card: "none" });
   const [busy, setBusy] = useState(false);
+  const [placesGoal, setPlacesGoal] = useState<PlaceGoal | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   async function load() {
@@ -156,24 +171,39 @@ export default function MarketingPage() {
     downloadBlob(blob, `${book.title.replace(/[^\w\- ]+/g, "").trim() || "book"}-${kind}-${size}.png`);
   }
 
-  async function addPost(p: typeof draft) {
+  async function addPost(p: Record<string, unknown>, fromDraft = true) {
     setBusy(true);
     setNote(null);
     try {
       const res = await fetch("/api/marketing/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...p, project_id: bookId || null }),
+        body: JSON.stringify({ project_id: bookId || null, ...p }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not add the post");
       setData((d) => (d ? { ...d, posts: [...d.posts, json.post].sort((a, b) => a.post_on.localeCompare(b.post_on)) } : d));
-      setDraft((d) => ({ ...d, body: "" }));
+      if (fromDraft) setDraft((d) => ({ ...d, body: "" }));
     } catch (err) {
       setNote(err instanceof Error ? err.message : "Could not add the post");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function addIdea(i: PlanIdea) {
+    await addPost({ post_on: i.day, network: "any", body: "", card: i.card, note: i.title, plan_key: i.key, project_id: i.bookId }, false);
+  }
+
+  function makeCard(i: PlanIdea) {
+    if (!i.bookId) return;
+    if (i.card === "cover") {
+      window.location.href = `/project/${i.bookId}?tab=cover`;
+      return;
+    }
+    setBookId(i.bookId);
+    if (i.card === "quote" || i.card === "review" || i.card === "progress") setKind(i.card);
+    document.getElementById("cards")?.scrollIntoView({ behavior: "smooth" });
   }
 
   async function patchPost(id: string, patch: Partial<Post>) {
@@ -200,6 +230,7 @@ export default function MarketingPage() {
       <li key={p.id} className={`border border-line p-3 text-sm ${p.status !== "planned" ? "opacity-60" : ""}`}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className="text-ink">
+            {p.note ? <span className="block">{p.note}</span> : null}
             {net?.label || "Anywhere"}
             {titleOf(p.project_id) ? <span className="text-muted"> · {titleOf(p.project_id)}</span> : null}
             {p.card !== "none" ? <span className="text-muted"> · with a {p.card} card</span> : null}
@@ -263,7 +294,7 @@ export default function MarketingPage() {
       {data.books.length === 0 ? (
         <p className="mt-8 text-sm text-muted">Create a book first, then come back to make posts for it.</p>
       ) : (
-        <section className="mt-8 grid gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
+        <section id="cards" className="mt-8 grid gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <div className="space-y-4 text-sm">
             <label className="block text-xs text-muted">
               Book
@@ -470,6 +501,39 @@ export default function MarketingPage() {
             </div>
           ))
         )}
+      </section>
+
+      <section id="year" className="mt-14">
+        <h2 className="font-display text-2xl">Your marketing year</h2>
+        <p className="mt-1 max-w-2xl text-sm text-muted">
+          Ideas for the next twelve months, built from your books: a monthly newsletter, backlist spotlights, book birthdays,
+          and reader moments that fit your genre. Studio adds series pushes and price promotions. Add the ones you like to the
+          calendar; you write the posts.
+        </p>
+        <MarketingYearPlan
+          books={data.planBooks}
+          today={data.today}
+          pro={data.pro}
+          studio={data.studio}
+          planned={new Set(data.posts.map((p) => p.plan_key).filter((k): k is string => Boolean(k)))}
+          onAdd={addIdea}
+          onMakeCard={makeCard}
+          onPlaces={(g) => {
+            setPlacesGoal(g);
+            document.getElementById("places")?.scrollIntoView({ behavior: "smooth" });
+          }}
+        />
+      </section>
+
+      <section id="places" className="mt-14">
+        <h2 className="font-display text-2xl">Where readers are</h2>
+        <p className="mt-1 max-w-2xl text-sm text-muted">
+          Places to post and promote, what they cost, and what each allows. Two or three done well beat all of them done
+          halfway.
+        </p>
+        <div className="mt-4">
+          <ReaderPlacesDirectory key={placesGoal || "all"} goal={placesGoal} />
+        </div>
       </section>
     </div>
   );

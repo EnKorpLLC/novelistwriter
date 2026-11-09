@@ -16,6 +16,9 @@ create table if not exists public.marketing_posts (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Year-round plan: what the post is for ("Backlist spotlight: ...") and which plan idea it came from
+alter table public.marketing_posts add column if not exists note text not null default '';
+alter table public.marketing_posts add column if not exists plan_key text;
 create index if not exists marketing_posts_user_day_idx on public.marketing_posts (user_id, post_on);
 create index if not exists marketing_posts_due_idx on public.marketing_posts (post_on) where status = 'planned';
 alter table public.marketing_posts enable row level security;

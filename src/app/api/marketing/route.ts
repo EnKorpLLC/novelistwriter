@@ -9,6 +9,7 @@ import { getStyle } from "@/lib/book/styles";
 import { TIMEZONE_COOKIE, dayInTimeZone, isValidTimeZone } from "@/lib/local-day";
 import { STREAK_MIN_WORDS, daysBetween, verifiedWordsByDay } from "@/lib/challenges";
 import { addDays } from "@/lib/launch-plan";
+import type { PlanBook } from "@/lib/marketing-year";
 
 /** Everything the Marketing page needs: books for cards, verified writing progress, and the posting calendar. */
 export async function GET() {
@@ -27,7 +28,11 @@ export async function GET() {
     userHasPro(user.id),
     userHasStudio(user.id),
     admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
-    admin.from("projects").select("id, title, subtitle, format_settings, book_details, cover_path, metadata, updated_at").eq("user_id", user.id).order("updated_at", { ascending: false }),
+    admin
+      .from("projects")
+      .select("id, title, subtitle, genre, series_id, published, release_date, format_settings, book_details, cover_path, metadata, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false }),
     verifiedWordsByDay(admin, user.id, tz, addDays(today, -60), today),
     admin.from("marketing_posts").select("*").eq("user_id", user.id).gte("post_on", addDays(today, -14)).lte("post_on", addDays(today, 90)).order("post_on"),
     admin.from("challenge_participants").select("challenge_id, verified_words").eq("user_id", user.id),
@@ -53,6 +58,24 @@ export async function GET() {
     if (active) challenge = { title: active.title, goal: active.goal_words, verified: joined.find((j) => j.challenge_id === active.id)?.verified_words || 0 };
   }
 
+  const seriesIds = [...new Set((projects || []).map((p) => p.series_id).filter(Boolean))] as string[];
+  const { data: seriesRows } = seriesIds.length ? await admin.from("series").select("id, title").in("id", seriesIds) : { data: [] as { id: string; title: string }[] };
+  const seriesTitle = new Map((seriesRows || []).map((s) => [s.id, s.title as string]));
+  const planBooks: PlanBook[] = (projects || []).map((p) => {
+    const d = normalizeDetails(p.book_details);
+    const name = (p.series_id && seriesTitle.get(p.series_id)) || d.seriesName;
+    return {
+      id: p.id,
+      title: p.title || "Untitled",
+      genre: p.genre || "",
+      published: Boolean(p.published),
+      releaseDate: p.release_date || null,
+      seriesKey: p.series_id || (d.seriesName ? d.seriesName.toLowerCase() : null),
+      seriesName: name || "",
+      seriesNumber: Number.parseFloat(d.seriesNumber) || null,
+    };
+  });
+
   const penName = (p: { book_details: unknown }) => normalizeDetails(p.book_details).penName || profile?.display_name || "Author";
   return NextResponse.json({
     pro,
@@ -71,6 +94,7 @@ export async function GET() {
       };
     }),
     progress: { today: byDay.get(today) || 0, week: sum(addDays(today, -6)), month: sum(addDays(today, -29)), streak, challenge },
+    planBooks,
     posts: posts || [],
   });
 }

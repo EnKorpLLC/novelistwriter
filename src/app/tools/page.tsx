@@ -5,7 +5,7 @@ import { contentMetadata } from "@/lib/seo";
 
 export const metadata = contentMetadata({
   title: "Free tools for self-publishing authors",
-  description: "A KDP spine width and cover size calculator, novel word counts by genre, a trim size guide, and a writing pace calculator. Free, no sign-up.",
+  description: "A KDP spine width and cover size calculator, novel word counts by genre, a trim size guide, a writing pace calculator, and where to find readers. Free, no sign-up.",
   path: "/tools",
   kicker: "Free author tools",
 });
@@ -15,6 +15,7 @@ const TOOLS = [
   { href: "/tools/novel-word-count", title: "How long is a novel in my genre?", d: "Typical word counts for romance, fantasy, thrillers, YA, and more, with page estimates." },
   { href: "/tools/trim-sizes", title: "Trim size guide", d: "Which paperback size fits your genre, and what it does to your page count." },
   { href: "/tools/writing-pace", title: "Writing pace calculator", d: "How many words a day you need to finish by your date, or when you'll finish at your pace." },
+  { href: "/tools/where-readers-are", title: "Where readers are", d: "Deal newsletters, ads, reader communities, and ARC services, with what each costs and its self-promotion rules." },
 ];
 
 export default function ToolsPage() {
