@@ -4,6 +4,7 @@ import { userHasPro } from "@/lib/credits";
 import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { getStyle } from "@/lib/book/styles";
 import { CoverBuilder } from "@/components/CoverBuilder";
+import { projectCoverPath } from "@/lib/cover";
 
 export const metadata = { title: "Cover builder — Novelist Writer", robots: { index: false } };
 
@@ -42,6 +43,7 @@ export default async function CoverBuilderPage({ params }: { params: Promise<{ i
       }}
       formatSettings={project.format_settings}
       savedDesign={project.cover_design ?? null}
+      uploadedCover={projectCoverPath(project)}
       migrationNeeded={!("cover_design" in project)}
       pro={pro}
     />

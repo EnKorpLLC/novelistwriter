@@ -46,6 +46,7 @@ export function CoverBuilder({
   book,
   formatSettings,
   savedDesign,
+  uploadedCover,
   migrationNeeded,
   pro,
 }: {
@@ -54,6 +55,8 @@ export function CoverBuilder({
   book: BookInfo;
   formatSettings: unknown;
   savedDesign: unknown;
+  /** The ebook cover uploaded on the Cover tab, which can become the paperback front */
+  uploadedCover: string | null;
   migrationNeeded: boolean;
   pro: boolean;
 }) {
@@ -258,6 +261,60 @@ export function CoverBuilder({
     }
   }
 
+  /**
+   * Makes the uploaded ebook cover the front of the paperback. It's copied first, because "Use as ebook
+   * cover" later overwrites the uploaded file. Front text is removed: a finished cover already has it.
+   */
+  async function startFromUploadedCover() {
+    if (!uploadedCover) return;
+    setBusy("import");
+    setNote(null);
+    try {
+      const supabase = createClient();
+      const ext = /\.png($|\?)/i.test(uploadedCover) ? "png" : /\.webp($|\?)/i.test(uploadedCover) ? "webp" : "jpg";
+      const path = `${userId}/${projectId}/design/art-${Date.now().toString(36)}.${ext}`;
+      if (uploadedCover.startsWith("http")) {
+        const res = await fetch(uploadedCover);
+        if (!res.ok) throw new Error("Your uploaded cover couldn't be read.");
+        const blob = await res.blob();
+        const { error } = await supabase.storage.from("covers").upload(path, blob, { contentType: blob.type || "image/jpeg", upsert: true });
+        if (error) throw new Error(`Copy failed: ${error.message}`);
+      } else {
+        const { error } = await supabase.storage.from("covers").copy(uploadedCover, path);
+        if (error) throw new Error(`Copy failed: ${error.message}`);
+      }
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.crossOrigin = "anonymous";
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("Your uploaded cover couldn't be loaded."));
+        el.src = coverPublicUrl(path, Date.now()) || "";
+      });
+      requested.current.add(path);
+      setImages((prev) => new Map(prev).set(path, img));
+      const old = design.art?.path;
+      change((d) => ({
+        ...d,
+        art: { path, scope: "front", zoom: 1, x: 0, y: 0, dim: 0, width: img.naturalWidth, height: img.naturalHeight },
+        layers: d.layers.filter((l) => !(l.type === "text" && l.panel === "front")),
+      }));
+      if (old) void supabase.storage.from("covers").remove([old]);
+      setSelected(null);
+      setNote(
+        "Your uploaded cover is now the front, and the front text is gone since your cover already has it. The spine and back still have theirs. Ebook covers are a little taller than paperback fronts, so check the top and bottom and use Move up / down if needed."
+      );
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Could not use your uploaded cover");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function removeFrontText() {
+    change((d) => ({ ...d, layers: d.layers.filter((l) => !(l.type === "text" && l.panel === "front")) }));
+    setSelected(null);
+  }
+
   function removeLayer(id: string) {
     const layer = design.layers.find((l) => l.id === id);
     change((d) => ({ ...d, layers: d.layers.filter((l) => l.id !== id) }));
@@ -437,6 +494,23 @@ export function CoverBuilder({
         <aside className="w-80 shrink-0 space-y-5 overflow-y-auto border-l border-line p-4 text-sm">
           {migrationNeeded && <p className="text-danger">Database needs an update. Run supabase/migration_formatting.sql in the Supabase SQL editor.</p>}
           {note && <p className="text-ink">{note}</p>}
+          {uploadedCover && !design.art && (
+            <div className="border border-accent/50 bg-accent/5 p-3 text-xs">
+              <p className="text-ink">You already uploaded an ebook cover.</p>
+              <p className="mt-1 text-muted">
+                Use it as the front of your paperback. If it already shows the title and author, we take the front text off for
+                you and keep the spine and back.
+              </p>
+              <button
+                type="button"
+                disabled={!!busy}
+                onClick={() => void startFromUploadedCover()}
+                className="mt-2 bg-accent px-3 py-1.5 text-paper disabled:opacity-50"
+              >
+                {busy === "import" ? "Copying…" : "Start from my uploaded cover"}
+              </button>
+            </div>
+          )}
           {!pro && (
             <div className="border border-accent/40 bg-accent/5 p-3 text-xs">
               <p className="text-ink">Try the builder freely. Uploading art and exporting covers are part of Pro and Studio.</p>
@@ -491,6 +565,16 @@ export function CoverBuilder({
                 }}
               />
             </label>
+            {uploadedCover && (
+              <button
+                type="button"
+                disabled={!!busy}
+                onClick={() => void startFromUploadedCover()}
+                className="ml-2 border border-line px-3 py-1.5 text-xs disabled:opacity-50"
+              >
+                {busy === "import" ? "Copying…" : "Use my uploaded cover"}
+              </button>
+            )}
             {design.art && (
               <div className="mt-2 space-y-2 text-xs">
                 <label className="block text-muted">
@@ -565,6 +649,16 @@ export function CoverBuilder({
               <button type="button" className="border border-line px-2 py-1" onClick={() => addText("tagline")}>
                 + Tagline
               </button>
+              {design.layers.some((l) => l.type === "text" && l.panel === "front") && (
+                <button
+                  type="button"
+                  className="border border-line px-2 py-1"
+                  title="For art that already shows the title and author"
+                  onClick={removeFrontText}
+                >
+                  Remove all front text
+                </button>
+              )}
               {(["photo", "logo"] as const).map((kind) => (
                 <label key={kind} className={`cursor-pointer border border-line px-2 py-1 ${pro ? "" : "opacity-50"}`}>
                   {busy === kind ? "Uploading…" : kind === "photo" ? "+ Author photo" : "+ Logo"}

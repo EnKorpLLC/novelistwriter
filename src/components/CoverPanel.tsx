@@ -183,6 +183,12 @@ export function CoverPanel({
               Design the whole cover here: your art, title, author, back cover blurb, and a spine sized to your page count.
               It checks the safe area and print sharpness, then saves your ebook cover and a print-ready paperback PDF.
             </p>
+            {coverUrl && (
+              <p className="mt-1 text-xs text-muted">
+                Already have a finished ebook cover? The builder can start from it, leave its title and author as they are,
+                and add just the spine and back.
+              </p>
+            )}
             <a href={`/project/${projectId}/cover-builder`} className="mt-3 inline-block bg-accent px-4 py-2 text-sm text-paper">
               Open the cover builder
             </a>
