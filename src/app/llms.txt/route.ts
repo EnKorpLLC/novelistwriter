@@ -19,6 +19,9 @@ export function GET() {
 - [For readers](${appUrl("/readers")}): free beta reads and advance copies, reader badges, and profiles
 - [Pricing](${appUrl("/pricing")}): Free, Pro, and Studio plans with answers to common questions
 - [Published books](${appUrl("/books")}): books by Novelist Writer authors
+- [Free author tools](${appUrl("/tools")}): KDP spine width and cover size calculator, novel word counts by genre, trim size guide, writing pace calculator
+- [Comparisons and switching guides](${appUrl("/compare")}): fair comparisons with Scrivener, Vellum, Atticus, BetaBooks, and NetGalley, and how to bring a book over
+- [Your data, your exit](${appUrl("/your-data")}): export manuscripts and reader lists anytime, on every plan
 - [Writing challenges](${appUrl("/challenges")}): free challenges with verified word counts (typed words only), streaks, and leaderboards
 - [Contact](${appUrl("/contact")})
 

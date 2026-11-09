@@ -356,6 +356,8 @@ export function copyrightLines(book: Book, recordUrl?: string | null): string[] 
         ? `Written by a human in Novelist Writer. See how this book was written: ${recordUrl}`
         : "Written by a human in Novelist Writer."
     );
+  } else if (book.format.madeWith) {
+    lines.push("Made with Novelist Writer · novelistwriter.com");
   }
   return lines;
 }

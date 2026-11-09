@@ -19,6 +19,9 @@ export function PublicHeader() {
         <Link href="/challenges" className="text-muted hover:text-ink">
           Challenges
         </Link>
+        <Link href="/tools" className="text-muted hover:text-ink">
+          Free tools
+        </Link>
         <Link href="/login" className="text-muted hover:text-ink">
           Log in
         </Link>

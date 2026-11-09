@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 import { ChallengeActions } from "@/components/ChallengeActions";
 import { ShareKit } from "@/components/ShareKit";
 import { appUrl } from "@/lib/stripe";
@@ -213,6 +214,7 @@ export default async function ChallengePage({ params, searchParams }: Props) {
           )}
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { exportDocx, exportEpub, type CoverImage } from "@/lib/export";
 import { validateEpubStructure } from "@/lib/kdp-checklist";
 import { projectCoverPath } from "@/lib/cover";
+import { userHasPro } from "@/lib/credits";
+import { normalizeFormat } from "@/lib/book/format";
 
 function coverTypeFromPath(path: string): CoverImage["type"] {
   const lower = path.toLowerCase();
@@ -53,6 +55,16 @@ export async function POST(
     enabled: m.enabled,
     sort_order: m.sort_order,
   }));
+  // Free exports always carry the credit; Pro and up can turn it off in the Format tab
+  if (!(await userHasPro(user.id)) || normalizeFormat(project.format_settings).madeWith) {
+    matterBlocks.push({
+      matter_type: "back_custom",
+      title: "Made with Novelist Writer",
+      content_html: "<p>This book was written in Novelist Writer, the writing studio where authors prove they wrote their books. novelistwriter.com</p>",
+      enabled: true,
+      sort_order: 100000,
+    });
+  }
 
   let cover: CoverImage | null = null;
   const coverPath = projectCoverPath(project);

@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { listLaunchBooks, resolveAuthor, type LaunchBook } from "@/lib/public-site";
 import { loadTrustBadges } from "@/lib/trust-badges";
 import { challengeWins } from "@/lib/challenges";
+import { PublicFooter } from "@/components/PublicFooter";
 import { userHasStudio } from "@/lib/credits";
 import { authorPath, bookPath } from "@/lib/handles";
 import { themeStyle } from "@/lib/site-themes";
@@ -262,6 +263,7 @@ export default async function AuthorSitePage({
           </div>
         )}
       </main>
+      <PublicFooter credit="author-site" />
     </div>
   );
 }

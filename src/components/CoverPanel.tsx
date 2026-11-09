@@ -10,7 +10,7 @@ import { MarketingImages } from "@/components/MarketingImages";
 
 const MAX_UPLOAD = 5 * 1024 * 1024;
 
-function WrapDiagram({ wrap }: { wrap: CoverWrap }) {
+export function WrapDiagram({ wrap }: { wrap: CoverWrap }) {
   const s = 40;
   const R = (r: { x: number; y: number; w: number; h: number }) => ({ x: r.x * s, y: r.y * s, width: r.w * s, height: r.h * s });
   return (

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 
 export const metadata = {
@@ -133,6 +134,7 @@ export default function ReadersPage() {
           </div>
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }

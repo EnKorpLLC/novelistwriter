@@ -8,6 +8,7 @@ import { authorPath, bookPath } from "@/lib/handles";
 import { themeStyle } from "@/lib/site-themes";
 import { PublicHeader } from "@/components/PublicHeader";
 import { GuestListSignup } from "@/components/GuestListSignup";
+import { PublicFooter } from "@/components/PublicFooter";
 import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { buildBook } from "@/lib/book/model";
 import { renderChapter } from "@/lib/book/render";
@@ -136,6 +137,7 @@ ${body.italic ? `@font-face { font-family: "NWS Body"; src: url("${body.italic}"
           </div>
         </section>
       </main>
+      <PublicFooter credit="launch-page" />
     </div>
   );
 }

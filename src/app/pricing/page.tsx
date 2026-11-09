@@ -4,6 +4,8 @@ import { PlanCards } from "@/components/PlanCards";
 import { PAY_AS_YOU_GO, PRICING_FAQ } from "@/lib/plans";
 import { JsonLd } from "@/components/JsonLd";
 import { faqJsonLd, softwareJsonLd } from "@/lib/seo";
+import { PublicFooter } from "@/components/PublicFooter";
+import { COMPARED_ON, REPLACES } from "@/lib/compare";
 
 export const metadata = {
   alternates: { canonical: "/pricing" },
@@ -53,6 +55,36 @@ export default function PricingPage() {
         </section>
 
         <section className="mt-16">
+          <h2 className="font-display text-3xl">What Novelist Writer replaces</h2>
+          <p className="font-ui mt-2 max-w-2xl text-sm text-muted">
+            The separate tools many authors pay for today, and the plan that covers each. Typical prices, checked {COMPARED_ON}.
+          </p>
+          <table className="font-ui mt-6 w-full text-left text-sm">
+            <thead className="text-xs text-muted">
+              <tr className="border-b border-line">
+                <th className="py-2">Tool</th>
+                <th>Typical cost</th>
+                <th>Included in</th>
+              </tr>
+            </thead>
+            <tbody>
+              {REPLACES.map((r) => (
+                <tr key={r.tool} className="border-b border-line/60">
+                  <td className="py-2 pr-3 text-ink">{r.tool}</td>
+                  <td className="pr-3 text-muted">{r.cost}</td>
+                  <td className="text-ink">{r.plan === "Free" ? "Every plan" : r.plan === "Pro" ? "Pro and Studio" : "Studio"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="font-ui mt-3 text-sm">
+            <Link href="/compare" className="text-accent underline">
+              See detailed comparisons
+            </Link>
+          </p>
+        </section>
+
+        <section className="mt-16">
           <h2 className="font-display text-3xl">Questions</h2>
           <dl className="mt-6 space-y-6">
             {PRICING_FAQ.map((f) => (
@@ -76,6 +108,7 @@ export default function PricingPage() {
           </Link>
         </div>
       </main>
+      <PublicFooter />
     </div>
   );
 }

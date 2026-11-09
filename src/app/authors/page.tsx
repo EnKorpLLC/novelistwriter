@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { PlanCards } from "@/components/PlanCards";
 
@@ -67,7 +68,19 @@ export default function AuthorsPage() {
               <h2 className="font-display text-2xl">On every plan</h2>
               <ul className="font-ui mt-3 space-y-1.5 text-sm text-muted">
                 <li>Your book stays yours: we never train on your manuscript</li>
-                <li>Export your manuscript anytime; it&apos;s never held hostage</li>
+                <li>
+                  Export your manuscript anytime; it&apos;s never held hostage (
+                  <Link href="/your-data" className="text-accent underline">
+                    your data, your exit
+                  </Link>
+                  )
+                </li>
+                <li>
+                  Coming from Scrivener, Word, Vellum, or Atticus?{" "}
+                  <Link href="/compare" className="text-accent underline">
+                    See how to switch
+                  </Link>
+                </li>
                 <li>A private record of how you wrote every book</li>
                 <li>Public pages (Pro and up) show up in AI search answers, with AI training blocked on them</li>
                 <li>One switch to turn every AI tool off</li>
@@ -88,6 +101,7 @@ export default function AuthorsPage() {
           </div>
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }

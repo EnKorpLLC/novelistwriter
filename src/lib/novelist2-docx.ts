@@ -1,4 +1,79 @@
 /** Novelist 2.0–style DOCX: title, optional front matter, Contents, Chapter N: Title, optional back matter */
+import { decodeEntities, htmlToBlocks, parseHtml, plainText, type Block } from "@/lib/book/model";
+
+/* ---------- Chapters from any Word file (Scrivener, Word, Google Docs exports) ---------- */
+
+const CHAPTER_LINE = /^(chapter\s+([0-9]+|[a-z-]+)\b|prologue\b|epilogue\b|interlude\b|part\s+([0-9]+|[ivxlc]+|[a-z]+)\b)/i;
+const BACK_LINE = /^(about the author|also by|acknowledg|newsletter|stay in touch|sample chapter|excerpt)/i;
+
+function blocksToEditorHtml(blocks: Block[]): string {
+  return blocks
+    .map((b) => {
+      switch (b.type) {
+        case "p":
+          return `<p${b.align !== "left" ? ` style="text-align: ${b.align}"` : ""}>${b.html}</p>`;
+        case "heading":
+          return `<h${Math.min(4, b.level + 1)}>${b.html}</h${Math.min(4, b.level + 1)}>`;
+        case "quote":
+          return `<blockquote>${blocksToEditorHtml(b.blocks)}</blockquote>`;
+        case "list":
+          return `<${b.ordered ? "ol" : "ul"}>${b.items.map((i) => `<li><p>${i}</p></li>`).join("")}</${b.ordered ? "ol" : "ul"}>`;
+        case "break":
+          return `<p style="text-align: center">* * *</p>`;
+        case "pre":
+          return `<p>${b.text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`;
+      }
+    })
+    .join("");
+}
+
+/**
+ * Splits converted Word HTML into chapters at heading styles or lines like "Chapter One", "CHAPTER 1",
+ * "Prologue", or "Part Two". Keeps italics, bold, lists, and scene breaks. Empty when it finds no chapters.
+ */
+export function chaptersFromDocxHtml(html: string): { title: string; html: string; text: string }[] {
+  const top = parseHtml(html).filter((n) => "tag" in n) as { tag: string; attrs: string; children: never[] }[];
+  const info = top.map((node) => {
+    const text = decodeEntities(plainText([node])).replace(/\s+/g, " ").trim();
+    const heading = /^h[1-2]$/.test(node.tag) && text.length > 0;
+    return { node, text, heading, chapterLike: text.length > 0 && text.length <= 100 && CHAPTER_LINE.test(text) };
+  });
+  const FRONT_LINE = /^(copyright|dedication|contents|table of contents|epigraph|title page)$/i;
+  // With "Chapter…" lines in the file, chapters start at the first one; the title and front pages come before it
+  const firstChapterLike = info.findIndex((i) => i.chapterLike);
+  let start = firstChapterLike >= 0 ? firstChapterLike : 0;
+  if (firstChapterLike < 0) {
+    // Heading styles only: a first heading followed by little text is the book's title
+    const headings = info.map((x, idx) => (x.heading ? idx : -1)).filter((idx) => idx >= 0);
+    if (headings.length >= 3) {
+      const between = info.slice(headings[0] + 1, headings[1]).reduce((n, x) => n + x.text.split(/\s+/).filter(Boolean).length, 0);
+      if (between < 50) start = headings[0] + 1;
+    }
+  }
+
+  const chapters: { title: string; parts: string[] }[] = [];
+  let current: { title: string; parts: string[] } | null = null;
+  for (const { node, text, heading, chapterLike } of info.slice(start)) {
+    if (current && text && BACK_LINE.test(text) && (heading || text.length <= 60)) break;
+    if ((heading && !FRONT_LINE.test(text) && (firstChapterLike < 0 || chapterLike || chapters.length > 0)) || chapterLike) {
+      current = { title: text, parts: [] };
+      chapters.push(current);
+      continue;
+    }
+    if (current) current.parts.push(serialize(node));
+  }
+  return chapters.map((c) => {
+    const body = blocksToEditorHtml(htmlToBlocks(c.parts.join("")));
+    return { title: c.title, html: body, text: decodeEntities(body.replace(/<\/p>/g, "\n\n").replace(/<[^>]+>/g, "")).trim() };
+  });
+}
+
+function serialize(node: { tag: string; attrs: string; children: unknown[] } | { text: string }): string {
+  if ("text" in node) return node.text;
+  if (/^(br|hr|img|wbr)$/i.test(node.tag)) return `<${node.tag}${node.attrs ? ` ${node.attrs}` : ""}/>`;
+  const inner = (node.children as ({ tag: string; attrs: string; children: unknown[] } | { text: string })[]).map(serialize).join("");
+  return `<${node.tag}${node.attrs ? ` ${node.attrs}` : ""}>${inner}</${node.tag}>`;
+}
 
 export type ParsedMatter = {
   matter_type: string;

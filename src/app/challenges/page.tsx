@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
+import { PublicFooter } from "@/components/PublicFooter";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { challengeStatus, type Challenge } from "@/lib/challenges";
 
@@ -82,6 +83,7 @@ export default async function ChallengesPage() {
           </ul>
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }

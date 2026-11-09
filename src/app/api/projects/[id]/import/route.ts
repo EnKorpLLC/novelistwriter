@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { projectLockedMessage } from "@/lib/studio-access";
 import mammoth from "mammoth";
-import { parseNovelist2DocxText, plainToMatterHtml } from "@/lib/novelist2-docx";
+import { chaptersFromDocxHtml, parseNovelist2DocxText, plainToMatterHtml } from "@/lib/novelist2-docx";
 
 function fountainToChapters(text: string): { title: string; body: string }[] {
   const scenes = text.split(/\n(?=\.[A-Z])/);
@@ -69,22 +69,26 @@ export async function POST(
     [];
   const name = file.name.toLowerCase();
 
+  let formatted: { title: string; html: string; text: string }[] = [];
   if (kind === "fountain" || name.endsWith(".fountain")) {
     chapters = fountainToChapters(buf.toString("utf8"));
   } else {
-    const result = await mammoth.extractRawText({ buffer: buf });
+    const [result, html] = await Promise.all([mammoth.extractRawText({ buffer: buf }), mammoth.convertToHtml({ buffer: buf })]);
     const parsed = parseNovelist2DocxText(result.value);
     chapters = parsed.chapters;
     importedTitle = parsed.title;
     frontMatter = parsed.frontMatter;
     backMatter = parsed.backMatter;
+    // Heading styles or "Chapter One" lines from Scrivener, Word, and Google Docs, with italics kept
+    formatted = chaptersFromDocxHtml(html.value);
+    if (formatted.length) chapters = formatted.map((c) => ({ title: c.title, body: c.text }));
   }
 
   if (!chapters.length) {
     return NextResponse.json(
       {
         error:
-          "No chapters found. Expected Novelist 2.0 style headings like “Chapter 1: Title”.",
+          "No chapters found. Mark chapter titles with Word's Heading 1 style, or start them with a line like “Chapter 1” or “Chapter One”.",
       },
       { status: 400 }
     );
@@ -104,7 +108,7 @@ export async function POST(
     }
   }
 
-  const rows = toRows(chapters, projectId, user.id);
+  const rows = toRows(chapters, projectId, user.id).map((r, i) => (formatted[i] ? { ...r, content_html: formatted[i].html || "<p></p>" } : r));
   const { error } = await supabase.from("chapters").insert(rows);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -160,6 +164,6 @@ export async function POST(
     matterUpdated,
     frontMatter: frontMatter.map((m) => m.title),
     backMatter: backMatter.map((m) => m.title),
-    format: "novelist2-docx",
+    format: formatted.length ? "docx-headings" : "novelist2-docx",
   });
 }

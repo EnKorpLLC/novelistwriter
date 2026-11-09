@@ -28,6 +28,8 @@ export type FormatSettings = {
   printer: Printer;
   /** From the last print layout; the cover calculator uses it */
   lastPageCount: number | null;
+  /** "Made with Novelist Writer" in exports: always on for Free, optional on Pro and up */
+  madeWith: boolean;
 };
 
 export type BookDetails = {
@@ -85,6 +87,7 @@ export const DEFAULT_FORMAT: FormatSettings = {
   paper: "cream",
   printer: "kdp",
   lastPageCount: null,
+  madeWith: true,
 };
 
 export const EMPTY_DETAILS: BookDetails = {
@@ -131,6 +134,7 @@ export function normalizeFormat(raw: unknown): FormatSettings {
     runningHeads: o.runningHeads !== false,
     paper: o.paper === "white" ? "white" : "cream",
     printer: o.printer === "ingram" ? "ingram" : "kdp",
+    madeWith: o.madeWith !== false,
     lastPageCount:
       Number.isFinite(Number(o.lastPageCount)) && Number(o.lastPageCount) > 0 ? Math.round(Number(o.lastPageCount)) : null,
   };

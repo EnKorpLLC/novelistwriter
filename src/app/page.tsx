@@ -478,6 +478,15 @@ export default async function HomePage() {
             <Link href="/challenges" className="hover:text-ink">
               Challenges
             </Link>
+            <Link href="/tools" className="hover:text-ink">
+              Free tools
+            </Link>
+            <Link href="/compare" className="hover:text-ink">
+              Compare
+            </Link>
+            <Link href="/your-data" className="hover:text-ink">
+              Your data
+            </Link>
             <Link href="/pricing" className="hover:text-ink">
               Pricing
             </Link>

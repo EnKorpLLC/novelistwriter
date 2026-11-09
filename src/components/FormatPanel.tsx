@@ -503,6 +503,15 @@ a{color:inherit}
                     <input type="checkbox" checked={format.autoAlsoBy} onChange={(e) => void updateFormat({ autoAlsoBy: e.target.checked })} />
                     Build &ldquo;Also by&rdquo; from my other books
                   </label>
+                  <label className="flex items-center gap-2" title={info && !info.pro ? "Always included on the Free plan" : undefined}>
+                    <input
+                      type="checkbox"
+                      checked={format.madeWith || Boolean(info && !info.pro)}
+                      disabled={Boolean(info && !info.pro)}
+                      onChange={(e) => void updateFormat({ madeWith: e.target.checked })}
+                    />
+                    &ldquo;Made with Novelist Writer&rdquo; credit{info && !info.pro ? " (always on for Free)" : ""}
+                  </label>
                 </div>
                 <h4 className="mt-4 text-xs uppercase tracking-wide text-muted">Front</h4>
                 <div className="mt-2">{matterList(front)}</div>

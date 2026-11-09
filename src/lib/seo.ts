@@ -14,6 +14,15 @@ export const STATIC_PAGES = [
   { path: "/pricing", priority: 0.9, changeFrequency: "weekly" as const },
   { path: "/books", priority: 0.8, changeFrequency: "daily" as const },
   { path: "/challenges", priority: 0.8, changeFrequency: "weekly" as const },
+  { path: "/tools", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/tools/spine-calculator", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/tools/novel-word-count", priority: 0.7, changeFrequency: "monthly" as const },
+  { path: "/tools/trim-sizes", priority: 0.7, changeFrequency: "monthly" as const },
+  { path: "/tools/writing-pace", priority: 0.7, changeFrequency: "monthly" as const },
+  { path: "/compare", priority: 0.7, changeFrequency: "monthly" as const },
+  ...["scrivener", "vellum", "atticus", "betabooks", "netgalley"].map((s) => ({ path: `/compare/${s}`, priority: 0.6, changeFrequency: "monthly" as const })),
+  ...["scrivener", "word", "vellum", "atticus"].map((s) => ({ path: `/switch/${s}`, priority: 0.6, changeFrequency: "monthly" as const })),
+  { path: "/your-data", priority: 0.4, changeFrequency: "yearly" as const },
   { path: "/contact", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/privacy", priority: 0.3, changeFrequency: "yearly" as const },
 ];
@@ -150,6 +159,18 @@ export function softwareJsonLd(): Json {
       description: p.lead,
       url: appUrl("/pricing"),
     })),
+  };
+}
+
+/** Title, description, canonical, and share image for Novelist Writer's own content pages. */
+export function contentMetadata(o: { title: string; description: string; path: string; kicker: string }) {
+  const image = `/og?${new URLSearchParams({ t: o.title, k: o.kicker, s: o.description.slice(0, 110) }).toString()}`;
+  return {
+    title: `${o.title} — Novelist Writer`,
+    description: o.description,
+    alternates: { canonical: o.path },
+    openGraph: { title: o.title, description: o.description, images: [image] },
+    twitter: { card: "summary_large_image" as const, title: o.title, description: o.description, images: [image] },
   };
 }
 

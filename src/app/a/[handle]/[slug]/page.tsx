@@ -14,6 +14,7 @@ import { TrustBadges } from "@/components/TrustBadges";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { LaunchTeamCard } from "@/components/LaunchTeamCard";
 import { thanksReaders } from "@/lib/author-thanks";
+import { PublicFooter } from "@/components/PublicFooter";
 import { OwnerBar, PreviewBar, SitePrivateBar } from "@/components/OwnerBar";
 import { SiteHolding } from "@/components/SiteHolding";
 import { JsonLd } from "@/components/JsonLd";
@@ -301,6 +302,7 @@ export default async function LaunchPage({
           )}
         </section>
       </main>
+      <PublicFooter credit="launch-page" />
     </div>
   );
 }

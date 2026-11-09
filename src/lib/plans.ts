@@ -43,7 +43,7 @@ export const PLANS: PlanCopy[] = [
       "Cover builder: design your front, spine, and back cover with your own art and our fonts, then save the ebook cover and a print-ready paperback cover PDF",
       "Cover tools: ebook cover checks, the exact paperback wrap size and spine width for KDP or IngramSpark, and a cover template for your designer",
       "Marketing images from your cover: a 3D book, plus ready-sized ads and posts for Facebook, Instagram, stories, Pinterest, and BookBub",
-      "Book details and auto pages: title page, copyright with your ISBN, contents, also-by with links, and a review request",
+      "Book details and auto pages: title page, copyright with your ISBN, contents, also-by with links, and a review request, with the “Made with Novelist Writer” credit optional",
       "Your own author site: photo, bio, links, themes, and every book in one place",
       "A launch page for every book that grows with it: cover reveal, preorders, then buy buttons on release day",
       "Your public writing record and badges, like “Written in Novelist Writer”, “No AI used on this book”, and writing challenge wins",
