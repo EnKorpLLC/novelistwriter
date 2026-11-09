@@ -120,6 +120,33 @@ export function ArcPanel({ projectId }: { projectId: string }) {
     void load();
   }, [load]);
 
+  const [thanked, setThanked] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    void fetch(`/api/projects/${projectId}/thanks`)
+      .then(async (r) => (r.ok ? setThanked(new Set(((await r.json()).thanked || []) as string[])) : null))
+      .catch(() => null);
+  }, [projectId]);
+
+  async function sendThanks(inviteId: string, email: string) {
+    setBusy(`thanks:${inviteId}`);
+    setNote(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/thanks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not send");
+      setThanked((s) => new Set(s).add(email.toLowerCase()));
+      setNote(json.emailed ? "Thanks sent by email and in the app." : json.inApp ? "Thanks sent in the app." : "Thanks saved. They'll see it when they create a reader account.");
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Could not send");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function act(action: string, extra: Record<string, unknown> = {}, ok?: string) {
     setBusy(`${action}:${String(extra.inviteId || "")}`);
     setNote(null);
@@ -559,6 +586,20 @@ export function ArcPanel({ projectId }: { projectId: string }) {
                               </button>
                             ) : (
                               <span className="text-muted">Reminded {shortDate(r.lastRemindedAt)}</span>
+                            ))}
+                          {(r.finishedAt || posted.length > 0) &&
+                            (thanked.has(r.email.toLowerCase()) ? (
+                              <span className="text-muted">Thanked</span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!!busy}
+                                className="text-accent hover:underline"
+                                title="A one-click thank-you, in the app and by email if they allow it"
+                                onClick={() => void sendThanks(r.id, r.email)}
+                              >
+                                {busy === `thanks:${r.id}` ? "Sending…" : "Send thanks"}
+                              </button>
                             ))}
                           {(r.reviewBody || r.mailingAddress) && (
                             <button

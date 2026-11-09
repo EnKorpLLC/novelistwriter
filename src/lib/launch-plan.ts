@@ -18,6 +18,11 @@ export type LaunchPlanState = {
   arcTarget: number;
   /** L6: a sample chapter on the launch page; off until the author turns it on */
   sample: { on: boolean; chapterId: string | null };
+  /** L2: when the "We're live" push went out (it only goes once) */
+  liveSentAt: string | null;
+  liveStats: { emails: number; followers: number; arcReaders: number } | null;
+  /** L3: opted in to the "Launching this week" spotlight */
+  spotlight: boolean;
 };
 
 export function normalizeLaunchPlan(raw: unknown): LaunchPlanState {
@@ -32,6 +37,16 @@ export function normalizeLaunchPlan(raw: unknown): LaunchPlanState {
     done,
     arcTarget: Number.isFinite(target) && target >= 1 && target <= 500 ? target : DEFAULT_ARC_TARGET,
     sample: { on: sample.on === true, chapterId: typeof sample.chapterId === "string" ? sample.chapterId : null },
+    liveSentAt: typeof o.liveSentAt === "string" ? o.liveSentAt : null,
+    liveStats:
+      o.liveStats && typeof o.liveStats === "object"
+        ? {
+            emails: Number((o.liveStats as Record<string, unknown>).emails) || 0,
+            followers: Number((o.liveStats as Record<string, unknown>).followers) || 0,
+            arcReaders: Number((o.liveStats as Record<string, unknown>).arcReaders) || 0,
+          }
+        : null,
+    spotlight: o.spotlight === true,
   };
 }
 

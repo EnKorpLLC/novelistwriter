@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { listPublishedBooks } from "@/lib/public-books";
 import { PublicHeader } from "@/components/PublicHeader";
+import { LaunchingThisWeek } from "@/components/LaunchingThisWeek";
+import { launchingThisWeek } from "@/lib/spotlight";
 
 export const metadata = {
   title: "Published books — Novelist Writer",
@@ -16,7 +18,8 @@ export default async function PublishedBooksPage({
   searchParams: Promise<{ genre?: string }>;
 }) {
   const { genre } = await searchParams;
-  const books = await listPublishedBooks(createServiceClient());
+  const admin = createServiceClient();
+  const [books, launching] = await Promise.all([listPublishedBooks(admin), launchingThisWeek(admin)]);
   const genres = [...new Set(books.map((b) => b.genre))].sort((a, b) => a.localeCompare(b));
   const shown = genre ? books.filter((b) => b.genre === genre) : books;
 
@@ -28,6 +31,12 @@ export default async function PublishedBooksPage({
         <p className="font-ui mt-1 text-sm text-muted">
           Finished novels from Novelist Writer authors.
         </p>
+
+        {!genre && launching.length > 0 && (
+          <div className="mt-8 border-b border-line pb-10">
+            <LaunchingThisWeek books={launching} />
+          </div>
+        )}
 
         {genres.length > 1 && (
           <div className="font-ui mt-6 flex flex-wrap gap-2 text-xs">

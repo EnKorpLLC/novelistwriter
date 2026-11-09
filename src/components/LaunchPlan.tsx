@@ -13,6 +13,8 @@ type Data = {
   state: LaunchPlanState;
   signals: LaunchSignals;
   chapters: { id: string; title: string }[];
+  releaseList: number;
+  emailsWaiting: number;
 };
 
 const STATUS: Record<StepStatus, { label: string; cls: string }> = {
@@ -33,7 +35,55 @@ export function LaunchPlan({ projectId }: { projectId: string }) {
   const [note, setNote] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [going, setGoing] = useState(false);
+  const [waiting, setWaiting] = useState(0);
+  // Today's sending budget is used up; the rest goes out in tomorrow's batch
+  const [paused, setPaused] = useState(false);
   const today = useMemo(() => clientLocalDay(), []);
+
+  // Keep sending queued launch emails while this tab is open, within the day's Gmail budget
+  useEffect(() => {
+    if (waiting <= 0 || paused) return;
+    const t = setTimeout(async () => {
+      const res = await fetch("/api/launch/queue", { method: "POST" }).catch(() => null);
+      const json = res && res.ok ? ((await res.json()) as { sent: number; waiting: number }) : null;
+      if (!json) return setPaused(true);
+      setWaiting(json.waiting);
+      if (json.sent === 0) setPaused(true);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [waiting, paused]);
+
+  async function goLive() {
+    if (!data) return;
+    if (
+      !window.confirm(
+        `Announce that ${data.title} is out? This marks it "Out now", emails the ${data.releaseList} reader${data.releaseList === 1 ? "" : "s"} waiting for it and followers who allow email, and asks your ARC readers to post reviews. It can only be sent once.`
+      )
+    )
+      return;
+    setGoing(true);
+    setNote(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/launch-live`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not send");
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              signals: { ...d.signals, published: true },
+              state: { ...d.state, liveSentAt: new Date().toISOString(), liveStats: { emails: json.emails, followers: json.followers, arcReaders: json.arcReaders } },
+            }
+          : d
+      );
+      setWaiting(json.waiting);
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Could not send");
+    } finally {
+      setGoing(false);
+    }
+  }
 
   useEffect(() => {
     void fetch(`/api/projects/${projectId}/launch-plan`)
@@ -55,12 +105,65 @@ export function LaunchPlan({ projectId }: { projectId: string }) {
     setData((d) => (d ? { ...d, state: json.state } : d));
   }
 
+  useEffect(() => {
+    if (data?.emailsWaiting) setWaiting(data.emailsWaiting);
+  }, [data?.emailsWaiting]);
+
   if (!data) return note ? <p className="text-sm text-danger">{note}</p> : null;
 
   const head = (
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <h3 className="font-display text-lg">Launch plan</h3>
       {!data.studio && <span className="text-xs text-muted">Studio</span>}
+    </div>
+  );
+
+  const live = (
+    <div className="mt-4 border border-line bg-paper-deep/30 p-3 text-sm">
+      <p className="font-display text-base">Launch day</p>
+      {data.state.liveSentAt ? (
+        <>
+          <p className="mt-1 text-ink">
+            Announced {new Date(data.state.liveSentAt).toLocaleDateString()}: {data.state.liveStats?.emails ?? 0} emails,{" "}
+            {data.state.liveStats?.followers ?? 0} followers notified, {data.state.liveStats?.arcReaders ?? 0} ARC readers asked for reviews.
+          </p>
+          {waiting > 0 && (
+            <p className="mt-1 text-xs text-muted">
+              {paused
+                ? `${waiting} emails wait for tomorrow's batch, to stay under Gmail's daily limit.`
+                : `Sending… ${waiting} to go. Keep this tab open to send faster; anything left goes out tomorrow.`}
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="mt-1 text-xs text-muted">
+            {data.releaseList} reader{data.releaseList === 1 ? "" : "s"} asked to hear when it&apos;s out. One click marks the book
+            &ldquo;Out now&rdquo;, emails them and followers who allow email, and asks every ARC reader to post their review today.
+          </p>
+          <button
+            type="button"
+            disabled={!data.studio || going}
+            onClick={() => void goLive()}
+            className="mt-2 bg-accent px-4 py-2 text-sm text-paper disabled:opacity-50"
+          >
+            {going ? "Sending…" : "We're live: announce it"}
+          </button>
+        </>
+      )}
+      <label className="mt-3 flex items-start gap-2 text-xs text-muted">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={data.state.spotlight}
+          disabled={!data.studio}
+          onChange={(e) => void save({ spotlight: e.target.checked })}
+        />
+        <span>
+          Feature this book in &ldquo;Launching this week&rdquo; on the reader catalog and home page during its release week
+          (your launch page needs to be public).
+        </span>
+      </label>
     </div>
   );
 
@@ -165,6 +268,8 @@ export function LaunchPlan({ projectId }: { projectId: string }) {
           />
         </label>
       </div>
+
+      {live}
 
       <ol className="mt-5 space-y-2">
         {timeline.map((s) => {

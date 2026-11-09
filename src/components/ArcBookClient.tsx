@@ -22,6 +22,7 @@ type ArcData = {
   trust?: TrustBadgeData;
   record?: RecordSummary | null;
   deadline: string | null;
+  thanksReaders?: boolean;
   windowOpen: boolean;
   deadlinePassed: boolean;
   loggedIn: boolean;
@@ -171,6 +172,22 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
       await load();
     } catch (err) {
       setNote(err instanceof Error ? err.message : "Could not send request");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function stepAway() {
+    const reason = window.prompt("Step away from this ARC? Your copy closes and the author is told. Want to share why? (optional)", "");
+    if (reason === null) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      await post({ action: "stepAway", reason });
+      setNote("You've stepped away. Thanks for letting the author know.");
+      await load();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Could not step away");
     } finally {
       setBusy(false);
     }
@@ -403,6 +420,11 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
             </p>
           )}
           <TrustBadges {...(data.trust || {})} className="mt-2" />
+          {data.thanksReaders && (
+            <p className="font-ui mt-2 inline-block border border-line px-2 py-0.5 text-xs text-muted" title="This author regularly thanks their readers">
+              Thanks readers
+            </p>
+          )}
           <RecordSummaryLine record={data.record} className="mt-2" />
           <AuthorLinks links={data.authorLinks} className="mt-2" />
           {data.loggedIn && data.access !== "author" && (
@@ -496,6 +518,38 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
 
       {data.access === "active" && (
         <>
+          <details className="font-ui mt-8 border border-line p-4 text-sm">
+            <summary className="cursor-pointer text-ink">
+              Reading this ARC{due ? ` · read by ${due}` : ""} · download for your e-reader
+            </summary>
+            <div className="mt-3 space-y-3 text-muted">
+              <p>
+                {due ? `Please finish by ${due}, then leave an honest review. ` : "Read at your own pace, then leave an honest review. "}
+                The author sees how far you&apos;ve read, never what you highlight in private.
+              </p>
+              <div>
+                <a href={`/api/arc/epub/${projectId}`} className="inline-block bg-accent px-4 py-2 text-paper">
+                  Download for your e-reader (EPUB)
+                </a>
+                <p className="mt-1 text-xs">Your copy is marked with your name. Please don&apos;t share it.</p>
+              </div>
+              <div className="text-xs">
+                <p className="text-ink">Send it to your Kindle</p>
+                <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+                  <li>Download the EPUB above.</li>
+                  <li>Go to amazon.com/sendtokindle and drag the file in, or email it to your Kindle address (find it under Devices in your Amazon account).</li>
+                  <li>It shows up in your Kindle library in a few minutes. Kobo, Apple Books, and Google Play Books open the EPUB directly.</li>
+                </ol>
+              </div>
+              <div className="border-t border-line pt-3 text-xs">
+                <p className="text-ink">Can&apos;t finish? That&apos;s okay.</p>
+                <p className="mt-1">Step away and let the author know, instead of going quiet. A short reason helps them, but it&apos;s optional.</p>
+                <button type="button" className="mt-2 text-accent underline" disabled={busy} onClick={() => void stepAway()}>
+                  Step away from this ARC
+                </button>
+              </div>
+            </div>
+          </details>
           {chapters.length > 0 && (
             <label className="font-ui mt-8 block text-[10px] uppercase tracking-wide text-muted">
               Chapter

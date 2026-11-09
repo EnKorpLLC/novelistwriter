@@ -6,6 +6,7 @@ import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { emailRedAlarms } from "@/lib/money";
 import { refreshActiveChallenges } from "@/lib/challenges";
+import { processEmailQueue } from "@/lib/email-queue";
 
 export const maxDuration = 60;
 
@@ -40,7 +41,9 @@ export async function GET(req: Request) {
   // Rides along on this daily job (Hobby allows few crons): email the owner if a free plan is nearly full,
   // and bring challenge leaderboards up to date
   await emailRedAlarms(admin);
-  await refreshActiveChallenges(admin, 200).catch(() => 0);
+  // Launch emails that didn't fit in yesterday's Gmail budget, then challenge leaderboards
+  await processEmailQueue(admin, { timeBudgetMs: 25_000 }).catch(() => null);
+  await refreshActiveChallenges(admin, 120).catch(() => 0);
   const now = Date.now();
   const { data: rows, error } = await admin
     .from("credit_balances")

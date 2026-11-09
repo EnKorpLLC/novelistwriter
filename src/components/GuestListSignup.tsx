@@ -13,10 +13,13 @@ export function GuestListSignup({
   authorUserId,
   authorName,
   heading,
+  releaseProjectId,
 }: {
   authorUserId: string;
   authorName: string;
   heading?: string;
+  /** Also email this reader the day this book comes out */
+  releaseProjectId?: string;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -33,7 +36,7 @@ export function GuestListSignup({
       const res = await fetch("/api/audience/guest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authorUserId, email, name, company }),
+        body: JSON.stringify({ authorUserId, email, name, company, releaseProjectId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not sign up");
@@ -50,7 +53,9 @@ export function GuestListSignup({
     <form onSubmit={(e) => void submit(e)} className="font-ui border border-line p-4">
       <p className="font-display text-lg">{heading || `Get updates from ${authorName}`}</p>
       <p className="mt-1 text-xs text-muted">
-        New books, advance copies, and release news. Unsubscribe anytime.
+        {releaseProjectId
+          ? "One email the day it's out, plus occasional news from the author. Unsubscribe anytime."
+          : "New books, advance copies, and release news. Unsubscribe anytime."}
       </p>
       {!done && (
         <div className="mt-3 flex flex-wrap gap-2">

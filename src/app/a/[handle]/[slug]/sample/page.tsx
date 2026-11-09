@@ -119,7 +119,7 @@ ${body.italic ? `@font-face { font-family: "NWS Body"; src: url("${body.italic}"
           <h2 className="font-display text-2xl">Want to keep reading?</h2>
           <div className="mt-4 flex flex-wrap gap-3">
             {links.map((l) => (
-              <a key={`${l.label}-${l.url}`} href={l.url} target="_blank" rel="noopener noreferrer" className="bg-accent px-4 py-2 text-sm text-paper">
+              <a key={`${l.label}-${l.url}`} href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`} target="_blank" rel="noopener noreferrer" className="bg-accent px-4 py-2 text-sm text-paper">
                 {book.published ? "Buy on" : "Preorder on"} {l.label}
               </a>
             ))}

@@ -3,8 +3,22 @@ import { JOB_META } from "@/lib/ai/jobs";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { JsonLd } from "@/components/JsonLd";
 import { organizationJsonLd, softwareJsonLd, websiteJsonLd } from "@/lib/seo";
+import { LaunchingThisWeek } from "@/components/LaunchingThisWeek";
+import { launchingThisWeek } from "@/lib/spotlight";
+import { createServiceClient } from "@/lib/supabase/admin";
 
 export const metadata = { alternates: { canonical: "/" } };
+// Rebuilt hourly so "Launching this week" stays current
+export const revalidate = 3600;
+
+async function spotlight() {
+  try {
+    return await launchingThisWeek(createServiceClient(), 4);
+  } catch {
+    // No database access while building locally
+    return [];
+  }
+}
 
 const AI_ACTIONS = Object.values(JOB_META);
 
@@ -85,7 +99,8 @@ const FORMAT_POINTS = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const launching = await spotlight();
   return (
     <div className="min-h-screen">
       <header className="app-chrome font-ui flex items-center justify-between px-6 py-5 md:px-10">
@@ -169,6 +184,12 @@ export default function HomePage() {
             aria-hidden
           />
         </section>
+
+        {launching.length > 0 && (
+          <section className="mx-auto max-w-5xl px-6 pt-16 md:px-10">
+            <LaunchingThisWeek books={launching} />
+          </section>
+        )}
 
         <section id="proof" className="mx-auto max-w-5xl scroll-mt-24 px-6 py-20 md:px-10">
           <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Proof of authorship</p>
@@ -283,9 +304,7 @@ export default function HomePage() {
             <p className="mt-3 max-w-2xl text-muted">
               On Pro, every book gets a page that grows with it: cover reveal and preorders, then buy
               buttons on release day, with beta and ARC calls on Studio. Your author site gathers every
-              book, your bio, and your links at one short address you can put anywhere. Studio adds a
-              launch plan that counts down from cover reveal to reviews, with every step one click away,
-              and a sample chapter right on the page.
+              book, your bio, and your links at one short address you can put anywhere.
             </p>
             <ul className="mt-10 grid gap-8 md:grid-cols-3">
               {[
@@ -309,6 +328,30 @@ export default function HomePage() {
               ))}
             </ul>
           </div>
+        </section>
+
+        <section id="launch-engine" className="mx-auto max-w-5xl scroll-mt-24 px-6 py-20 md:px-10">
+          <p className="font-ui text-[10px] uppercase tracking-wide text-accent">Studio</p>
+          <h2 className="font-display mt-2 text-3xl text-ink">Launch without crickets</h2>
+          <p className="mt-3 max-w-2xl text-muted">
+            Launching a book is the scariest part. Studio walks you through it, gets reviews in on day one, and sends
+            Novelist Writer&apos;s readers to your launch.
+          </p>
+          <ul className="mt-10 grid gap-8 md:grid-cols-3">
+            {[
+              { t: "A plan that counts down", d: "From cover reveal to reviews, every step has a date, a one-click action, and a post you can edit. A readiness score shows what's left." },
+              { t: "Launch day in one click", d: "Readers who asked to hear get an email, followers are told, and every ARC reader is asked to post their review today." },
+              { t: "Readers come to you", d: "Your book shows in “Launching this week”, readers can try a sample chapter, and a launch team shares, reviews, and asks their library." },
+              { t: "Watch it happen", d: "A launch week dashboard shows visitors, buy clicks by store, new signups, and reviews as they arrive." },
+              { t: "Readers feel the thanks", d: "ARC readers get a copy for any e-reader, and you thank them in one click. Authors who do earn a “Thanks readers” label." },
+              { t: "Gentle on your inbox", d: "Launch email goes out in batches that stay inside Gmail's daily limit, with an unsubscribe link on every list email." },
+            ].map((item) => (
+              <li key={item.t} className="border-t border-line pt-4">
+                <h3 className="font-display text-xl">{item.t}</h3>
+                <p className="mt-2 text-sm text-muted">{item.d}</p>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section id="challenges" className="border-t border-line px-6 py-20 md:px-10">

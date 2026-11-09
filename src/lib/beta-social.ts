@@ -42,7 +42,12 @@ export type NotificationType =
   | "author_new_arc"
   | "arc_invite"
   | "arc_deadline"
-  | "studio_pass";
+  | "studio_pass"
+  | "book_released"
+  | "arc_review_push"
+  | "launch_team"
+  | "author_thanks"
+  | "reader_milestone";
 
 export async function createNotification(
   admin: SupabaseClient,
@@ -66,7 +71,7 @@ export async function createNotification(
   });
 }
 
-export type ReaderBadgeId = "finisher" | "on_time" | "feedback" | "reviewer" | "top_rated";
+export type ReaderBadgeId = "finisher" | "on_time" | "feedback" | "reviewer" | "top_rated" | "launch_day" | "launch_team";
 
 export type ReaderBadge = { id: ReaderBadgeId; label: string; detail: string };
 
@@ -78,6 +83,10 @@ export type ReaderBadgeStats = {
   reviewsPosted: number;
   avgRating: number | null;
   ratingCount: number;
+  /** Reviews posted within 7 days of a book's release */
+  launchWeekReviews: number;
+  /** Launch teams joined where the reader did at least one task */
+  launchTeams: number;
 };
 
 /** What each badge takes. Shared with the reader dashboard's progress hints. */
@@ -129,6 +138,12 @@ export function readerBadgesFromStats(s: ReaderBadgeStats): ReaderBadge[] {
       detail: `${s.avgRating.toFixed(1)} average from ${plural(s.ratingCount, "author rating")}`,
     });
   }
+  if (s.launchWeekReviews >= 1) {
+    out.push({ id: "launch_day", label: "Launch day", detail: `${plural(s.launchWeekReviews, "review")} posted in a book's first week` });
+  }
+  if (s.launchTeams >= 1) {
+    out.push({ id: "launch_team", label: "Launch team", detail: `Helped launch ${plural(s.launchTeams, "book")}` });
+  }
   return out;
 }
 
@@ -140,7 +155,11 @@ const EMPTY_STATS: ReaderBadgeStats = {
   reviewsPosted: 0,
   avgRating: null,
   ratingCount: 0,
+  launchWeekReviews: 0,
+  launchTeams: 0,
 };
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const THANKS_EMOJIS = ["thanks", "heart"];
 
@@ -207,16 +226,34 @@ export async function readerBadgeStatsFor(
     if (key && row.finished_at) get(key).finishedProjects.add(`beta:${row.project_id}`);
   }
 
-  const arcProjectIds = [...new Set((arcRows || []).filter((r) => r.finished_at).map((r) => r.project_id))];
+  const arcProjectIds = [
+    ...new Set(
+      (arcRows || [])
+        .filter((r) => r.finished_at || Object.keys((r.review_posts as Record<string, string>) || {}).length)
+        .map((r) => r.project_id)
+    ),
+  ];
   const { data: arcProjects } = arcProjectIds.length
-    ? await admin.from("projects").select("id, arc_deadline").in("id", arcProjectIds)
-    : { data: [] as { id: string; arc_deadline: string | null }[] };
+    ? await admin.from("projects").select("id, arc_deadline, release_date, published_at").in("id", arcProjectIds)
+    : { data: [] as { id: string; arc_deadline: string | null; release_date: string | null; published_at: string | null }[] };
   const deadlineById = new Map((arcProjects || []).map((p) => [p.id, p.arc_deadline as string | null]));
+  const releaseById = new Map(
+    (arcProjects || []).map((p) => [p.id, p.release_date ? Date.parse(`${p.release_date}T00:00:00Z`) : p.published_at ? Date.parse(p.published_at) : null])
+  );
   for (const row of arcRows || []) {
     const key = ownerOf(row.reader_user_id, row.email);
     if (!key) continue;
     const s = get(key);
-    s.reviewsPosted += Object.keys((row.review_posts as Record<string, string>) || {}).length;
+    const posts = (row.review_posts as Record<string, string>) || {};
+    s.reviewsPosted += Object.keys(posts).length;
+    const release = releaseById.get(row.project_id);
+    if (release != null) {
+      const inLaunchWeek = Object.values(posts).some((at) => {
+        const t = Date.parse(at);
+        return Number.isFinite(t) && t >= release - 24 * 60 * 60 * 1000 && t <= release + WEEK_MS;
+      });
+      if (inLaunchWeek) s.launchWeekReviews += 1;
+    }
     if (!row.finished_at) continue;
     s.finishedProjects.add(`arc:${row.project_id}`);
     const deadline = deadlineById.get(row.project_id);
@@ -259,6 +296,14 @@ export async function readerBadgeStatsFor(
       if (!c || authorOf.get(c.project_id) !== r.user_id) continue;
       const key = ownerOf(c.reader_user_id);
       if (key) get(key).thanks += 1;
+    }
+  }
+
+  if (userIds.length) {
+    const { data: teams } = await admin.from("launch_team").select("user_id, tasks").in("user_id", userIds);
+    for (const t of teams || []) {
+      const key = ownerOf(t.user_id);
+      if (key && t.tasks && Object.keys(t.tasks).length > 0) get(key).launchTeams += 1;
     }
   }
 

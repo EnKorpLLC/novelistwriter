@@ -13,6 +13,8 @@ const PRIVATE = [
   "/auth",
   "/api/",
   "/subscribe",
+  // Buy-button redirects: bots following them would inflate authors' click counts
+  "/go/",
 ];
 
 /** AI search tools that quote pages with a link back: welcome everywhere public. */

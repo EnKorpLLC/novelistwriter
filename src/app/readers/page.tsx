@@ -15,8 +15,8 @@ const FEATURES = [
     d: "Browse books open for beta readers and advance reader copies (ARCs) by genre. Read the blurb or a sample chapter, then apply or request a copy.",
   },
   {
-    t: "Read right in your browser",
-    d: "No files to download. Your place is saved, so you pick up where you left off on any device.",
+    t: "Read in your browser or on your e-reader",
+    d: "Your place is saved on every device. Advance copies can also be downloaded for Kindle, Kobo, or Apple Books, marked with your name, with Send to Kindle steps built in.",
   },
   {
     t: "Comment on the exact sentence",
@@ -48,7 +48,15 @@ const FEATURES = [
   },
   {
     t: "Earn reader badges",
-    d: "Finisher, On time, Thoughtful feedback, Reviewer, and Top rated. Authors see your badges when you apply, so a good track record gets you picked.",
+    d: "Finisher, On time, Thoughtful feedback, Reviewer, Top rated, Launch day, and Launch team. Authors see your badges when you apply, so a good track record gets you picked.",
+  },
+  {
+    t: "Join a launch team",
+    d: "Help an author you love launch: share on release day, post a review, and ask your library to stock the book. Authors can thank the whole team, and some thank every reader. Look for “Thanks readers”.",
+  },
+  {
+    t: "Step away gracefully",
+    d: "Can't finish an advance copy? Step away with an optional reason instead of going quiet. The author hears, and nobody's left wondering.",
   },
   {
     t: "A public reader profile, if you want one",

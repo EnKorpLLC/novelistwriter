@@ -17,6 +17,8 @@ export async function upsertAuthorSubscriber(
     email: string;
     displayName?: string | null;
     source: SubscriberSource;
+    /** "Notify me when this book is out" */
+    releaseProjectId?: string | null;
   }
 ): Promise<void> {
   const email = opts.email.trim().toLowerCase();
@@ -41,8 +43,10 @@ export async function upsertAuthorSubscriber(
         // Signed-in opt-ins and book joins are already verified accounts
         confirmed_at: now,
       });
+      if (opts.releaseProjectId) await addReleaseAlert(admin, opts.authorUserId, email, opts.releaseProjectId);
       return;
     }
+    if (opts.releaseProjectId) await addReleaseAlert(admin, opts.authorUserId, email, opts.releaseProjectId);
 
     const sources: string[] = Array.isArray(existing.sources) ? existing.sources : [];
     const patch: Record<string, unknown> = {};
@@ -61,6 +65,24 @@ export async function upsertAuthorSubscriber(
     await admin.from("author_subscribers").update(patch).eq("id", existing.id);
   } catch {
     /* list is best-effort until migration_platform_admin.sql is applied */
+  }
+}
+
+/** Remember that this subscriber wants an email the day a specific book comes out. Best effort before the launch migration. */
+export async function addReleaseAlert(admin: SupabaseClient, authorUserId: string, email: string, projectId: string) {
+  try {
+    const { data } = await admin
+      .from("author_subscribers")
+      .select("id, release_project_ids")
+      .eq("author_user_id", authorUserId)
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
+    if (!data) return;
+    const ids: string[] = Array.isArray(data.release_project_ids) ? data.release_project_ids : [];
+    if (ids.includes(projectId)) return;
+    await admin.from("author_subscribers").update({ release_project_ids: [...ids, projectId] }).eq("id", data.id);
+  } catch {
+    /* column missing before migration_launch_engine.sql */
   }
 }
 

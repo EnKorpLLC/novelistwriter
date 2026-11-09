@@ -12,6 +12,8 @@ import { readerTrustForBooks } from "@/lib/trust-badges";
 import { inReaderGrace, pauseForLostStudio } from "@/lib/studio-access";
 import { recordReadingDay, rewardReaderJoin } from "@/lib/pass-rewards";
 import { recordBookDay } from "@/lib/reader-insights";
+import { createNotification } from "@/lib/beta-social";
+import { thanksReaders } from "@/lib/author-thanks";
 import {
   isArcDeadlinePassed,
   isArcWindowOpen,
@@ -116,6 +118,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     authorName: author?.display_name || "Author",
     authorLinks: publicLinkList(normalizePublicLinks(author?.public_links)),
     ...((await readerTrustForBooks(admin, [{ id: project.id, user_id: project.user_id }])).get(project.id) || {}),
+    thanksReaders: await thanksReaders(admin, project.user_id),
     deadline: project.arc_deadline,
     windowOpen,
     deadlinePassed: isArcDeadlinePassed(project.arc_deadline),
@@ -204,7 +207,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = (await req.json()) as {
-    action?: "request" | "progress" | "finish" | "markPosted" | "saveAddress";
+    action?: "request" | "progress" | "finish" | "markPosted" | "saveAddress" | "stepAway";
+    reason?: string;
     displayName?: string;
     chapterId?: string;
     percent?: number;
@@ -253,6 +257,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
     return NextResponse.json({ error: "No ARC access" }, { status: 403 });
   }
 
+  const readerName = invite.display_name || String(invite.email || "").split("@")[0] || "A reader";
+  // The author hears about finishes and reviews, with a nudge to say thanks
+  const tellAuthor = (title: string, body: string | null = null) =>
+    createNotification(admin, {
+      userId: project.user_id,
+      type: "reader_milestone",
+      title,
+      body,
+      href: `/project/${projectId}?tab=arc`,
+      meta: { projectId, inviteId: invite.id },
+    });
+
   if (body.action === "markPosted") {
     const links = normalizeReviewLinks(project.arc_review_links);
     const site = String(body.site || "");
@@ -260,10 +276,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
       return NextResponse.json({ error: "Unknown review site" }, { status: 400 });
     }
     const posts = { ...(invite.review_posts || {}) };
+    const firstPost = Object.keys(posts).length === 0;
     if (body.posted) posts[site] = new Date().toISOString();
     else delete posts[site];
     await admin.from("arc_invites").update({ review_posts: posts }).eq("id", invite.id);
+    if (body.posted && firstPost) {
+      const where = links.find((l) => reviewSiteKey(l) === site)?.label || "a review site";
+      await tellAuthor(`${readerName} posted a review on ${where}`, "Send a quick thank-you from the ARC tab.");
+    }
     return NextResponse.json({ ok: true, reviewPosts: posts });
+  }
+
+  if (body.action === "stepAway") {
+    // A polite exit instead of going quiet: the author hears why, and the copy closes
+    const reason = String(body.reason || "").trim().slice(0, 500);
+    await admin.from("arc_invites").update({ status: "revoked" }).eq("id", invite.id);
+    await tellAuthor(`${readerName} stepped away from the ARC`, reason || "No reason given. Thank them for trying.");
+    return NextResponse.json({ ok: true, access: "removed" });
   }
 
   if (body.action === "saveAddress") {
@@ -292,6 +321,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
       .from("arc_invites")
       .update({ finished_at: invite.finished_at || now, review_body: review })
       .eq("id", invite.id);
+    if (!invite.finished_at) await tellAuthor(`${readerName} finished your ARC`, "Send a quick thank-you from the ARC tab.");
     return NextResponse.json({ ok: true, finishedAt: invite.finished_at || now, reviewBody: review });
   }
 

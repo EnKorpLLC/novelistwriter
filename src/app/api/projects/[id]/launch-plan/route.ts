@@ -57,7 +57,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     published: Boolean(project.published),
   };
   const handle = profile?.handle as string | null;
+  const [{ count: releaseList }, { count: queued }] = await Promise.all([
+    admin
+      .from("author_subscribers")
+      .select("id", { count: "exact", head: true })
+      .eq("author_user_id", user.id)
+      .is("unsubscribed_at", null)
+      .not("confirmed_at", "is", null)
+      .contains("release_project_ids", [id]),
+    admin.from("email_queue").select("id", { count: "exact", head: true }).is("sent_at", null),
+  ]);
   return NextResponse.json({
+    releaseList: releaseList || 0,
+    emailsWaiting: queued || 0,
     studio,
     migrationNeeded: !("launch_plan" in project),
     title: project.title || "Untitled",
@@ -82,6 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     done?: boolean;
     arcTarget?: number;
     sample?: { on?: boolean; chapterId?: string | null };
+    spotlight?: boolean;
   };
   const state = planState(auth.project.launch_plan);
   if (body.step && LAUNCH_STEPS.some((s) => s.id === body.step)) {
@@ -92,6 +105,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const t = Math.round(Number(body.arcTarget));
     if (Number.isFinite(t) && t >= 1 && t <= 500) state.arcTarget = t;
   }
+  if (typeof body.spotlight === "boolean") state.spotlight = body.spotlight;
   if (body.sample) {
     state.sample = {
       on: body.sample.on === true,

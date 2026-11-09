@@ -9,6 +9,8 @@ type SendOpts = {
   text: string;
   html?: string;
   replyTo?: string | null;
+  /** One-click unsubscribe URL, shown by Gmail and other mail apps next to the sender */
+  listUnsubscribe?: string | null;
 };
 
 export type SendResult = { ok: true } | { ok: false; error: string };
@@ -26,6 +28,9 @@ function getTransport() {
     host: process.env.SMTP_HOST || "smtp.gmail.com",
     port,
     secure: port === 465,
+    // One reused connection makes batches much faster than reconnecting per email
+    pool: true,
+    maxConnections: 1,
     auth: {
       user: process.env.SMTP_USER,
       // Google shows app passwords with spaces; SMTP wants the 16 characters only
@@ -49,6 +54,9 @@ export async function sendEmail(opts: SendOpts): Promise<SendResult> {
       text: opts.text,
       html: opts.html,
       replyTo: opts.replyTo || undefined,
+      ...(opts.listUnsubscribe
+        ? { list: { unsubscribe: { url: opts.listUnsubscribe, comment: "Unsubscribe" } }, headers: { "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } }
+        : {}),
     });
     await logSend(true);
     return { ok: true };

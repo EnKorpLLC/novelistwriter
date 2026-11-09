@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { userHasStudio } from "@/lib/credits";
-import { upsertAuthorSubscriber } from "@/lib/audience";
+import { addReleaseAlert, upsertAuthorSubscriber } from "@/lib/audience";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 
@@ -16,6 +16,7 @@ export async function POST(req: Request) {
     email?: string;
     name?: string;
     company?: string;
+    releaseProjectId?: string;
   };
   if (body.company) return NextResponse.json({ ok: true, status: "check_email" });
 
@@ -30,6 +31,12 @@ export async function POST(req: Request) {
   if (!(await userHasStudio(authorUserId))) {
     return NextResponse.json({ error: "This author isn't collecting an email list right now." }, { status: 400 });
   }
+  // Only this author's own books can be followed for a release email
+  let releaseProjectId: string | null = null;
+  if (body.releaseProjectId) {
+    const { data: p } = await admin.from("projects").select("id").eq("id", String(body.releaseProjectId)).eq("user_id", authorUserId).maybeSingle();
+    releaseProjectId = p?.id || null;
+  }
 
   // A signed-in reader joining with their own email needs no confirmation
   const supabase = await createClient();
@@ -37,7 +44,7 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (user?.email && user.email.trim().toLowerCase() === email) {
-    await upsertAuthorSubscriber(admin, { authorUserId, email, displayName: name, source: "opt_in" });
+    await upsertAuthorSubscriber(admin, { authorUserId, email, displayName: name, source: "opt_in", releaseProjectId });
     return NextResponse.json({ ok: true, status: "subscribed" });
   }
 
@@ -54,7 +61,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: hint }, { status: 500 });
   }
   if (existing?.confirmed_at && !existing.unsubscribed_at) {
-    return NextResponse.json({ ok: true, status: "already" });
+    if (releaseProjectId) await addReleaseAlert(admin, authorUserId, email, releaseProjectId);
+    return NextResponse.json({ ok: true, status: releaseProjectId ? "subscribed" : "already" });
   }
   if (existing?.confirm_sent_at && Date.now() - Date.parse(existing.confirm_sent_at) < RESEND_AFTER_MS) {
     return NextResponse.json({ ok: true, status: "check_email" });
@@ -77,6 +85,8 @@ export async function POST(req: Request) {
         confirm_sent_at: now,
       });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Saved now and honored once they confirm
+  if (releaseProjectId) await addReleaseAlert(admin, authorUserId, email, releaseProjectId);
 
   const { data: author } = await admin
     .from("profiles")

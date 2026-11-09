@@ -12,6 +12,8 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { AuthorLinks } from "@/components/AuthorConnect";
 import { TrustBadges } from "@/components/TrustBadges";
 import { GuestListSignup } from "@/components/GuestListSignup";
+import { LaunchTeamCard } from "@/components/LaunchTeamCard";
+import { thanksReaders } from "@/lib/author-thanks";
 import { OwnerBar, PreviewBar, SitePrivateBar } from "@/components/OwnerBar";
 import { SiteHolding } from "@/components/SiteHolding";
 import { JsonLd } from "@/components/JsonLd";
@@ -83,10 +85,11 @@ export default async function LaunchPage({
       />
     );
   }
-  const [trust, studio, { data: recordFlag }] = await Promise.all([
+  const [trust, studio, { data: recordFlag }, thanks] = await Promise.all([
     trustBadgesForBook(admin, author.userId, book.id),
     userHasStudio(author.userId),
     admin.from("projects").select("*").eq("id", book.id).maybeSingle(),
+    thanksReaders(admin, author.userId),
   ]);
   const path = bookPath(author.handle, book.slug);
   const recordPublic = Boolean(recordFlag?.record_public);
@@ -200,6 +203,11 @@ export default async function LaunchPage({
               </div>
             )}
             <TrustBadges {...trust} className="mt-3" />
+            {thanks && (
+              <p className="font-ui mt-2 inline-block border border-line px-2 py-0.5 text-xs text-muted" title="This author regularly thanks their beta, ARC, and launch team readers">
+                Thanks readers
+              </p>
+            )}
 
             {book.tropes.length > 0 && (
               <ul className="font-ui mt-4 flex flex-wrap gap-2 text-xs">
@@ -221,7 +229,7 @@ export default async function LaunchPage({
                 book.buyLinks.map((l) => (
                   <a
                     key={`${l.label}-${l.url}`}
-                    href={l.url}
+                    href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
@@ -233,7 +241,7 @@ export default async function LaunchPage({
                 book.preorderLinks.map((l) => (
                   <a
                     key={`${l.label}-${l.url}`}
-                    href={l.url}
+                    href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
@@ -281,11 +289,15 @@ export default async function LaunchPage({
             </div>
           </div>
           {studio && (
-            <GuestListSignup
-              authorUserId={author.userId}
-              authorName={author.name}
-              heading={book.published ? `More from ${author.name}` : `Get notified when ${book.title} is out`}
-            />
+            <div className="space-y-4">
+              <GuestListSignup
+                authorUserId={author.userId}
+                authorName={author.name}
+                heading={book.published ? `More from ${author.name}` : `Get notified when ${book.title} is out`}
+                releaseProjectId={book.published ? undefined : book.id}
+              />
+              <LaunchTeamCard projectId={book.id} title={book.title} authorName={author.name} loggedIn={Boolean(user)} path={path} />
+            </div>
           )}
         </section>
       </main>

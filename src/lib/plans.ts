@@ -69,7 +69,11 @@ export const PLANS: PlanCopy[] = [
       "Email signups on your author site and launch pages, audience lists across all your books, CSV export",
       "Beta and ARC calls on your launch pages, and your books listed in the reader catalog",
       "Launch plan: a countdown from cover reveal to reviews, with one-click steps, countdown images, ready-to-edit posts, and a readiness score",
+      "Launch day in one click: readers who asked to hear about the book get an email, followers are told, and every ARC reader is asked to post their review",
+      "“Launching this week” spotlight on the reader catalog and home page, plus a launch team of readers who share, review, and ask their library",
+      "Launch week dashboard: visitors, buy clicks by store, new list signups, and reviews as they come in",
       "A sample chapter on your launch page, styled like your book, right before the buy buttons",
+      "ARC readers download a copy marked with their name for Kindle or any e-reader, and you thank readers in one click",
       "An ebook for each store: Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble builds whose review and “Also by” links point only to that store",
       "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again",
       "Series tools",
@@ -105,6 +109,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "What happens when Pro ends?",
     a: "Your author site and launch pages stay up for 7 more days, then visitors see a simple holding page until you're back. Nothing is deleted. On Free, your most recently edited book (plus any you paid $9 to unlock) stays open and the others can still be exported.",
+  },
+  {
+    q: "What does Studio do for my launch?",
+    a: "Set a release date and Studio builds your launch plan: cover reveal, advance copies, preorders, countdown posts, and launch day, each with a one-click step. On launch day one button marks the book out now, emails readers who asked to hear, notifies your followers, and asks ARC readers to post reviews. Your book appears in “Launching this week”, a launch team of readers helps spread the word, and a launch week dashboard shows visitors, buy clicks, signups, and reviews.",
   },
   {
     q: "How do writing challenges work?",
