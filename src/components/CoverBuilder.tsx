@@ -10,8 +10,10 @@ import { TRIM_INCHES } from "@/lib/book/print";
 import { coverWrap, type Rect } from "@/lib/book/cover-math";
 import {
   MAX_LAYERS,
+  MIN_ART_ZOOM,
   ROLE_LABEL,
   artPlacement,
+  fitArtInSafeArea,
   coverIssues,
   defaultDesign,
   drawCover,
@@ -21,6 +23,7 @@ import {
   panelRect,
   snapLayer,
   textLayer,
+  type Art,
   type CoverDesign,
   type Fill,
   type ImageLayer,
@@ -29,7 +32,7 @@ import {
   type Panel,
   type TextLayer,
 } from "@/lib/book/cover-design";
-import { canvasBlob, downloadBlob, loadImage, prepareCoverUpload } from "@/lib/book/cover-template";
+import { canvasBlob, downloadBlob, edgeColor, loadImage, prepareCoverUpload } from "@/lib/book/cover-template";
 
 type BookInfo = { title: string; subtitle: string; author: string; series: string; blurb: string; heading: FontId; body: FontId };
 
@@ -293,21 +296,46 @@ export function CoverBuilder({
       requested.current.add(path);
       setImages((prev) => new Map(prev).set(path, img));
       const old = design.art?.path;
+      const art: Art = { path, scope: "front", zoom: 1, x: 0, y: 0, dim: 0, width: img.naturalWidth, height: img.naturalHeight };
+      // A finished cover has text near its edges, so start with all of it inside the safe area
+      const fit = fitArtInSafeArea(wrap, art);
+      const edge = edgeColor(img);
       change((d) => ({
         ...d,
-        art: { path, scope: "front", zoom: 1, x: 0, y: 0, dim: 0, width: img.naturalWidth, height: img.naturalHeight },
+        front: { color: edge, color2: null },
+        art: { ...art, ...fit },
         layers: d.layers.filter((l) => !(l.type === "text" && l.panel === "front")),
       }));
       if (old) void supabase.storage.from("covers").remove([old]);
       setSelected(null);
       setNote(
-        "Your uploaded cover is now the front, and the front text is gone since your cover already has it. The spine and back still have theirs. Ebook covers are a little taller than paperback fronts, so check the top and bottom and use Move up / down if needed."
+        "Your uploaded cover is now the front, fitted inside the safe area so nothing gets trimmed, with its edge color around it. The front text is gone since your cover already has it; the spine and back keep theirs. Prefer edge to edge? Use Fill edge to edge in Artwork."
       );
     } catch (err) {
       setNote(err instanceof Error ? err.message : "Could not use your uploaded cover");
     } finally {
       setBusy(null);
     }
+  }
+
+  function fitInside() {
+    const art = design.art;
+    if (!art) return;
+    const fit = fitArtInSafeArea(wrap, art);
+    const img = images.get(art.path);
+    const edge = img ? edgeColor(img) : null;
+    change((d) => {
+      if (!d.art) return d;
+      const next = { ...d, art: { ...d.art, ...fit } };
+      if (!edge) return next;
+      return art.scope === "front"
+        ? { ...next, front: { color: edge, color2: null } }
+        : { ...next, front: { color: edge, color2: null }, back: { color: edge, color2: null }, spine: { color: edge, color2: null } };
+    });
+  }
+
+  function fillEdgeToEdge() {
+    change((d) => (d.art ? { ...d, art: { ...d.art, zoom: 1, x: 0, y: 0 } } : d));
   }
 
   function removeFrontText() {
@@ -588,9 +616,21 @@ export function CoverBuilder({
                     <option value="wrap">Back, spine, and front</option>
                   </select>
                 </label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={fitInside} className="border border-accent px-2 py-1 text-accent">
+                    Fit inside the safe area
+                  </button>
+                  <button type="button" onClick={fillEdgeToEdge} className="border border-line px-2 py-1">
+                    Fill edge to edge
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted">
+                  Fit shows the whole image with nothing trimmed, filling around it with the image&apos;s edge color (change it under
+                  Background). Fill covers the panel to the bleed, which can trim a little off the edges.
+                </p>
                 {(
                   [
-                    ["zoom", "Zoom", 1, 3, 0.01],
+                    ["zoom", design.art.zoom < 1 ? "Zoom (whole image showing)" : "Zoom", MIN_ART_ZOOM, 3, 0.01],
                     ["x", "Move left / right", -1, 1, 0.01],
                     ["y", "Move up / down", -1, 1, 0.01],
                     ["dim", "Darken for text", 0, 0.7, 0.01],

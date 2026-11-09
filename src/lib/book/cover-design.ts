@@ -12,6 +12,7 @@ export type Art = {
   path: string;
   /** "front" covers the front panel; "wrap" runs across back, spine, and front */
   scope: "front" | "wrap";
+  /** 1 fills the area edge to edge; below 1 shrinks the art so all of it shows, with the panel color around it */
   zoom: number;
   /** Pan within the overflow, -1 to 1 */
   x: number;
@@ -216,7 +217,7 @@ export function normalizeCoverDesign(raw: unknown): CoverDesign | null {
       ? {
           path: artPath,
           scope: a.scope === "wrap" ? "wrap" : "front",
-          zoom: num(a.zoom, 1, 4, 1),
+          zoom: num(a.zoom, MIN_ART_ZOOM, 4, 1),
           x: num(a.x, -1, 1, 0),
           y: num(a.y, -1, 1, 0),
           dim: num(a.dim, 0, 0.7, 0),
@@ -299,6 +300,23 @@ export function artTarget(wrap: CoverWrap, art: Art): Rect {
   return art.scope === "wrap"
     ? { x: 0, y: 0, w: wrap.width, h: wrap.height }
     : { x: wrap.front.x, y: 0, w: wrap.width - wrap.front.x, h: wrap.height };
+}
+
+export const MIN_ART_ZOOM = 0.3;
+
+/** Zoom and pan that show the whole image, centered inside the safe area (a finished cover with its own text). */
+export function fitArtInSafeArea(wrap: CoverWrap, art: Art): { zoom: number; x: number; y: number } {
+  const t = artTarget(wrap, art);
+  const safe = art.scope === "front" ? wrap.frontSafe : { x: wrap.backSafe.x, y: wrap.backSafe.y, w: wrap.frontSafe.x + wrap.frontSafe.w - wrap.backSafe.x, h: wrap.backSafe.h };
+  const fill = Math.max(t.w / art.width, t.h / art.height);
+  const inside = Math.min(safe.w / art.width, safe.h / art.height);
+  const zoom = Math.max(MIN_ART_ZOOM, Math.min(1, inside / fill));
+  const w = art.width * fill * zoom;
+  const h = art.height * fill * zoom;
+  // Solve artPlacement for the pan that puts the image's center on the safe area's center
+  const pan = (start: number, span: number, size: number, center: number) =>
+    Math.abs(size - span) < 1e-6 ? 0 : Math.max(-1, Math.min(1, (2 * (start - (center - size / 2))) / (size - span) - 1));
+  return { zoom: Math.round(zoom * 1000) / 1000, x: pan(t.x, t.w, w, safe.x + safe.w / 2), y: pan(t.y, t.h, h, safe.y + safe.h / 2) };
 }
 
 /** Where the art lands, in inches, after cover-fit, zoom, and pan. */

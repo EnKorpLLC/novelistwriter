@@ -160,6 +160,34 @@ export function downloadBlob(data: Blob | Uint8Array, name: string, type?: strin
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+/** The average color along an image's outer edge, to fill the space around a shrunken cover seamlessly. */
+export function edgeColor(img: HTMLImageElement): string {
+  const size = 32;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d");
+  if (!ctx) return "#1d2633";
+  ctx.drawImage(img, 0, 0, size, size);
+  const d = ctx.getImageData(0, 0, size, size).data;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let n = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (x > 0 && y > 0 && x < size - 1 && y < size - 1) continue;
+      const i = (y * size + x) * 4;
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+      n++;
+    }
+  }
+  const hex = (v: number) => Math.round(v / n).toString(16).padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
+
 export function loadImage(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
