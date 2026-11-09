@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     displayName?: string;
     role?: "author" | "beta_reader";
     emailNotifications?: boolean;
+    readerDigest?: boolean;
     source?: Record<string, unknown>;
   };
 
@@ -69,6 +70,11 @@ export async function POST(req: Request) {
         },
       })
       .eq("id", data.user.id);
+  }
+
+  if (body.readerDigest && data.user?.id) {
+    // Best effort: before migration_reader_digest.sql the column doesn't exist, and signup must still work
+    await admin.from("profiles").update({ reader_digest: true }).eq("id", data.user.id);
   }
 
   if (body.emailNotifications && data.user?.id) {

@@ -9,6 +9,7 @@ import { normalizeLaunchPlan } from "@/lib/launch-plan";
 
 export type SpotlightBook = {
   id: string;
+  authorUserId: string;
   title: string;
   tagline: string;
   authorName: string;
@@ -63,6 +64,7 @@ export async function launchingThisWeek(admin: SupabaseClient, limit = 8): Promi
     const p = profileById.get(r.user_id)!;
     return {
       id: r.id,
+      authorUserId: r.user_id,
       title: r.title || "Untitled",
       tagline: String(r.tagline || "").trim(),
       authorName: p.display_name || "An author",

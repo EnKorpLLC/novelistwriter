@@ -19,6 +19,7 @@ export default function BetaSignupPage() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(false);
+  const [readerDigest, setReaderDigest] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export default function BetaSignupPage() {
           displayName: name,
           role: "beta_reader",
           emailNotifications,
+          readerDigest,
           source: readFirstTouch(),
         }),
       });
@@ -165,6 +167,13 @@ export default function BetaSignupPage() {
           />
         </label>
         <EmailConsentCheckbox checked={emailNotifications} onChange={setEmailNotifications} />
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={readerDigest} onChange={(e) => setReaderDigest(e.target.checked)} />
+          <span>
+            Send me the weekly reader digest
+            <span className="block text-xs text-muted">Every Thursday: new books, launches, and free advance copies. Unsubscribe anytime.</span>
+          </span>
+        </label>
         <button
           type="submit"
           disabled={loading || wrongAccount}

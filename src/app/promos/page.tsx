@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
+import { ReaderDigestCta } from "@/components/ReaderDigestCta";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { loadPublicPromos, promoPath } from "@/lib/cross-promo";
 import { contentMetadata } from "@/lib/seo";
@@ -70,6 +71,7 @@ export default async function PromosPage() {
             ))}
           </ul>
         )}
+        <ReaderDigestCta />
       </main>
       <PublicFooter />
     </div>

@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { listPublishedBooks } from "@/lib/public-books";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
+import { ReaderDigestCta } from "@/components/ReaderDigestCta";
 import { LaunchingThisWeek } from "@/components/LaunchingThisWeek";
 import { launchingThisWeek } from "@/lib/spotlight";
 
@@ -91,6 +92,7 @@ export default async function PublishedBooksPage({
             ))}
           </ul>
         )}
+        <ReaderDigestCta />
       </main>
       <PublicFooter />
     </div>

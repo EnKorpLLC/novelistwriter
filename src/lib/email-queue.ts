@@ -45,6 +45,8 @@ export async function enqueueEmails(admin: SupabaseClient, items: QueuedEmail[])
  */
 export async function processEmailQueue(admin: SupabaseClient, opts: { timeBudgetMs?: number } = {}): Promise<{ sent: number; waiting: number }> {
   const stopAt = Date.now() + (opts.timeBudgetMs ?? 35_000);
+  // A digest that couldn't go out within six days is stale; next week's replaces it
+  await admin.from("email_queue").delete().eq("kind", "digest").is("sent_at", null).lt("created_at", new Date(Date.now() - 6 * 86_400_000).toISOString());
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
   const [{ count: sentToday }, { count: waitingBefore }] = await Promise.all([
@@ -54,9 +56,13 @@ export async function processEmailQueue(admin: SupabaseClient, opts: { timeBudge
   const budget = Math.max(0, Math.min(MAX_PER_RUN, dailyEmailCap() - RESERVED_PER_DAY - (sentToday || 0)));
   if (!budget || !waitingBefore) return { sent: 0, waiting: waitingBefore || 0 };
 
-  const { data: batch } = await admin.from("email_queue").select("*").is("sent_at", null).lt("attempts", 3).order("id").limit(budget);
+  // Launch and list emails first; the weekly reader digest only uses what's left of the day's budget
+  const { data: urgent } = await admin.from("email_queue").select("*").is("sent_at", null).lt("attempts", 3).neq("kind", "digest").order("id").limit(budget);
+  const room = budget - (urgent?.length || 0);
+  const { data: digests } = room > 0 ? await admin.from("email_queue").select("*").is("sent_at", null).lt("attempts", 3).eq("kind", "digest").order("id").limit(room) : { data: [] };
+  const batch = [...(urgent || []), ...(digests || [])];
   let sent = 0;
-  for (const m of batch || []) {
+  for (const m of batch) {
     if (Date.now() > stopAt) break;
     const r = await sendEmail({
       to: m.to_email,
@@ -100,6 +106,17 @@ export function unsubscribeUrl(authorUserId: string, email: string) {
 /** List-Unsubscribe header: mail apps POST here for one-click unsubscribe */
 export function oneClickUnsubscribeUrl(authorUserId: string, email: string) {
   return appUrl(`/api/audience/unsubscribe?${unsubscribeQuery(authorUserId, email)}`);
+}
+
+/** The weekly reader digest uses the same signed links, with "digest" in place of an author id */
+export const DIGEST_LIST = "digest";
+
+export function digestUnsubscribeUrl(email: string) {
+  return unsubscribeUrl(DIGEST_LIST, email);
+}
+
+export function digestOneClickUrl(email: string) {
+  return oneClickUnsubscribeUrl(DIGEST_LIST, email);
 }
 
 export function verifyUnsubscribe(authorUserId: string, email: string, token: string) {

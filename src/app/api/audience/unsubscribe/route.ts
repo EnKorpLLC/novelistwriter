@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { setSubscriberOptOut } from "@/lib/audience";
-import { verifyUnsubscribe } from "@/lib/email-queue";
+import { DIGEST_LIST, verifyUnsubscribe } from "@/lib/email-queue";
 
 /** One-click unsubscribe (mail apps) and the confirm button on /subscribe/unsubscribe. */
 export async function POST(req: Request) {
@@ -17,8 +17,9 @@ export async function POST(req: Request) {
     t = String(form.get("t") || "");
   }
   if (!a || !e || !verifyUnsubscribe(a, e, t)) return NextResponse.json({ error: "This unsubscribe link isn't valid." }, { status: 400 });
-  await setSubscriberOptOut(createServiceClient(), { authorUserId: a, email: e });
-  if (type.includes("form")) return NextResponse.redirect(new URL(`/subscribe/unsubscribe?done=1`, url.origin), 303);
+  if (a === DIGEST_LIST) await createServiceClient().from("profiles").update({ reader_digest: false }).ilike("email", e);
+  else await setSubscriberOptOut(createServiceClient(), { authorUserId: a, email: e });
+  if (type.includes("form")) return NextResponse.redirect(new URL(`/subscribe/unsubscribe?done=${a === DIGEST_LIST ? "digest" : "1"}`, url.origin), 303);
   return NextResponse.json({ ok: true });
 }
 

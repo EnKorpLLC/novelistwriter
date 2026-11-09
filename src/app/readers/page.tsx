@@ -40,6 +40,10 @@ const FEATURES = [
     d: "Get a notification (and an email, if you want one) when they open a new beta read or ARC, and join their email list in one click.",
   },
   {
+    t: "A weekly reading list",
+    d: "Turn on the reader digest for one email every Thursday: new books from authors you follow, launches, new releases, free advance copies, and book promotions, focused on the genres you pick.",
+  },
+  {
     t: "Know how a book was written",
     d: "Before you apply, listings can show badges like “No AI used on this book” or “Written in Novelist Writer,” and a writing record summary, when the author chooses to share them.",
   },

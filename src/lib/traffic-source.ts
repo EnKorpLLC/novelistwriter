@@ -50,6 +50,7 @@ export const NETWORK_LABEL: Record<string, string> = {
   pinterest: "Pinterest",
   bookbub: "BookBub",
   ads: "Ads",
+  digest: "Novelist Writer digest",
   any: "Other",
 };
 
