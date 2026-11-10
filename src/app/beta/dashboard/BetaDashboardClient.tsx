@@ -268,8 +268,12 @@ function ReaderBadgesBox() {
           <span>
             <span className="text-ink">Public reader profile</span>
             <span className="block text-muted">
-              A page with your display name, badges, and reading stats that anyone can see. Never the books
-              you read or anything you wrote in them.
+              A page with your display name, badges, and reading stats that anyone can see. Never anything
+              you wrote in books, and never the books you read unless you also turn on sharing in your{" "}
+              <Link href="/library" className="text-accent underline">
+                library
+              </Link>
+              .
             </span>
           </span>
         </label>
@@ -597,6 +601,9 @@ export default function BetaDashboardClient() {
         </Link>
         <div className="flex flex-wrap items-center gap-4">
           <DashboardRoleNav roles={roles} side="beta" />
+          <Link href="/library" className="font-ui text-sm text-muted hover:text-ink">
+            My library
+          </Link>
           <Link href="/books" className="font-ui text-sm text-muted hover:text-ink">
             Published books
           </Link>

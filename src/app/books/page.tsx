@@ -8,6 +8,8 @@ import { CompactTrust } from "@/components/TrustBadges";
 import { readerTrustForBooks } from "@/lib/trust-badges";
 import { LaunchingThisWeek } from "@/components/LaunchingThisWeek";
 import { launchingThisWeek } from "@/lib/spotlight";
+import { createClient } from "@/lib/supabase/server";
+import { applyContentFilters, contentFiltersFor } from "@/lib/reader-recs";
 
 export const metadata = {
   title: "Published books — Novelist Writer",
@@ -25,7 +27,12 @@ export default async function PublishedBooksPage({
   const admin = createServiceClient();
   const [books, launching] = await Promise.all([listPublishedBooks(admin), launchingThisWeek(admin)]);
   const genres = [...new Set(books.map((b) => b.genre))].sort((a, b) => a.localeCompare(b));
-  const shown = genre ? books.filter((b) => b.genre === genre) : books;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const filters = await contentFiltersFor(admin, user?.id).catch(() => []);
+  const { shown, hidden } = await applyContentFilters(admin, filters, genre ? books.filter((b) => b.genre === genre) : books);
   // Badges and writing records the authors chose to show readers (RX1); the first screens' worth
   const trust = await readerTrustForBooks(admin, shown.slice(0, 60).map((b) => ({ id: b.id, user_id: b.authorUserId }))).catch(() => new Map());
 
@@ -64,8 +71,18 @@ export default async function PublishedBooksPage({
           </div>
         )}
 
+        {hidden > 0 && (
+          <p className="font-ui mt-4 text-xs text-muted">
+            {hidden} book{hidden === 1 ? " is" : "s are"} hidden because of your{" "}
+            <Link href="/library" className="text-accent underline">
+              content filters
+            </Link>
+            .
+          </p>
+        )}
+
         {shown.length === 0 ? (
-          <p className="font-ui mt-10 text-sm text-muted">No published books yet.</p>
+          <p className="font-ui mt-10 text-sm text-muted">{hidden > 0 ? "Every book here matches your content filters." : "No published books yet."}</p>
         ) : (
           <ul className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4">
             {shown.map((b) => (

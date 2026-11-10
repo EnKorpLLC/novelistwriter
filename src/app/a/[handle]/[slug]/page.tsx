@@ -12,6 +12,7 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { AuthorLinks } from "@/components/AuthorConnect";
 import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ReportConcern } from "@/components/ReportConcern";
+import { LibraryButton } from "@/components/LibraryButton";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { LaunchTeamCard } from "@/components/LaunchTeamCard";
 import { thanksReaders } from "@/lib/author-thanks";
@@ -205,6 +206,7 @@ export default async function LaunchPage({
                 </Link>
               </div>
             )}
+            {!isOwner && <LibraryButton projectId={book.id} className="mt-3" />}
             <TrustBadges {...trust} pace={readerTrust?.trust.pace} className="mt-3" />
             <RecordSummaryLine record={readerTrust?.record} className="mt-2" />
             {thanks && (

@@ -10,6 +10,7 @@ const PRIVATE = [
   "/admin",
   "/billing",
   "/settings",
+  "/library",
   "/auth",
   "/api/",
   "/subscribe",
@@ -41,7 +42,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       { userAgent: "*", allow: "/", disallow: PRIVATE },
       { userAgent: AI_SEARCH_BOTS, allow: "/", disallow: PRIVATE },
-      { userAgent: AI_TRAINING_BOTS, allow: "/", disallow: [...PRIVATE, "/a/", "/r/"] },
+      { userAgent: AI_TRAINING_BOTS, allow: "/", disallow: [...PRIVATE, "/a/", "/r/", "/lists/"] },
     ],
     sitemap: appUrl("/sitemap.xml"),
   };

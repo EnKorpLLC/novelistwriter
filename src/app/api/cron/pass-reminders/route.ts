@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { createNotification } from "@/lib/beta-social";
-import { optedInUserIds } from "@/lib/notifications";
+import { notifyUser, optedInUserIds } from "@/lib/notifications";
+import { notifySeriesReleases } from "@/lib/reader-library";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { emailRedAlarms } from "@/lib/money";
@@ -87,6 +88,7 @@ export async function GET(req: Request) {
   if (new Date().getUTCDay() === DIGEST_WEEKDAY) await queueWeeklyDigest(admin, { timeBudgetMs: 10_000 }).catch(() => null);
   await processEmailQueue(admin, { timeBudgetMs: 25_000 }).catch(() => null);
   await refreshActiveChallenges(admin, 120).catch(() => 0);
+  await notifySeriesReleases(admin, (userId, title, body, href) => notifyUser(admin, userId, { type: "author_new_book", title, body, href })).catch(() => 0);
   // Affiliate commissions go out once a month
   if (new Date().getUTCDate() === 1) await runAffiliatePayouts(admin, { timeBudgetMs: 8_000 }).catch(() => null);
   const now = Date.now();
