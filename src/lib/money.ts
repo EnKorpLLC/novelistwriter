@@ -5,7 +5,7 @@ import { getStripe, appUrl } from "@/lib/stripe";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { platformAdminEmail } from "@/lib/platform-admin";
 
-export type RevenueKind = "subscription" | "credits" | "project_unlock" | "other" | "refund";
+export type RevenueKind = "subscription" | "credits" | "project_unlock" | "other" | "refund" | "sales_fee";
 
 /** Stripe's standard US card fee, used to estimate fees per payment. */
 const STRIPE_PCT = 0.029;
@@ -132,6 +132,8 @@ export async function recordInvoice(admin: SupabaseClient, invoice: Stripe.Invoi
 export async function recordCheckout(admin: SupabaseClient, session: Stripe.Checkout.Session, userId: string | null) {
   if (session.mode !== "payment" || session.payment_status !== "paid") return;
   const kind = session.metadata?.kind;
+  // Book sales are mostly the author's money; only our fee is recorded, as sales_fee
+  if (kind === "book_purchase") return;
   await recordRevenue(admin, {
     stripeRef: `checkout:${session.id}`,
     kind: kind === "project_unlock" ? "project_unlock" : kind === "credits" || !kind ? "credits" : "other",
@@ -144,6 +146,11 @@ export async function recordCheckout(admin: SupabaseClient, session: Stripe.Chec
 
 export async function recordRefund(admin: SupabaseClient, refund: Stripe.Refund) {
   if (refund.status && refund.status !== "succeeded") return;
+  const pi = typeof refund.payment_intent === "string" ? refund.payment_intent : refund.payment_intent?.id;
+  if (pi) {
+    const { data: book } = await admin.from("book_purchases").select("id").eq("stripe_payment_intent", pi).maybeSingle();
+    if (book) return;
+  }
   await recordRevenue(admin, {
     stripeRef: `refund:${refund.id}`,
     kind: "refund",
@@ -262,6 +269,31 @@ export async function usageNow(admin: SupabaseClient) {
   ];
 }
 
+/** Book sales across all authors: what readers paid, tax collected for states, our fees, and what authors are owed. */
+async function directSalesTotals(admin: SupabaseClient) {
+  const { data, error } = await admin.from("book_purchases").select("price_cents, tax_cents, platform_fee_cents, author_cents, status, payout_id").limit(50000);
+  if (error) return null;
+  const rows = data || [];
+  const paid = rows.filter((r) => r.status === "paid");
+  return {
+    sales: paid.length,
+    grossCents: paid.reduce((n, r) => n + r.price_cents, 0),
+    taxCents: paid.reduce((n, r) => n + r.tax_cents, 0),
+    feeCents: rows.reduce((n, r) => n + r.platform_fee_cents, 0),
+    owedCents: rows.filter((r) => !r.payout_id).reduce((n, r) => n + r.author_cents, 0),
+  };
+}
+
+/** Whether Stripe Tax is set up on our account, so sales tax is calculated at checkout. */
+async function stripeTaxStatus(): Promise<"active" | "pending" | "unknown"> {
+  try {
+    const settings = await getStripe().tax.settings.retrieve();
+    return settings.status === "active" ? "active" : "pending";
+  } catch {
+    return "unknown";
+  }
+}
+
 export async function moneySummary(admin: SupabaseClient) {
   const now = new Date();
   const months: string[] = [];
@@ -300,7 +332,8 @@ export async function moneySummary(admin: SupabaseClient) {
     if (e.kind === "refund") r.refunds += cents;
     else if (e.kind === "subscription") r.subscriptions += cents;
     else r.oneTime += cents;
-    if (cents > 0) r.stripeFees += cents * STRIPE_PCT + STRIPE_FIXED_CENTS;
+    // Stripe's fee on a book sale comes out of the author's share, not ours
+    if (cents > 0 && e.kind !== "sales_fee") r.stripeFees += cents * STRIPE_PCT + STRIPE_FIXED_CENTS;
   }
   for (const j of jobs || []) {
     const r = byMonth.get(String(j.created_at).slice(0, 7));
@@ -325,8 +358,12 @@ export async function moneySummary(admin: SupabaseClient) {
     return { ...u, ratio: after ? incomeForRule / after : null, affordable: incomeForRule >= 2 * after };
   });
 
+  const [sales, stripeTax] = await Promise.all([directSalesTotals(admin), stripeTaxStatus()]);
+
   return {
     migrationNeeded: false as const,
+    sales,
+    stripeTax,
     months: rows.map((r) => ({
       ...r,
       stripeFees: Math.round(r.stripeFees),

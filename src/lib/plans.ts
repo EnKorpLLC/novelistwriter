@@ -52,6 +52,7 @@ export const PLANS: PlanCopy[] = [
       "A launch page for every book that grows with it: cover reveal, preorders, then buy buttons on release day",
       "Serial release schedule: a log of where every chapter is posted, how many chapters you have written ahead on each site, and a reminder on release days",
       "Buttons for your own website and newsletter (Get the book, Notify me on release, Join my beta, Request an ARC, Read a sample) and “Read on Royal Road / Wattpad / Substack” links for serials, with every click counted",
+      "Sell your ebook direct from your launch page: readers pay once and it goes straight to their library. You keep about 78% (10% + 15¢ per sale), and we handle sales tax",
       "Readers add your book to their TBR from your launch page and the catalog, and you see how many TBRs, shelves, and reader lists each book is on (counts only, never who)",
       "Your public writing record and badges, like “Written in Novelist Writer”, “No AI used on this book”, and writing challenge wins",
       "Share kit: ready-to-post copy for every network, a newsletter block, a square image, and link previews",
@@ -73,6 +74,7 @@ export const PLANS: PlanCopy[] = [
     lead: "Run beta readers, ARCs, and your audience from one place.",
     items: [
       "Everything in Pro",
+      "Lower fee when you sell direct: keep about 83% of each sale (5% + 15¢)",
       "Beta reader desk: application forms, auto-approve rules, end dates with a 3-day grace for final reviews, chapter progress, DNF reasons, comments pinned to the sentence",
       "ARC desk: read-by deadlines, reminders, mailing addresses, one-tap review links",
       "Reader feedback beside the editor: each chapter's comments next to the text, resolve and reply as you revise",
@@ -176,6 +178,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "Do I have to use AI?",
     a: "No. AI only critiques and never writes your book. One switch in Settings turns every AI tool off, and your books can show that.",
+  },
+  {
+    q: "How does selling my ebook direct work?",
+    a: "On Pro and Studio, turn on Sell direct in a book's Launch tab and set your price. Readers in the US buy from your launch page, and the book goes into their library to download anytime. We're the seller, so we collect and pay sales tax for you. Our fee is 10% + 15¢ per sale on Pro and 5% + 15¢ on Studio, plus Stripe's card fee; on a $4.99 ebook you keep about $3.90 on Pro or $4.15 on Studio. Each sale is held 14 days for refunds, then paid out on the 1st of the month once you have $50. Your store links stay on the page too. [Seller terms](/seller-terms)",
   },
   {
     q: "Can I prove my book is human-written on other sites?",

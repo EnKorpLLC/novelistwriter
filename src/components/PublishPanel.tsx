@@ -8,6 +8,7 @@ import { LaunchRoom } from "@/components/LaunchRoom";
 import { LaunchTeamPanel } from "@/components/LaunchTeamPanel";
 import { VerifyBadgePanel } from "@/components/VerifyBadgePanel";
 import { EmbedButtonsPanel } from "@/components/EmbedButtonsPanel";
+import { DirectSalePanel } from "@/components/DirectSalePanel";
 import { RecordBadge, WritingRecordView, type WritingRecordData } from "@/components/WritingRecordView";
 
 type LaunchState = {
@@ -458,6 +459,8 @@ export function PublishPanel({ projectId }: { projectId: string }) {
               )}
             </div>
           </section>
+
+          <DirectSalePanel projectId={projectId} published={state.published} />
 
           <WritingRecordSection projectId={projectId} launchPath={state.launchPath} sitePublic={state.sitePublic !== false} />
 

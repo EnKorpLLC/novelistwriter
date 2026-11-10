@@ -19,6 +19,7 @@ const LINKS = [
   { href: "/affiliates", label: "Affiliates" },
   { href: "/your-data", label: "Your data" },
   { href: "/contact", label: "Contact" },
+  { href: "/refunds", label: "Refunds" },
   { href: "/privacy", label: "Privacy" },
 ];
 

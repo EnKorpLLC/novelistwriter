@@ -8,6 +8,7 @@ import { onSubscriptionTierChange } from "@/lib/studio-pass";
 import { recordInvoice, recordRefund } from "@/lib/money";
 import { adjustForCharge, recordCommissionForInvoice } from "@/lib/affiliates";
 import { revokeLifetimeForCharge } from "@/lib/offers";
+import { adjustBookPurchaseForCharge, recordBookPurchase } from "@/lib/direct-sales";
 import Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -31,7 +32,12 @@ export async function POST(req: Request) {
   const admin = createServiceClient();
 
   try {
-    if (event.type === "checkout.session.completed") {
+    const completed = event.type === "checkout.session.completed" ? (event.data.object as Stripe.Checkout.Session) : null;
+    if (completed?.metadata?.kind === "book_purchase") {
+      // Guest buyers have no account yet, so book sales skip the account-based handler
+      const result = await recordBookPurchase(admin, completed.id);
+      if (!result.ok) console.error("stripe webhook: book purchase not recorded", event.id, result.skipped);
+    } else if (event.type === "checkout.session.completed") {
       const result = await handleCheckoutCompleted(
         event.data.object as Stripe.Checkout.Session
       );
@@ -137,6 +143,11 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error("lifetime refund handling failed", charge.id, err);
       }
+      try {
+        await adjustBookPurchaseForCharge(admin, charge, "refunded");
+      } catch (err) {
+        console.error("book refund handling failed", charge.id, err);
+      }
     }
     if (event.type === "charge.dispute.created") {
       const dispute = event.data.object as Stripe.Dispute;
@@ -145,6 +156,11 @@ export async function POST(req: Request) {
         await adjustForCharge(admin, chargeId, 1, "Disputed");
       } catch (err) {
         console.error("affiliate dispute adjustment failed", chargeId, err);
+      }
+      try {
+        await adjustBookPurchaseForCharge(admin, await stripe.charges.retrieve(chargeId), "disputed");
+      } catch (err) {
+        console.error("book dispute handling failed", chargeId, err);
       }
     }
   } catch (err) {

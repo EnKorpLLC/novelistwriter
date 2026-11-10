@@ -11,6 +11,8 @@ const PRIVATE = [
   "/billing",
   "/settings",
   "/library",
+  // Download pages: the link is the key to a bought ebook
+  "/purchase",
   "/auth",
   "/api/",
   "/subscribe",

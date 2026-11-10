@@ -38,6 +38,8 @@ type Money = {
   lastSync?: { at?: string; invoices?: number; checkouts?: number; refunds?: number };
   costs?: Cost[];
   usage: Usage[];
+  sales?: { sales: number; grossCents: number; taxCents: number; feeCents: number; owedCents: number } | null;
+  stripeTax?: "active" | "pending" | "unknown";
 };
 
 const usd = (cents: number) =>
@@ -138,6 +140,31 @@ export function AdminMoney({ onNote }: { onNote: (msg: string | null) => void })
           >
             I&apos;ve upgraded Vercel
           </button>
+        </div>
+      )}
+
+      {(data.sales || data.stripeTax) && (
+        <div>
+          <h2 className="font-display text-xl">Direct ebook sales</h2>
+          <p className="mt-1 text-xs text-muted">
+            Stripe Tax:{" "}
+            {data.stripeTax === "active" ? (
+              <span className="text-accent">active, so sales tax is calculated at checkout</span>
+            ) : data.stripeTax === "pending" ? (
+              <span className="text-danger">not finished. In Stripe, open Settings → Tax and complete the setup before books go on sale.</span>
+            ) : (
+              <span>couldn&apos;t check (is the Stripe key set?)</span>
+            )}
+          </p>
+          {data.sales && (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <Stat label="Copies sold" value={data.sales.sales} />
+              <Stat label="Readers paid" value={usd(data.sales.grossCents)} hint="Before tax" />
+              <Stat label="Sales tax collected" value={usd(data.sales.taxCents)} hint="Owed to states where registered" />
+              <Stat label="Our fees" value={usd(data.sales.feeCents)} tone="good" />
+              <Stat label="Owed to authors" value={usd(data.sales.owedCents)} hint="Paid on the 1st once $50+" />
+            </div>
+          )}
         </div>
       )}
 

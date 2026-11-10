@@ -13,6 +13,9 @@ import { AuthorLinks } from "@/components/AuthorConnect";
 import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ReportConcern } from "@/components/ReportConcern";
 import { LibraryButton } from "@/components/LibraryButton";
+import { BuyDirectButton } from "@/components/BuyDirectButton";
+import { buyerCountryAllowed, saleReadiness } from "@/lib/direct-sales";
+import { currentPrice } from "@/lib/direct-sale-rules";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { LaunchTeamCard } from "@/components/LaunchTeamCard";
 import { thanksReaders } from "@/lib/author-thanks";
@@ -100,6 +103,9 @@ export default async function LaunchPage({
   const isbn = normalizeDetails(recordFlag?.book_details).isbnEbook || null;
   const sampleOn = studio && normalizeLaunchPlan(recordFlag?.launch_plan).sample.on;
   const record = recordPublic ? await computeWritingRecord(admin, book.id) : null;
+  // Selling direct: only once it's out, set up, and for US visitors (others see the store links)
+  const saleReady = recordFlag && book.stage === "published" ? await saleReadiness(admin, recordFlag).catch(() => null) : null;
+  const direct = saleReady?.ok ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed() } : null;
 
   const stageLine =
     book.stage === "published"
@@ -231,6 +237,7 @@ export default async function LaunchPage({
                   Read the first chapter
                 </Link>
               )}
+              {direct && !isOwner && <BuyDirectButton projectId={book.id} price={direct.price} canBuy={direct.canBuy} />}
               {book.stage === "published" &&
                 book.buyLinks.map((l) => (
                   <a

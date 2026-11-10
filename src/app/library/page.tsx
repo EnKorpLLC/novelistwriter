@@ -324,10 +324,46 @@ export default function LibraryPage() {
         </ul>
       )}
 
+      <Purchases />
       <Recommendations version={books.length} />
       <Lists lists={lists} reload={loadLists} />
       <SharingAndFilters />
     </div>
+  );
+}
+
+/** Ebooks bought direct: yours forever, download anytime. */
+function Purchases() {
+  const [items, setItems] = useState<{ id: string; title: string; boughtAt: string; downloadUrl: string }[]>([]);
+  useEffect(() => {
+    void fetch("/api/library/purchases")
+      .then(async (r) => (r.ok ? setItems((await r.json()).purchases || []) : null))
+      .catch(() => null);
+  }, []);
+  if (!items.length) return null;
+  return (
+    <section className="mt-12 border-t border-line pt-8">
+      <h2 className="font-display text-2xl">Ebooks you bought</h2>
+      <p className="mt-1 text-xs text-muted">
+        Yours to keep. Download them again anytime.{" "}
+        <a href="/refunds" className="underline">
+          Refunds and your books
+        </a>
+      </p>
+      <ul className="mt-3 divide-y divide-line border-y border-line text-sm">
+        {items.map((p) => (
+          <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <span className="font-display text-base">{p.title}</span>
+            <span className="flex items-center gap-3 text-xs">
+              <span className="text-muted">Bought {new Date(p.boughtAt).toLocaleDateString()}</span>
+              <a href={p.downloadUrl} className="border border-accent px-2 py-1 text-accent">
+                Download
+              </a>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

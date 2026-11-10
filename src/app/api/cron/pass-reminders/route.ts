@@ -5,6 +5,7 @@ import { notifyUser, optedInUserIds } from "@/lib/notifications";
 import { notifySeriesReleases } from "@/lib/reader-library";
 import { remindSerialReleases } from "@/lib/serial";
 import { sweepRecentChapterImages } from "@/lib/chapter-image-sweep";
+import { runSellerPayouts } from "@/lib/direct-sales";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { emailRedAlarms } from "@/lib/money";
@@ -94,7 +95,10 @@ export async function GET(req: Request) {
   await sweepRecentChapterImages(admin, { timeBudgetMs: 5_000 }).catch(() => 0);
   await remindSerialReleases(admin, (userId, title, body, href) => notifyUser(admin, userId, { type: "marketing_reminder", title, body, href })).catch(() => 0);
   // Affiliate commissions go out once a month
-  if (new Date().getUTCDate() === 1) await runAffiliatePayouts(admin, { timeBudgetMs: 8_000 }).catch(() => null);
+  if (new Date().getUTCDate() === 1) {
+    await runAffiliatePayouts(admin, { timeBudgetMs: 8_000 }).catch(() => null);
+    await runSellerPayouts(admin, { timeBudgetMs: 8_000 }).catch(() => null);
+  }
   const now = Date.now();
   const { data: rows, error } = await admin
     .from("credit_balances")
