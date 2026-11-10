@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { PublicHeader } from "@/components/PublicHeader";
 import { authorPath } from "@/lib/handles";
+import { deliverPendingMagnets } from "@/lib/direct-sales";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Confirm your subscription — Novelist Writer" };
@@ -15,11 +16,12 @@ export default async function ConfirmSubscriptionPage({
   const admin = createServiceClient();
   let authorName: string | null = null;
   let handle: string | null = null;
+  let freeBooks: string[] = [];
 
   if (token && /^[0-9a-f]{48}$/.test(token)) {
     const { data: row } = await admin
       .from("author_subscribers")
-      .select("id, author_user_id, sources")
+      .select("id, author_user_id, sources, email")
       .eq("confirm_token", token)
       .maybeSingle();
     if (row) {
@@ -43,6 +45,8 @@ export default async function ConfirmSubscriptionPage({
         .maybeSingle();
       authorName = author?.display_name || "the author";
       handle = author?.handle || null;
+      // Free books they asked for when joining (reader magnets)
+      freeBooks = row.email ? await deliverPendingMagnets(admin, row.author_user_id, row.email).catch(() => []) : [];
     }
   }
 
@@ -56,6 +60,18 @@ export default async function ConfirmSubscriptionPage({
             <p className="mt-3 text-sm text-muted">
               You&apos;ll hear from {authorName} about new books, advance copies, and release news.
             </p>
+            {freeBooks.length > 0 && (
+              <div className="mt-6 border border-accent p-4">
+                <p className="text-sm text-ink">Your free {freeBooks.length === 1 ? "book is" : "books are"} ready. We&apos;ve emailed the link too.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {freeBooks.map((url, i) => (
+                    <Link key={url} href={url} className="bg-accent px-4 py-2 text-sm text-paper">
+                      {freeBooks.length === 1 ? "Get your ebook" : `Get ebook ${i + 1}`}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
             {handle && (
               <Link href={authorPath(handle)} className="mt-6 inline-block text-sm text-accent underline">
                 Visit {authorName}&apos;s page

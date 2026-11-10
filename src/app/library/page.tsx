@@ -334,7 +334,7 @@ export default function LibraryPage() {
 
 /** Ebooks bought direct: yours forever, download anytime. */
 function Purchases() {
-  const [items, setItems] = useState<{ id: string; title: string; boughtAt: string; downloadUrl: string }[]>([]);
+  const [items, setItems] = useState<{ id: string; title: string; priceCents: number; boughtAt: string; downloadUrl: string }[]>([]);
   useEffect(() => {
     void fetch("/api/library/purchases")
       .then(async (r) => (r.ok ? setItems((await r.json()).purchases || []) : null))
@@ -343,7 +343,7 @@ function Purchases() {
   if (!items.length) return null;
   return (
     <section className="mt-12 border-t border-line pt-8">
-      <h2 className="font-display text-2xl">Ebooks you bought</h2>
+      <h2 className="font-display text-2xl">Your ebooks</h2>
       <p className="mt-1 text-xs text-muted">
         Yours to keep. Download them again anytime.{" "}
         <a href="/refunds" className="underline">
@@ -355,7 +355,9 @@ function Purchases() {
           <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
             <span className="font-display text-base">{p.title}</span>
             <span className="flex items-center gap-3 text-xs">
-              <span className="text-muted">Bought {new Date(p.boughtAt).toLocaleDateString()}</span>
+              <span className="text-muted">
+                {p.priceCents ? "Bought" : "Free since"} {new Date(p.boughtAt).toLocaleDateString()}
+              </span>
               <a href={p.downloadUrl} className="border border-accent px-2 py-1 text-accent">
                 Download
               </a>

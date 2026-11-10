@@ -17,6 +17,8 @@ export const REFUND_WINDOW_DAYS = 14;
 
 export type DirectSale = {
   on: boolean;
+  /** Reader magnet (Studio): free for joining the author's list */
+  magnet: boolean;
   priceCents: number;
   salePriceCents: number | null;
   saleStarts: string | null;
@@ -35,6 +37,7 @@ export function normalizeDirectSale(raw: unknown): DirectSale {
   const sale = o.salePriceCents == null || o.salePriceCents === "" ? null : cents(o.salePriceCents);
   return {
     on: o.on === true,
+    magnet: o.magnet === true,
     priceCents: price,
     salePriceCents: sale != null && sale < price ? sale : null,
     saleStarts: day(o.saleStarts),
@@ -61,3 +64,35 @@ export function estimateShare(priceCents: number, tier: SellerTier) {
 }
 
 export const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
+
+export type DiscountCode = {
+  id: string;
+  code: string;
+  percentOff: number | null;
+  amountOffCents: number | null;
+  projectIds: string[];
+  maxUses: number | null;
+  uses: number;
+  endsOn: string | null;
+  active: boolean;
+};
+
+/** Letters, numbers, and dashes, 3 to 24 long, compared without case. */
+export function normalizeCode(raw: unknown): string | null {
+  const c = String(raw || "").trim().toUpperCase().replace(/\s+/g, "");
+  return /^[A-Z0-9-]{3,24}$/.test(c) ? c : null;
+}
+
+/** The price after a code; never below the minimum, so a code can't make a book free (that's what reader magnets are for). */
+export function discountedPrice(priceCents: number, code: Pick<DiscountCode, "percentOff" | "amountOffCents">): number {
+  const off = code.percentOff ? Math.round((priceCents * code.percentOff) / 100) : code.amountOffCents || 0;
+  return Math.max(MIN_PRICE_CENTS, priceCents - off);
+}
+
+export function codeUsable(code: DiscountCode, projectId: string, today = new Date().toISOString().slice(0, 10)): string | null {
+  if (!code.active) return "That code has been turned off.";
+  if (code.endsOn && code.endsOn < today) return "That code has expired.";
+  if (code.maxUses != null && code.uses >= code.maxUses) return "That code has been used up.";
+  if (code.projectIds.length && !code.projectIds.includes(projectId)) return "That code doesn't work for this book.";
+  return null;
+}

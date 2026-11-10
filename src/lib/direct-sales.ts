@@ -13,7 +13,16 @@ import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { getStyle } from "@/lib/book/styles";
 import { buildStyledEpub } from "@/lib/book/epub";
 import { loadBookExtras, loadCover } from "@/lib/book/load";
-import { PAYOUT_MIN_CENTS, REFUND_WINDOW_DAYS, dollars, normalizeDirectSale, platformFeeCents, type SellerTier } from "@/lib/direct-sale-rules";
+import {
+  PAYOUT_MIN_CENTS,
+  REFUND_WINDOW_DAYS,
+  dollars,
+  normalizeCode,
+  normalizeDirectSale,
+  platformFeeCents,
+  type DiscountCode,
+  type SellerTier,
+} from "@/lib/direct-sale-rules";
 
 export const SALES_MIGRATION_HINT = "Database needs an update. Run supabase/migration_direct_sales.sql in the Supabase SQL editor.";
 const DAY_MS = 86_400_000;
@@ -91,9 +100,110 @@ export async function saleReadiness(admin: SupabaseClient, project: { user_id: s
   return { ok: true as const, tier: status.tier, sale: s };
 }
 
+/* ---------- Discount codes ---------- */
+
+type CodeRow = {
+  id: string;
+  code: string;
+  percent_off: number | null;
+  amount_off_cents: number | null;
+  project_ids: string[] | null;
+  max_uses: number | null;
+  uses: number;
+  ends_on: string | null;
+  active: boolean;
+};
+
+export function codeFromRow(r: CodeRow): DiscountCode {
+  return {
+    id: r.id,
+    code: r.code,
+    percentOff: r.percent_off,
+    amountOffCents: r.amount_off_cents,
+    projectIds: r.project_ids || [],
+    maxUses: r.max_uses,
+    uses: r.uses,
+    endsOn: r.ends_on,
+    active: r.active,
+  };
+}
+
+/** One of this author's codes, by what the reader typed. */
+export async function findCode(admin: SupabaseClient, authorId: string, raw: unknown): Promise<DiscountCode | null> {
+  const code = normalizeCode(raw);
+  if (!code) return null;
+  const { data } = await admin.from("discount_codes").select("*").eq("author_user_id", authorId).ilike("code", code).maybeSingle();
+  return data ? codeFromRow(data as CodeRow) : null;
+}
+
 /* ---------- After payment ---------- */
 
 const token = () => randomBytes(24).toString("base64url");
+
+async function addToLibrary(admin: SupabaseClient, userId: string, projectId: string, title: string, shelf: string) {
+  const { data: entry } = await admin.from("library_entries").select("id, custom_shelves").eq("user_id", userId).eq("project_id", projectId).maybeSingle();
+  const shelves = [...new Set([...(entry?.custom_shelves || []), shelf])];
+  if (entry) await admin.from("library_entries").update({ custom_shelves: shelves, updated_at: new Date().toISOString() }).eq("id", entry.id);
+  else await admin.from("library_entries").insert({ user_id: userId, project_id: projectId, title, source: "here", shelf: "want", custom_shelves: shelves });
+}
+
+/**
+ * Reader magnet: the book as a free "purchase", so it gets the same download link, library entry, and receipt.
+ * One copy per email per book; asking again just resends the link.
+ */
+export async function deliverMagnet(admin: SupabaseClient, opts: { projectId: string; authorId: string; email: string; name?: string }) {
+  const email = opts.email.trim().toLowerCase();
+  const ref = `magnet:${opts.projectId}:${email}`;
+  const { data: project } = await admin.from("projects").select("id, title").eq("id", opts.projectId).maybeSingle();
+  const title = (project?.title as string) || "Your free ebook";
+  const { data: prior } = await admin.from("book_purchases").select("id, download_token, buyer_user_id").eq("stripe_session_id", ref).maybeSingle();
+  let purchase = prior;
+  if (!purchase) {
+    const { data: p } = await admin.from("profiles").select("id").ilike("email", email).maybeSingle();
+    const { data: inserted, error } = await admin
+      .from("book_purchases")
+      .insert({
+        project_id: opts.projectId,
+        author_user_id: opts.authorId,
+        buyer_user_id: (p?.id as string | null) || null,
+        buyer_email: email,
+        buyer_name: String(opts.name || "").slice(0, 120),
+        title,
+        price_cents: 0,
+        currency: "usd",
+        stripe_session_id: ref,
+        available_at: new Date().toISOString(),
+        download_token: token(),
+      })
+      .select("id, download_token, buyer_user_id")
+      .single();
+    if (error) throw new Error(error.message.includes("book_purchases") ? SALES_MIGRATION_HINT : error.message);
+    purchase = inserted;
+    if (purchase.buyer_user_id) await addToLibrary(admin, purchase.buyer_user_id, opts.projectId, title, "free").catch(() => null);
+  }
+  await admin.from("magnet_claims").update({ status: "delivered", purchase_id: purchase.id }).eq("project_id", opts.projectId).eq("email", email);
+  const mail = renderEmail({
+    heading: `Your free copy of ${title}`,
+    paragraphs: [
+      `Thanks for joining the list. Here's ${title}, free. The link keeps working whenever you need the file again.`,
+      purchase.buyer_user_id ? "It's also in your Novelist Writer library." : "Create a free reader account with this email to keep it in your library.",
+    ],
+    button: { label: "Download your ebook", url: appUrl(`/purchase/${purchase.download_token}`) },
+  });
+  await sendEmail({ to: email, subject: `Your free copy of ${title}`, text: mail.text, html: mail.html }).catch(() => null);
+  return { downloadUrl: `/purchase/${purchase.download_token}` };
+}
+
+/** After a reader confirms their email: send every free book they asked this author for. */
+export async function deliverPendingMagnets(admin: SupabaseClient, authorId: string, email: string) {
+  const { data: claims } = await admin.from("magnet_claims").select("project_id, name").eq("author_user_id", authorId).eq("email", email.toLowerCase()).eq("status", "pending");
+  const out: string[] = [];
+  for (const c of claims || []) {
+    const d = await deliverMagnet(admin, { projectId: c.project_id, authorId, email, name: c.name }).catch(() => null);
+    if (d) out.push(d.downloadUrl);
+  }
+  return out;
+}
 
 /**
  * checkout.session.completed for a book: record the sale with Stripe's real fee, put the book in the buyer's
@@ -157,12 +267,13 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
 
   await recordRevenue(admin, { stripeRef: `sale:${session.id}`, kind: "sales_fee", amountCents: fee, occurredAt: new Date().toISOString(), userId: authorId }).catch(() => null);
 
-  if (buyerId) {
-    const { data: entry } = await admin.from("library_entries").select("id, custom_shelves").eq("user_id", buyerId).eq("project_id", projectId).maybeSingle();
-    const shelves = [...new Set([...(entry?.custom_shelves || []), "purchased"])];
-    if (entry) await admin.from("library_entries").update({ custom_shelves: shelves, updated_at: new Date().toISOString() }).eq("id", entry.id);
-    else await admin.from("library_entries").insert({ user_id: buyerId, project_id: projectId, title, source: "here", shelf: "want", custom_shelves: shelves });
+  if (meta.code_id) {
+    const { data: c } = await admin.from("discount_codes").select("uses").eq("id", meta.code_id).maybeSingle();
+    if (c) await admin.from("discount_codes").update({ uses: (c.uses || 0) + 1 }).eq("id", meta.code_id);
+    await admin.from("book_purchases").update({ discount_code_id: meta.code_id, regular_price_cents: Number(meta.regular_cents) || null }).eq("id", inserted.id);
   }
+
+  if (buyerId) await addToLibrary(admin, buyerId, projectId, title, "purchased").catch(() => null);
 
   const downloadUrl = appUrl(`/purchase/${inserted.download_token}`);
   if (email) {
@@ -260,6 +371,8 @@ export async function runSellerPayouts(admin: SupabaseClient, opts: { timeBudget
 
 export type SellerSummary = {
   sales: number;
+  /** Reader magnets delivered */
+  freeCopies: number;
   refunds: number;
   grossCents: number;
   feesCents: number;
@@ -277,7 +390,8 @@ export async function sellerSummary(admin: SupabaseClient, userId: string): Prom
     admin.from("book_purchases").select("project_id, title, price_cents, stripe_fee_cents, platform_fee_cents, author_cents, status, available_at, payout_id").eq("author_user_id", userId).limit(20000),
     admin.from("seller_payouts").select("amount_cents, status, created_at").eq("author_user_id", userId).order("created_at", { ascending: false }).limit(24),
   ]);
-  const all = rows || [];
+  const free = (rows || []).filter((r) => r.price_cents === 0);
+  const all = (rows || []).filter((r) => r.price_cents > 0);
   const unpaid = all.filter((r) => !r.payout_id);
   const books = new Map<string, { projectId: string | null; title: string; sales: number; earnedCents: number }>();
   for (const r of all) {
@@ -289,6 +403,7 @@ export async function sellerSummary(admin: SupabaseClient, userId: string): Prom
   }
   return {
     sales: all.filter((r) => r.status === "paid").length,
+    freeCopies: free.length,
     refunds: all.filter((r) => r.status !== "paid").length,
     grossCents: all.filter((r) => r.status === "paid").reduce((n, r) => n + r.price_cents, 0),
     feesCents: all.reduce((n, r) => n + r.stripe_fee_cents + r.platform_fee_cents, 0),

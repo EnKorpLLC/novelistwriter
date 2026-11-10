@@ -13,7 +13,7 @@ async function load(token: string) {
   try {
     const { createServiceClient } = await import("@/lib/supabase/admin");
     const admin = createServiceClient();
-    const { data: p } = await admin.from("book_purchases").select("title, status, buyer_email, buyer_user_id, project_id, created_at").eq("download_token", token).maybeSingle();
+    const { data: p } = await admin.from("book_purchases").select("title, status, buyer_email, buyer_user_id, project_id, created_at, price_cents").eq("download_token", token).maybeSingle();
     if (!p) return null;
     const { data: project } = p.project_id ? await admin.from("projects").select("cover_path, metadata, updated_at").eq("id", p.project_id).maybeSingle() : { data: null };
     return { ...p, coverUrl: project ? coverPublicUrl(projectCoverPath(project), project.updated_at ? Date.parse(project.updated_at) : undefined) : null };
@@ -82,11 +82,15 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
               with {p.buyer_email}.
             </>
           )}{" "}
-          Questions or a refund within 14 days? Reply to your receipt email, or see the{" "}
-          <Link href="/refunds" className="text-accent underline">
-            refund policy
-          </Link>
-          .
+          {p.price_cents > 0 && (
+            <>
+              Questions or a refund within 14 days? Reply to your receipt email, or see the{" "}
+              <Link href="/refunds" className="text-accent underline">
+                refund policy
+              </Link>
+              .
+            </>
+          )}
         </p>
       </main>
       <PublicFooter />

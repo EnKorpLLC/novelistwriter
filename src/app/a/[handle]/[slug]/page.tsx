@@ -15,7 +15,8 @@ import { ReportConcern } from "@/components/ReportConcern";
 import { LibraryButton } from "@/components/LibraryButton";
 import { BuyDirectButton } from "@/components/BuyDirectButton";
 import { buyerCountryAllowed, saleReadiness } from "@/lib/direct-sales";
-import { currentPrice } from "@/lib/direct-sale-rules";
+import { currentPrice, normalizeDirectSale } from "@/lib/direct-sale-rules";
+import { MagnetForm } from "@/components/MagnetForm";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { LaunchTeamCard } from "@/components/LaunchTeamCard";
 import { thanksReaders } from "@/lib/author-thanks";
@@ -106,6 +107,8 @@ export default async function LaunchPage({
   // Selling direct: only once it's out, set up, and for US visitors (others see the store links)
   const saleReady = recordFlag && book.stage === "published" ? await saleReadiness(admin, recordFlag).catch(() => null) : null;
   const direct = saleReady?.ok ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed() } : null;
+  // Reader magnet (Studio): free for joining the list; also before release, for prequels and novellas
+  const magnet = studio && recordFlag && normalizeDirectSale(recordFlag.direct_sale).magnet;
 
   const stageLine =
     book.stage === "published"
@@ -290,6 +293,11 @@ export default async function LaunchPage({
                 <VisitorShareButton path={path} title={`${book.title} by ${author.name}`} />
               )}
             </div>
+            {magnet && (!isOwner || previewing) && (
+              <div className="mt-5">
+                <MagnetForm projectId={book.id} title={book.title} authorName={author.name} />
+              </div>
+            )}
 
             {book.blurb && (
               <p className="mt-8 whitespace-pre-wrap text-base leading-relaxed text-ink">{book.blurb}</p>

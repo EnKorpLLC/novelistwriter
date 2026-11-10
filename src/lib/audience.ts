@@ -1,10 +1,76 @@
 import "server-only";
+import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { optedInUserIds } from "@/lib/notifications";
 import { appUrl } from "@/lib/stripe";
 
 export type SubscriberSource = "opt_in" | "beta" | "arc";
+
+const RESEND_AFTER_MS = 10 * 60 * 1000;
+
+/**
+ * A guest joining an author's list: send the confirmation email (at most every 10 minutes).
+ * With freeBookTitle, the email says confirming also sends that free book.
+ */
+export async function requestGuestConfirmation(
+  admin: SupabaseClient,
+  opts: { authorUserId: string; email: string; name: string | null; cameFrom: string | null; releaseProjectId?: string | null; freeBookTitle?: string | null }
+): Promise<{ status: "already" | "check_email" } | { error: string; http: number }> {
+  const { authorUserId, email, name, cameFrom } = opts;
+  const { data: existing, error: lookupErr } = await admin
+    .from("author_subscribers")
+    .select("id, confirmed_at, unsubscribed_at, confirm_sent_at")
+    .eq("author_user_id", authorUserId)
+    .eq("email", email)
+    .maybeSingle();
+  if (lookupErr) {
+    const hint = lookupErr.message.includes("confirm")
+      ? "Database needs an update. Run supabase/migration_launch_share.sql in the Supabase SQL editor."
+      : lookupErr.message;
+    return { error: hint, http: 500 };
+  }
+  if (existing?.confirmed_at && !existing.unsubscribed_at) {
+    if (opts.releaseProjectId) await addReleaseAlert(admin, authorUserId, email, opts.releaseProjectId);
+    return { status: "already" };
+  }
+  if (existing?.confirm_sent_at && Date.now() - Date.parse(existing.confirm_sent_at) < RESEND_AFTER_MS) {
+    return { status: "check_email" };
+  }
+
+  const token = randomBytes(24).toString("hex");
+  const now = new Date().toISOString();
+  const row = { author_user_id: authorUserId, email, display_name: name, sources: ["opt_in"], confirmed_at: null, confirm_token: token, confirm_sent_at: now };
+  let { error } = existing
+    ? await admin.from("author_subscribers").update({ confirm_token: token, confirm_sent_at: now, display_name: name, updated_at: now }).eq("id", existing.id)
+    : await admin.from("author_subscribers").insert({ ...row, came_from: cameFrom });
+  // Before migration_author_marketing.sql there is no came_from column
+  if (error && !existing && /came_from/.test(error.message)) ({ error } = await admin.from("author_subscribers").insert(row));
+  if (error) return { error: error.message, http: 500 };
+  // Saved now and honored once they confirm
+  if (opts.releaseProjectId) await addReleaseAlert(admin, authorUserId, email, opts.releaseProjectId);
+
+  const { data: author } = await admin.from("profiles").select("display_name").eq("id", authorUserId).maybeSingle();
+  const authorName = author?.display_name || "this author";
+  const mail = renderEmail({
+    heading: opts.freeBookTitle ? `Confirm to get ${opts.freeBookTitle} free` : `Confirm you want to join ${authorName}'s list`,
+    paragraphs: [
+      `Someone entered this email to get updates from ${authorName} on Novelist Writer: new books, advance copies, and release news.`,
+      opts.freeBookTitle
+        ? `Confirm below and your free copy of ${opts.freeBookTitle} is sent right away. If this wasn't you, ignore this email and nothing happens.`
+        : "If that was you, confirm below. If not, ignore this email and nothing happens.",
+    ],
+    button: { label: opts.freeBookTitle ? "Yes, send my free book" : "Yes, add me", url: appUrl(`/subscribe/confirm?token=${token}`) },
+  });
+  const sent = await sendEmail({
+    to: email,
+    subject: opts.freeBookTitle ? `Confirm to get ${opts.freeBookTitle} free` : `Confirm: updates from ${authorName}`,
+    text: mail.text,
+    html: mail.html,
+  });
+  if (!sent.ok) return { error: "We couldn't send the confirmation email. Try again later.", http: 502 };
+  return { status: "check_email" };
+}
 
 /**
  * Add an email to an author's list, or merge a new source into an existing row.

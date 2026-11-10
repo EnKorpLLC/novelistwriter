@@ -460,7 +460,7 @@ export function PublishPanel({ projectId }: { projectId: string }) {
             </div>
           </section>
 
-          <DirectSalePanel projectId={projectId} published={state.published} />
+          <DirectSalePanel projectId={projectId} published={state.published} launchPath={state.launchPath} />
 
           <WritingRecordSection projectId={projectId} launchPath={state.launchPath} sitePublic={state.sitePublic !== false} />
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PAYOUT_MIN_CENTS, SALE_FEES, dollars, estimateShare, normalizeDirectSale, type DirectSale, type SellerTier } from "@/lib/direct-sale-rules";
+import { PAYOUT_MIN_CENTS, SALE_FEES, dollars, estimateShare, normalizeDirectSale, type DirectSale, type DiscountCode, type SellerTier } from "@/lib/direct-sale-rules";
 
 type Seller = {
   tier: SellerTier | null;
@@ -10,14 +10,116 @@ type Seller = {
   payoutsEnabled: boolean;
   migrationNeeded?: boolean;
   error?: string;
-  summary: { sales: number; refunds: number; earnedCents: number; onHoldCents: number; readyCents: number; paidCents: number } | null;
+  summary: { sales: number; freeCopies: number; refunds: number; earnedCents: number; onHoldCents: number; readyCents: number; paidCents: number } | null;
 };
+
+/** Codes work across the author's books unless limited to one; shared as a link that fills in the code. */
+function DiscountCodes({ projectId, launchPath }: { projectId: string; launchPath: string | null }) {
+  const [codes, setCodes] = useState<DiscountCode[]>([]);
+  const [form, setForm] = useState({ code: "", kind: "percent", value: "25", thisBook: true, maxUses: "", endsOn: "" });
+  const [msg, setMsg] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
+
+  const load = useCallback(async () => {
+    const r = await fetch("/api/sales/codes").catch(() => null);
+    if (r?.ok) setCodes((await r.json()).codes || []);
+  }, []);
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    void load();
+  }, [load]);
+
+  async function send(method: string, body: unknown) {
+    const r = await fetch("/api/sales/codes", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    setMsg(r.ok ? null : d.error || "Something went wrong");
+    await load();
+    return r.ok;
+  }
+
+  const forThis = codes.filter((c) => !c.projectIds.length || c.projectIds.includes(projectId));
+  return (
+    <div className="mt-5 border-t border-line pt-3">
+      <p className="text-ink">Discount codes</p>
+      <p className="text-xs text-muted">For launch day, your newsletter, or a promo. A code can&apos;t take the price below $0.99.</p>
+      <form
+        className="mt-2 flex flex-wrap items-end gap-2 text-xs"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const ok = await send("POST", {
+            code: form.code,
+            ...(form.kind === "percent" ? { percentOff: Number(form.value) } : { amountOffCents: Math.round(Number(form.value) * 100) }),
+            projectIds: form.thisBook ? [projectId] : [],
+            maxUses: form.maxUses ? Number(form.maxUses) : undefined,
+            endsOn: form.endsOn || undefined,
+          });
+          if (ok) setForm((f) => ({ ...f, code: "" }));
+        }}
+      >
+        <label>
+          Code
+          <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="LAUNCH25" className="mt-1 block w-28 border border-line bg-paper px-2 py-1 uppercase" />
+        </label>
+        <label>
+          Off
+          <span className="mt-1 flex">
+            <input value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} inputMode="decimal" className="w-14 border border-line bg-paper px-2 py-1" />
+            <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} className="border border-l-0 border-line bg-paper px-1">
+              <option value="percent">%</option>
+              <option value="amount">$</option>
+            </select>
+          </span>
+        </label>
+        <label>
+          Max uses
+          <input value={form.maxUses} onChange={(e) => setForm({ ...form, maxUses: e.target.value })} inputMode="numeric" placeholder="Any" className="mt-1 block w-16 border border-line bg-paper px-2 py-1" />
+        </label>
+        <label>
+          Ends
+          <input type="date" value={form.endsOn} onChange={(e) => setForm({ ...form, endsOn: e.target.value })} className="mt-1 block border border-line bg-paper px-1 py-0.5" />
+        </label>
+        <label className="flex items-center gap-1 pb-1">
+          <input type="checkbox" checked={form.thisBook} onChange={(e) => setForm({ ...form, thisBook: e.target.checked })} /> This book only
+        </label>
+        <button type="submit" className="bg-accent px-3 py-1.5 text-paper">
+          Add code
+        </button>
+      </form>
+      {msg && <p className="mt-1 text-xs text-danger">{msg}</p>}
+      {forThis.length > 0 && (
+        <ul className="mt-3 space-y-1.5 text-xs">
+          {forThis.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <strong className={`font-mono ${c.active ? "" : "text-muted line-through"}`}>{c.code}</strong>
+              <span className="text-muted">
+                {c.percentOff ? `${c.percentOff}% off` : `${dollars(c.amountOffCents || 0)} off`} · {c.projectIds.length ? "this book" : "all your books"} · used {c.uses}
+                {c.maxUses ? ` of ${c.maxUses}` : ""}
+                {c.endsOn ? ` · ends ${c.endsOn}` : ""}
+              </span>
+              {launchPath && origin && c.active && (
+                <button type="button" className="text-accent underline" onClick={() => void navigator.clipboard.writeText(`${origin}${launchPath}?code=${c.code}`).then(() => setMsg(null))}>
+                  Copy link
+                </button>
+              )}
+              <button type="button" className="text-muted underline" onClick={() => void send("PATCH", { id: c.id, active: !c.active })}>
+                {c.active ? "Turn off" : "Turn on"}
+              </button>
+              <button type="button" className="text-danger underline" onClick={() => void send("DELETE", { id: c.id })}>
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const toCents = (v: string) => Math.round(Number(v.replace(/[^0-9.]/g, "")) * 100);
 const toDollars = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
 
 /** Launch tab: sell this ebook straight from the launch page (Pro and Studio). */
-export function DirectSalePanel({ projectId, published }: { projectId: string; published: boolean }) {
+export function DirectSalePanel({ projectId, published, launchPath }: { projectId: string; published: boolean; launchPath: string | null }) {
   const [seller, setSeller] = useState<Seller | null>(null);
   const [sale, setSale] = useState<DirectSale>(normalizeDirectSale(null));
   const [price, setPrice] = useState("4.99");
@@ -182,8 +284,36 @@ export function DirectSalePanel({ projectId, published }: { projectId: string; p
           </li>
         </ol>
       )}
+      {tier && !seller.migrationNeeded && (
+        <div className="mt-5 border-t border-line pt-3">
+          <p className="text-ink">Free for joining your list (reader magnet)</p>
+          {tier === "studio" ? (
+            <>
+              <label className="mt-1 flex items-start gap-2 text-xs">
+                <input type="checkbox" className="mt-0.5" checked={sale.magnet} disabled={busy} onChange={(e) => void save({ magnet: e.target.checked })} />
+                <span>
+                  Give this book free to readers who join your email list
+                  <span className="block text-muted">
+                    They confirm their email, then get the ebook in their library. Great for a prequel, novella, or book one. Works before release too, and
+                    for readers anywhere. No fees.
+                  </span>
+                </span>
+              </label>
+              {sale.magnet && sale.on && <p className="mt-1 text-xs text-muted">This book is also for sale, so the launch page shows both: buy it, or get it free by joining.</p>}
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-muted">
+              Reader magnets come with your email list on Studio.{" "}
+              <a href="/billing" className="text-accent underline">
+                See Studio
+              </a>
+            </p>
+          )}
+        </div>
+      )}
+      {tier && !seller.migrationNeeded && <DiscountCodes projectId={projectId} launchPath={launchPath} />}
       {note && <p className={`mt-3 text-xs ${note === "Saved." ? "text-accent" : "text-danger"}`}>{note}</p>}
-      {seller.summary && seller.summary.sales + seller.summary.refunds > 0 && (
+      {seller.summary && seller.summary.sales + seller.summary.refunds + seller.summary.freeCopies > 0 && (
         <div className="mt-5 border-t border-line pt-3">
           <p className="text-ink">Your direct sales (all books)</p>
           <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
@@ -201,7 +331,8 @@ export function DirectSalePanel({ projectId, published }: { projectId: string; p
           </dl>
           <p className="mt-2 text-xs text-muted">
             Payouts go out on the 1st of each month once {dollars(PAYOUT_MIN_CENTS)} is ready. {dollars(seller.summary.paidCents)} paid so far
-            {seller.summary.refunds ? `; ${seller.summary.refunds} refunded` : ""}.
+            {seller.summary.refunds ? `; ${seller.summary.refunds} refunded` : ""}
+            {seller.summary.freeCopies ? `. ${seller.summary.freeCopies} free ${seller.summary.freeCopies === 1 ? "copy" : "copies"} sent to readers who joined your list` : ""}.
           </p>
         </div>
       )}

@@ -274,7 +274,7 @@ async function directSalesTotals(admin: SupabaseClient) {
   const { data, error } = await admin.from("book_purchases").select("price_cents, tax_cents, platform_fee_cents, author_cents, status, payout_id").limit(50000);
   if (error) return null;
   const rows = data || [];
-  const paid = rows.filter((r) => r.status === "paid");
+  const paid = rows.filter((r) => r.status === "paid" && r.price_cents > 0);
   return {
     sales: paid.length,
     grossCents: paid.reduce((n, r) => n + r.price_cents, 0),
