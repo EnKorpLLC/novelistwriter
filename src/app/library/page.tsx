@@ -38,7 +38,7 @@ type Recs = {
 type List = { id: string; title: string; description: string; public: boolean; items: { projectId: string; title: string; note: string }[] };
 type Prefs = { libraryPublic: boolean; contentFilters: string[]; profilePublic: boolean; handle: string | null };
 
-const SHELF_LABEL: Record<Shelf, string> = { reading: "Reading", want: "Want to read", finished: "Finished", dnf: "Did not finish" };
+const SHELF_LABEL: Record<Shelf, string> = { reading: "Reading", want: "To be read (TBR)", finished: "Finished", dnf: "Did not finish" };
 const SOURCE_LABEL: Record<string, string> = { goodreads: "From Goodreads", storygraph: "From StoryGraph" };
 
 export default function LibraryPage() {
@@ -153,7 +153,7 @@ export default function LibraryPage() {
       </div>
       <p className="mt-2 max-w-2xl text-xs text-muted">
         Import uses the CSV file from Goodreads (My Books → Import and export → Export library) or StoryGraph (Manage account → Export
-        StoryGraph library). Your beta reads and advance copies appear here on their own.
+        StoryGraph library). Your beta reads and advance copies appear here on their own. Saving a book doesn&apos;t buy it, and authors only see how many readers have their book on a shelf or list, never who.
       </p>
       {note && <p className="mt-3 text-sm text-accent">{note}</p>}
 
@@ -264,7 +264,7 @@ export default function LibraryPage() {
 
       {shown.length === 0 ? (
         <p className="mt-8 text-sm text-muted">
-          Nothing here yet. Find books in the <Link href="/books" className="text-accent underline">catalog</Link> and add them with “Add to my library”, or import
+          Nothing here yet. Find books in the <Link href="/books" className="text-accent underline">catalog</Link> and save them with “Add to TBR”, or import
           your history above.
         </p>
       ) : (

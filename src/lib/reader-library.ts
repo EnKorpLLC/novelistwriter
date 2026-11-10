@@ -5,14 +5,49 @@ import { bookPath } from "@/lib/handles";
 import { normalizeDetails } from "@/lib/book/format";
 import { listPublishedBooks } from "@/lib/public-books";
 import type { ImportedBook, Shelf } from "@/lib/library-import";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 
 export const LIBRARY_MIGRATION_HINT = "Database needs an update. Run supabase/migration_reader_library.sql in the Supabase SQL editor.";
 export const SHELVES: { id: Shelf; label: string }[] = [
   { id: "reading", label: "Reading" },
-  { id: "want", label: "Want to read" },
+  { id: "want", label: "To be read (TBR)" },
   { id: "finished", label: "Finished" },
   { id: "dnf", label: "Did not finish" },
 ];
+
+export type ShelfCounts = { tbr: number; reading: number; finished: number; dnf: number; readers: number; lists: number };
+
+/**
+ * How many readers have each of an author's books on their shelves and lists. Counts only: never who.
+ * The author's own shelves and lists don't count.
+ */
+export async function shelfCountsFor(admin: SupabaseClient, authorId: string, projectIds: string[]): Promise<Map<string, ShelfCounts>> {
+  const out = new Map<string, ShelfCounts>(projectIds.map((id) => [id, { tbr: 0, reading: 0, finished: 0, dnf: 0, readers: 0, lists: 0 }]));
+  if (!projectIds.length) return out;
+  const [entries, items] = await Promise.all([
+    fetchAll<{ project_id: string; shelf: Shelf; user_id: string }>((f, t) =>
+      admin.from("library_entries").select("project_id, shelf, user_id").in("project_id", projectIds).neq("user_id", authorId).order("id").range(f, t)
+    ),
+    fetchAll<{ project_id: string; list_id: string }>((f, t) => admin.from("reader_list_items").select("project_id, list_id").in("project_id", projectIds).order("list_id").range(f, t)),
+  ]);
+  for (const e of entries) {
+    const c = out.get(e.project_id);
+    if (!c) continue;
+    c.readers += 1;
+    if (e.shelf === "want") c.tbr += 1;
+    else c[e.shelf] += 1;
+  }
+  if (items.length) {
+    const listIds = [...new Set(items.map((i) => i.list_id))];
+    const own = new Set<string>();
+    for (let i = 0; i < listIds.length; i += 300) {
+      const { data } = await admin.from("reader_lists").select("id").in("id", listIds.slice(i, i + 300)).eq("user_id", authorId);
+      for (const l of data || []) own.add(l.id);
+    }
+    for (const i of items) if (!own.has(i.list_id)) out.get(i.project_id)!.lists += 1;
+  }
+  return out;
+}
 
 type ProjectRow = {
   id: string;

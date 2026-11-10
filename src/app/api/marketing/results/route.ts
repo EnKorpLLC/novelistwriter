@@ -7,6 +7,7 @@ import { authorPath, bookPath } from "@/lib/handles";
 import { addDays } from "@/lib/launch-plan";
 import { postCampaign, sourceLabel } from "@/lib/traffic-source";
 import { appUrl } from "@/lib/stripe";
+import { shelfCountsFor, type ShelfCounts } from "@/lib/reader-library";
 
 export const maxDuration = 30;
 
@@ -194,6 +195,9 @@ export async function GET(req: Request) {
     .sort((a, b) => b.clicks * 3 + b.visitors - (a.clicks * 3 + a.visitors))
     .slice(0, 10);
 
+  // Shelves are a running total, not tied to the period above
+  const shelves = await shelfCountsFor(admin, user.id, books.map((b) => b.id)).catch(() => new Map<string, ShelfCounts>());
+
   return NextResponse.json({
     pro,
     studio,
@@ -214,9 +218,19 @@ export async function GET(req: Request) {
     books: books
       .map((b) => {
         const r = perBook.get(b.id)!;
-        return { id: b.id, title: b.title, visitors: r.visitors, clicks: r.clicks, stores: [...r.stores.entries()].map(([store, n]) => ({ store, clicks: n })).sort((x, y) => y.clicks - x.clicks) };
+        const s = shelves.get(b.id);
+        return {
+          id: b.id,
+          title: b.title,
+          visitors: r.visitors,
+          clicks: r.clicks,
+          stores: [...r.stores.entries()].map(([store, n]) => ({ store, clicks: n })).sort((x, y) => y.clicks - x.clicks),
+          tbr: s?.tbr || 0,
+          shelved: s?.readers || 0,
+          lists: s?.lists || 0,
+        };
       })
-      .filter((b) => b.visitors || b.clicks)
+      .filter((b) => b.visitors || b.clicks || b.shelved || b.lists)
       .sort((a, b) => b.visitors - a.visitors),
     posts: postResults,
     links,

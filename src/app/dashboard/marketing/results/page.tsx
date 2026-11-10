@@ -14,7 +14,7 @@ type Results = {
   totals: { visitors: number; pageViews: number; clicks: number; signups: number; unsubscribes: number; listSize: number };
   series: { start: string; visitors: number; clicks: number; signups: number }[];
   sources: Row[];
-  books: { id: string; title: string; visitors: number; clicks: number; stores: { store: string; clicks: number }[] }[];
+  books: { id: string; title: string; visitors: number; clicks: number; stores: { store: string; clicks: number }[]; tbr: number; shelved: number; lists: number }[];
   posts: { id: string; postOn: string; network: string; label: string; visitors: number; clicks: number }[];
   links: { label: string; url: string }[];
   capped: boolean;
@@ -226,6 +226,11 @@ export default function MarketingResultsPage() {
                         </span>
                       </div>
                       {b.stores.length > 0 && <div className="mt-0.5 text-xs text-muted">{b.stores.map((s) => `${s.store} ${s.clicks}`).join(" · ")}</div>}
+                      {(b.shelved > 0 || b.lists > 0) && (
+                        <div className="mt-0.5 text-xs text-accent" title="Running totals from readers' libraries. You never see who.">
+                          On {b.tbr} TBR{b.tbr === 1 ? "" : "s"} · {b.shelved} reader{b.shelved === 1 ? "'s shelf" : "s' shelves"} · {b.lists} reader list{b.lists === 1 ? "" : "s"}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

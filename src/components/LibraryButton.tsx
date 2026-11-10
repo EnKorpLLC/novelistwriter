@@ -4,13 +4,26 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const SHELVES = [
-  { id: "want", label: "Want to read" },
+  { id: "want", label: "To be read (TBR)" },
   { id: "reading", label: "Reading" },
   { id: "finished", label: "Finished" },
   { id: "dnf", label: "Did not finish" },
 ];
+const SHORT: Record<string, string> = { want: "On your TBR", reading: "Reading", finished: "Finished", dnf: "Did not finish" };
 
-/** Put a book on your shelves from its page, and follow its series. Signed-out visitors get a sign-up link. */
+async function saveShelf(projectId: string, body: Record<string, unknown>) {
+  const res = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, ...body }) }).catch(() => null);
+  return Boolean(res?.ok);
+}
+
+function signupHref() {
+  return `/beta/signup?next=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/books")}`;
+}
+
+/**
+ * Put a book on your TBR (or another shelf) from its page, and follow its series.
+ * Saving a book doesn't buy it; the author only ever sees a count.
+ */
 export function LibraryButton({ projectId, className = "" }: { projectId: string; className?: string }) {
   const [state, setState] = useState<{ signedIn: boolean; shelf: string | null; series: { name: string; followed: boolean } | null } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -29,43 +42,41 @@ export function LibraryButton({ projectId, className = "" }: { projectId: string
   async function post(body: Record<string, unknown>) {
     setBusy(true);
     try {
-      const res = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, ...body }) });
-      return res.ok;
+      return await saveShelf(projectId, body);
     } finally {
       setBusy(false);
     }
+  }
+  async function setShelf(shelf: string) {
+    if (await post({ action: "add", shelf })) setState((s) => (s ? { ...s, shelf } : s));
   }
 
   if (!state) return null;
   if (!state.signedIn) {
     return (
-      <Link href={`/beta/signup?next=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/books")}`} className={`font-ui inline-block border border-line px-3 py-1.5 text-sm text-accent ${className}`}>
-        + Want to read
-      </Link>
+      <div className={`font-ui text-sm ${className}`}>
+        <Link href={signupHref()} className="inline-block border border-accent px-3 py-1.5 text-accent">
+          + Add to TBR
+        </Link>
+        <p className="mt-1 text-xs text-muted">Free reader account. Saving a book doesn&apos;t buy it.</p>
+      </div>
     );
   }
   return (
     <div className={`font-ui flex flex-wrap items-center gap-2 text-sm ${className}`}>
-      <select
-        aria-label="Your shelf"
-        disabled={busy}
-        value={state.shelf || ""}
-        onChange={async (e) => {
-          const shelf = e.target.value;
-          if (shelf && (await post({ action: "add", shelf }))) setState((s) => (s ? { ...s, shelf } : s));
-        }}
-        className={`border px-2 py-1.5 ${state.shelf ? "border-accent text-ink" : "border-line text-accent"}`}
-      >
-        <option value="" disabled>
-          + Add to my library
-        </option>
-        {SHELVES.map((s) => (
-          <option key={s.id} value={s.id}>
-            {state.shelf === s.id ? "✓ " : ""}
-            {s.label}
-          </option>
-        ))}
-      </select>
+      {!state.shelf ? (
+        <button type="button" disabled={busy} onClick={() => void setShelf("want")} className="border border-accent px-3 py-1.5 text-accent" title="Saves it to your library. Nothing is bought.">
+          + Add to TBR
+        </button>
+      ) : (
+        <select aria-label="Your shelf" disabled={busy} value={state.shelf} onChange={(e) => void setShelf(e.target.value)} className="border border-accent px-2 py-1.5 text-ink">
+          {SHELVES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {state.shelf === s.id ? `✓ ${SHORT[s.id]}` : `Move to ${s.label}`}
+            </option>
+          ))}
+        </select>
+      )}
       {state.series && (
         <button
           type="button"
@@ -86,5 +97,58 @@ export function LibraryButton({ projectId, className = "" }: { projectId: string
         </Link>
       )}
     </div>
+  );
+}
+
+let shelvesOnce: Promise<Record<string, string> | null> | null = null;
+/** One request per page for every TBR button in a catalog grid. Null when signed out. */
+function myShelves() {
+  shelvesOnce ??= fetch("/api/library?shelves=1")
+    .then(async (r) => (r.status === 401 ? null : ((await r.json()).shelves as Record<string, string>) || {}))
+    .catch(() => ({}));
+  return shelvesOnce;
+}
+
+/** Small TBR toggle for book grids. */
+export function TbrButton({ projectId }: { projectId: string }) {
+  const [shelf, setShelf] = useState<string | null | undefined>(undefined);
+  const [signedIn, setSignedIn] = useState(true);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void myShelves().then((s) => {
+      if (s === null) setSignedIn(false);
+      setShelf(s?.[projectId] || null);
+    });
+  }, [projectId]);
+
+  if (shelf === undefined) return null;
+  if (!signedIn) {
+    return (
+      <Link href={signupHref()} className="font-ui text-xs text-accent hover:underline">
+        + TBR
+      </Link>
+    );
+  }
+  if (shelf) {
+    return (
+      <Link href="/library" className="font-ui text-xs text-muted hover:text-ink">
+        ✓ {SHORT[shelf] || "In your library"}
+      </Link>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      title="Saves it to your library. Nothing is bought."
+      onClick={async () => {
+        setBusy(true);
+        if (await saveShelf(projectId, { action: "add", shelf: "want" })) setShelf("want");
+        setBusy(false);
+      }}
+      className="font-ui text-xs text-accent hover:underline"
+    >
+      + TBR
+    </button>
   );
 }

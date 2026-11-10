@@ -47,6 +47,7 @@ export const PLANS: PlanCopy[] = [
       "Book details and auto pages: title page, copyright with your ISBN, contents, also-by with links, and a review request, with the “Made with Novelist Writer” credit optional",
       "Your own author site: photo, bio, links, themes, and every book in one place",
       "A launch page for every book that grows with it: cover reveal, preorders, then buy buttons on release day",
+      "Readers add your book to their TBR from your launch page and the catalog, and you see how many TBRs, shelves, and reader lists each book is on (counts only, never who)",
       "Your public writing record and badges, like “Written in Novelist Writer”, “No AI used on this book”, and writing challenge wins",
       "Share kit: ready-to-post copy for every network, a newsletter block, a square image, and link previews",
       "Posts made from your book, not by AI: quote cards in your book's fonts (marked “From the book” when we find the line in your manuscript) and verified writing progress cards",

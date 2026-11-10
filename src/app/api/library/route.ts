@@ -21,7 +21,14 @@ export async function GET(req: Request) {
   const user = await auth();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const admin = createServiceClient();
-  const projectId = new URL(req.url).searchParams.get("projectId");
+  const params = new URL(req.url).searchParams;
+  // Which shelf each of your books is on, for TBR buttons across a catalog page
+  if (params.get("shelves")) {
+    const { data, error } = await admin.from("library_entries").select("project_id, shelf").eq("user_id", user.id).not("project_id", "is", null).limit(5000);
+    if (error) return NextResponse.json({ migrationNeeded: true });
+    return NextResponse.json({ shelves: Object.fromEntries((data || []).map((e) => [e.project_id, e.shelf])) });
+  }
+  const projectId = params.get("projectId");
   if (projectId) {
     const [{ data: entry, error }, series] = await Promise.all([
       admin.from("library_entries").select("id, shelf").eq("user_id", user.id).eq("project_id", projectId).maybeSingle(),

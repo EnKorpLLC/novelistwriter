@@ -16,6 +16,27 @@ import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 import { PassNotice } from "@/components/PassNotice";
 import { reconcileAuthorAccess } from "@/lib/studio-access";
 import { passNoticeFor } from "@/lib/pass-notice";
+import { shelfCountsFor, type ShelfCounts } from "@/lib/reader-library";
+
+/** Readers' shelves and lists this book is on, as counts only. */
+function ShelfLine({ counts }: { counts?: ShelfCounts }) {
+  if (!counts || (!counts.readers && !counts.lists)) return null;
+  const parts = [
+    counts.tbr && `On ${counts.tbr} TBR${counts.tbr === 1 ? "" : "s"}`,
+    counts.reading && `${counts.reading} reading now`,
+    counts.finished && `${counts.finished} finished`,
+    counts.lists && `${counts.lists} reader list${counts.lists === 1 ? "" : "s"}`,
+  ].filter(Boolean);
+  return (
+    <p className="mt-0.5 text-xs text-accent" title="Counts from readers' libraries on Novelist Writer. You never see who.">
+      {parts.join(" · ")}
+      <span className="text-muted">
+        {" "}
+        · on {counts.readers} reader{counts.readers === 1 ? "'s shelf" : "s' shelves"}
+      </span>
+    </p>
+  );
+}
 
 function formatWords(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
@@ -89,6 +110,8 @@ export default async function DashboardPage() {
     cur.words += row.word_count || 0;
     stats.set(row.project_id, cur);
   }
+
+  const shelves = await shelfCountsFor(serviceAdmin, user.id, (projects ?? []).map((p) => p.id as string)).catch(() => new Map<string, ShelfCounts>());
 
   const jar = await cookies();
   const tzRaw = jar.get(TIMEZONE_COOKIE)?.value;
@@ -238,6 +261,7 @@ export default async function DashboardPage() {
                         </>
                       )}
                     </p>
+                    <ShelfLine counts={shelves.get(p.id)} />
                   </div>
                 </Link>
                 <div className="font-ui flex shrink-0 items-center gap-4 text-sm">

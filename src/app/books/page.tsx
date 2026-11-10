@@ -9,6 +9,7 @@ import { readerTrustForBooks } from "@/lib/trust-badges";
 import { LaunchingThisWeek } from "@/components/LaunchingThisWeek";
 import { launchingThisWeek } from "@/lib/spotlight";
 import { createClient } from "@/lib/supabase/server";
+import { TbrButton } from "@/components/LibraryButton";
 import { applyContentFilters, contentFiltersFor } from "@/lib/reader-recs";
 
 export const metadata = {
@@ -111,6 +112,9 @@ export default async function PublishedBooksPage({
                 </Link>
                 <div className="mt-1">
                   <CompactTrust trust={trust.get(b.id)?.trust} record={trust.get(b.id)?.record} />
+                </div>
+                <div className="mt-1">
+                  <TbrButton projectId={b.id} />
                 </div>
               </li>
             ))}

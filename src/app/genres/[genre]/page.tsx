@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { ReaderDigestCta } from "@/components/ReaderDigestCta";
+import { TbrButton } from "@/components/LibraryButton";
 import { contentMetadata } from "@/lib/seo";
 import { liveGenres, type GenreItem } from "@/lib/genre-pages";
 
@@ -46,6 +47,7 @@ function Shelf({ title, items }: { title: string; items: GenreItem[] }) {
               {b.title}
             </Link>
             <p className="font-ui text-xs text-muted">by {b.authorName}</p>
+            <TbrButton projectId={b.id} />
             {b.note && <p className="font-ui text-xs text-accent">{b.note}</p>}
             {b.badges.map((x) => (
               <p key={x} className="font-ui mt-1 inline-block border border-accent/40 px-1.5 text-[10px] text-accent">
