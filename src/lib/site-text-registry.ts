@@ -156,7 +156,7 @@ export const SITE_TEXT: TextEntry[] = [
         { t: "Readers come to you", d: "Your book shows in “Launching this week”, readers can try a sample chapter, and a launch team shares, reviews, and asks their library." },
         { t: "Watch it happen", d: "A launch week dashboard shows visitors, buy clicks by store, new signups, and reviews as they arrive." },
         { t: "Readers feel the thanks", d: "ARC readers get a copy for any e-reader, and you thank them in one click. Authors who do earn a “Thanks readers” label." },
-        { t: "Gentle on your inbox", d: "Launch email goes out in batches that stay inside Gmail's daily limit, with an unsubscribe link on every list email." },
+        { t: "Email readers asked for", d: "Launch email only goes to readers who signed up to hear, with a one-click unsubscribe on every message, so it lands as welcome news instead of spam." },
         { t: "Posts from your own book", d: "Quote cards in your book's fonts, ARC review cards, and verified writing progress, on a posting calendar that reminds you, plus a year of ideas built around your releases. Never written by AI." },
       ],
     },

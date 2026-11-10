@@ -130,7 +130,7 @@ export function LaunchPlan({ projectId }: { projectId: string }) {
           {waiting > 0 && (
             <p className="mt-1 text-xs text-muted">
               {paused
-                ? `${waiting} emails wait for tomorrow's batch, to stay under Gmail's daily limit.`
+                ? `${waiting} emails go out in tomorrow's batch. Nothing to do; they send on their own.`
                 : `Sending… ${waiting} to go. Keep this tab open to send faster; anything left goes out tomorrow.`}
             </p>
           )}

@@ -65,7 +65,7 @@ export const READER_PLACES: ReaderPlace[] = [
     cost: "free",
     costNote: "Author site on Pro; email signups and lists on Studio.",
     goals: ["list", "launch"],
-    rules: "Your list, your rules. Every email carries an unsubscribe link, and launch email is sent in batches that stay inside Gmail's limits.",
+    rules: "Your list, your rules. Every email carries a one-click unsubscribe link.",
     tip: "Put your signup link in the back of every book. It's the one place every finished reader sees.",
   },
   {
