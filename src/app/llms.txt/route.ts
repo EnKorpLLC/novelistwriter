@@ -1,14 +1,17 @@
-import { PLANS, PRICING_FAQ } from "@/lib/plans";
+import { siteFaq, sitePlans } from "@/lib/site-text";
 import { appUrl } from "@/lib/stripe";
 
 export const revalidate = 86400;
 
 /** Plain summary of Novelist Writer for AI tools (llmstxt.org). Built from the same plan lists as Pricing. */
-export function GET() {
-  const plans = PLANS.map(
-    (p) => `### ${p.name} (${p.price} ${p.note})\n${p.lead}\n${p.items.map((i) => `- ${i}`).join("\n")}`
+export async function GET() {
+  const [planList, faqList] = await Promise.all([sitePlans(), siteFaq()]);
+  // Links typed into site text read as plain words here
+  const plain = (s: string) => s.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  const plans = planList.map(
+    (p) => `### ${p.name} (${p.price} ${p.note})\n${p.lead}\n${p.items.map((i) => `- ${plain(i)}`).join("\n")}`
   ).join("\n\n");
-  const faq = PRICING_FAQ.map((f) => `- **${f.q}** ${f.a}`).join("\n");
+  const faq = faqList.map((f) => `- **${f.q}** ${plain(f.a)}`).join("\n");
 
   const body = `# Novelist Writer
 

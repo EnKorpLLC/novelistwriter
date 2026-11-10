@@ -2,6 +2,10 @@ import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
+import { InlineText, Lines } from "@/components/Markdown";
+import { siteText } from "@/lib/site-text";
+
+export const revalidate = 600;
 
 export const metadata = {
   alternates: { canonical: "/readers" },
@@ -10,66 +14,8 @@ export const metadata = {
     "Read books before anyone else, free. Beta read and get advance copies from indie authors, comment right on the page, and follow the writers you love.",
 };
 
-const FEATURES = [
-  {
-    t: "Read before anyone else",
-    d: "Browse books open for beta readers and advance reader copies (ARCs) by genre. Read the blurb or a sample chapter, then apply or request a copy.",
-  },
-  {
-    t: "Read in your browser or on your e-reader",
-    d: "Your place is saved on every device. Advance copies can also be downloaded for Kindle, Kobo, or Apple Books, marked with your name, with Send to Kindle steps built in.",
-  },
-  {
-    t: "Comment on the exact sentence",
-    d: "Highlight a passage and tell the author what you felt, or leave notes for a whole chapter. Authors see your notes right beside the chapter as they revise, and can react and reply.",
-  },
-  {
-    t: "Finish, or say why you stopped",
-    d: "Leave a short review when you finish a beta read, or mark it DNF with a reason. Both help the author more than you'd think.",
-  },
-  {
-    t: "ARC reviews in one tap",
-    d: "When you finish an advance copy, you get a button for each store the author picked, plus Copy review so you can paste what you wrote.",
-  },
-  {
-    t: "Physical copies and thank-you gifts",
-    d: "Some authors ask ARC readers for a mailing address to send a print copy or a small thank-you. Only that author ever sees it.",
-  },
-  {
-    t: "Follow authors you love",
-    d: "Get a notification (and an email, if you want one) when they open a new beta read or ARC, and join their email list in one click.",
-  },
-  {
-    t: "A weekly reading list",
-    d: "Turn on the reader digest for one email every Thursday: new books from authors you follow, launches, new releases, free advance copies, and book promotions, focused on the genres you pick.",
-  },
-  {
-    t: "Know how a book was written",
-    d: "Before you apply, listings can show badges like “No AI used on this book” or “Written in Novelist Writer,” and a writing record summary, when the author chooses to share them.",
-  },
-  {
-    t: "Clear dates, fair time",
-    d: "Every beta read shows when it ends, and you get 3 extra days after that to send your final review. Advance copies show their read-by date.",
-  },
-  {
-    t: "Earn reader badges",
-    d: "Finisher, On time, Thoughtful feedback, Reviewer, Top rated, Launch day, and Launch team. Authors see your badges when you apply, so a good track record gets you picked.",
-  },
-  {
-    t: "Join a launch team",
-    d: "Help an author you love launch: share on release day, post a review, and ask your library to stock the book. Authors can thank the whole team, and some thank every reader. Look for “Thanks readers”.",
-  },
-  {
-    t: "Step away gracefully",
-    d: "Can't finish an advance copy? Step away with an optional reason instead of going quiet. The author hears, and nobody's left wondering.",
-  },
-  {
-    t: "A public reader profile, if you want one",
-    d: "Turn it on to share a page with your badges and reading stats. It never lists the books you read or anything you wrote in them.",
-  },
-];
-
-export default function ReadersPage() {
+export default async function ReadersPage() {
+  const [hero, features, cost] = await Promise.all([siteText("readers.hero"), siteText("readers.features"), siteText("readers.cost")]);
   return (
     <div className="min-h-screen">
       <PublicHeader />
@@ -77,16 +23,15 @@ export default function ReadersPage() {
       <main>
         <section className="hero-wash border-b border-line px-6 py-20 md:px-10">
           <div className="mx-auto max-w-5xl">
-            <p className="font-ui text-xs uppercase tracking-[0.2em] text-accent">For readers</p>
+            {hero.kicker && <p className="font-ui text-xs uppercase tracking-[0.2em] text-accent">{hero.kicker}</p>}
             <h1 className="font-display mt-4 text-5xl leading-tight text-ink md:text-6xl">
-              Read books before
-              <br />
-              anyone else. Free.
+              <Lines text={hero.heading || ""} />
             </h1>
-            <p className="mt-6 max-w-2xl text-lg text-muted">
-              Beta read and get advance copies from indie authors, tell them what worked right on the
-              page, and follow the writers you love. A reader account costs nothing, ever.
-            </p>
+            {hero.intro && (
+              <p className="mt-6 max-w-2xl text-lg text-muted">
+                <InlineText text={hero.intro} />
+              </p>
+            )}
             <div className="font-ui mt-10 flex flex-wrap gap-3">
               <Link href="/beta/signup" className="rounded-sm bg-ink px-6 py-3 text-paper transition hover:bg-accent">
                 Create a free reader account
@@ -102,12 +47,14 @@ export default function ReadersPage() {
         </section>
 
         <section className="mx-auto max-w-5xl px-6 py-20 md:px-10">
-          <h2 className="font-display text-3xl text-ink">What you can do</h2>
+          <h2 className="font-display text-3xl text-ink">{features.heading}</h2>
           <ul className="mt-10 grid gap-8 md:grid-cols-2">
-            {FEATURES.map((f) => (
-              <li key={f.t} className="border-t border-line pt-4">
+            {(features.items || []).map((f, i) => (
+              <li key={`${f.t}-${i}`} className="border-t border-line pt-4">
                 <h3 className="font-display text-xl">{f.t}</h3>
-                <p className="mt-2 text-sm text-muted">{f.d}</p>
+                <p className="mt-2 text-sm text-muted">
+                  <InlineText text={f.d} />
+                </p>
               </li>
             ))}
           </ul>
@@ -115,15 +62,17 @@ export default function ReadersPage() {
 
         <section className="border-y border-line bg-paper-deep/40 px-6 py-16 md:px-10">
           <div className="mx-auto max-w-5xl">
-            <h2 className="font-display text-3xl">What it costs</h2>
-            <p className="mt-3 max-w-2xl text-muted">
-              Nothing. Reader accounts are free, beta reads and advance copies are free, and there are
-              no ads. Authors pay for the tools that run their reading programs, so readers never do.
-            </p>
-            <p className="mt-3 max-w-2xl text-sm text-muted">
-              Also a writer? It&apos;s the same login. Switch between your reader and author dashboards
-              anytime.
-            </p>
+            <h2 className="font-display text-3xl">{cost.heading}</h2>
+            {cost.intro && (
+              <p className="mt-3 max-w-2xl text-muted">
+                <InlineText text={cost.intro} />
+              </p>
+            )}
+            {cost.note && (
+              <p className="mt-3 max-w-2xl text-sm text-muted">
+                <InlineText text={cost.note} />
+              </p>
+            )}
             <div className="font-ui mt-6 flex flex-wrap gap-3 text-sm">
               <Link href="/beta/signup" className="bg-accent px-4 py-2 text-paper">
                 Start reading

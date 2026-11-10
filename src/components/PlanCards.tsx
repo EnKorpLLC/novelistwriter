@@ -1,13 +1,16 @@
 import Link from "next/link";
-import { FOUNDING_PERCENT, PLANS, foundingPrice } from "@/lib/plans";
+import { FOUNDING_PERCENT, foundingPrice } from "@/lib/plans";
+import { sitePlans } from "@/lib/site-text";
+import { InlineText } from "@/components/Markdown";
 
 type Offers = {
   founding: { cap: number; left: number; percent: number };
   lifetime: Record<"pro" | "studio", { cap: number; left: number; cents: number }>;
 } | null;
 
-/** Free / Pro / Studio cards for the public pages, with founding prices while spots remain. */
-export function PlanCards({ offers = null }: { offers?: Offers }) {
+/** Free / Pro / Studio cards for the public pages, with your edited plan lists and founding prices while spots remain. */
+export async function PlanCards({ offers = null }: { offers?: Offers }) {
+  const plans = await sitePlans();
   const founding = Boolean(offers && offers.founding.left > 0);
   return (
     <>
@@ -18,7 +21,7 @@ export function PlanCards({ offers = null }: { offers?: Offers }) {
         </p>
       )}
       <div className="grid gap-6 md:grid-cols-3">
-        {PLANS.map((p) => {
+        {plans.map((p) => {
           const highlight = p.id === "studio";
           const discounted = founding && p.id !== "free";
           return (
@@ -32,17 +35,15 @@ export function PlanCards({ offers = null }: { offers?: Offers }) {
               {discounted && <p className="font-ui text-xs text-accent">Founding price, for life</p>}
               <p className="font-ui mt-2 text-sm text-muted">{p.lead}</p>
               <ul className="font-ui mt-4 flex-1 space-y-2 text-sm text-ink">
-                {p.items.map((i) => (
-                  <li key={i} className="border-t border-line pt-2">
-                    {i}
+                {p.items.map((i, n) => (
+                  <li key={n} className="border-t border-line pt-2">
+                    <InlineText text={i} />
                   </li>
                 ))}
               </ul>
               <Link
                 href={p.id === "free" ? "/signup" : "/billing"}
-                className={`font-ui mt-6 inline-block px-4 py-2 text-center text-sm ${
-                  highlight ? "bg-accent text-paper" : "border border-line text-accent"
-                }`}
+                className={`font-ui mt-6 inline-block px-4 py-2 text-center text-sm ${highlight ? "bg-accent text-paper" : "border border-line text-accent"}`}
               >
                 {p.id === "free" ? "Start free" : `Get ${p.name}`}
               </Link>

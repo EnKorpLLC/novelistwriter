@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { ClaimReferral } from "@/components/ClaimReferral";
+import { InlineText } from "@/components/Markdown";
 import { FOUNDING_PERCENT, LIFETIME, PLANS, foundingPrice, type PlanCopy } from "@/lib/plans";
 
 type Offers = {
@@ -89,6 +90,14 @@ function BillingInner() {
     })();
   }, []);
 
+  const [editedItems, setEditedItems] = useState<Partial<Record<PlanCopy["id"], string[]>>>({});
+  useEffect(() => {
+    void fetch("/api/site-text?keys=plans.pro,plans.studio")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setEditedItems({ pro: d.blocks["plans.pro"]?.list, studio: d.blocks["plans.studio"]?.list }))
+      .catch(() => null);
+  }, []);
+  const itemsFor = (id: PlanCopy["id"]) => editedItems[id]?.length ? editedItems[id]! : planItems(id);
   const [offers, setOffers] = useState<Offers | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   useEffect(() => {
@@ -276,8 +285,10 @@ function BillingInner() {
             </p>
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
-              {planItems("pro").map((i) => (
-                <li key={i}>{i}</li>
+              {itemsFor("pro").map((i) => (
+                <li key={i}>
+                  <InlineText text={i} />
+                </li>
               ))}
             </ul>
             <div className="font-ui mt-4 flex flex-wrap gap-2">
@@ -308,8 +319,10 @@ function BillingInner() {
             </p>
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
-              {planItems("studio").map((i) => (
-                <li key={i}>{i}</li>
+              {itemsFor("studio").map((i) => (
+                <li key={i}>
+                  <InlineText text={i} />
+                </li>
               ))}
             </ul>
             <div className="font-ui mt-4 flex flex-wrap gap-2">

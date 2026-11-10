@@ -3,7 +3,9 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { contentMetadata } from "@/lib/seo";
 import { publicOffers } from "@/lib/offers";
-import { LIFETIME, PLANS } from "@/lib/plans";
+import { LIFETIME } from "@/lib/plans";
+import { sitePlans } from "@/lib/site-text";
+import { InlineText } from "@/components/Markdown";
 
 export const revalidate = 600;
 
@@ -15,8 +17,8 @@ export const metadata = contentMetadata({
 });
 
 export default async function LifetimePage() {
-  const offers = await publicOffers();
-  const tiers = (["pro", "studio"] as const).map((t) => ({ t, plan: PLANS.find((p) => p.id === t)!, spots: offers?.lifetime[t] }));
+  const [offers, plans] = await Promise.all([publicOffers(), sitePlans()]);
+  const tiers = (["pro", "studio"] as const).map((t) => ({ t, plan: plans.find((p) => p.id === t)!, spots: offers?.lifetime[t] }));
   const soldOut = Boolean(offers) && tiers.every((x) => (x.spots?.left ?? 0) <= 0);
 
   return (
@@ -51,9 +53,9 @@ export default async function LifetimePage() {
                   {spots ? ` ${spots.left} of ${spots.cap} spots left.` : ` Limited to ${LIFETIME[t].cap} spots.`}
                 </p>
                 <ul className="font-ui mt-4 flex-1 space-y-2 text-sm">
-                  {plan.items.slice(0, 8).map((i) => (
-                    <li key={i} className="border-t border-line pt-2">
-                      {i}
+                  {plan.items.slice(0, 8).map((i, n) => (
+                    <li key={n} className="border-t border-line pt-2">
+                      <InlineText text={i} />
                     </li>
                   ))}
                 </ul>

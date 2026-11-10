@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PlanCards } from "@/components/PlanCards";
-import { PAY_AS_YOU_GO, PRICING_FAQ } from "@/lib/plans";
+import { PAY_AS_YOU_GO } from "@/lib/plans";
 import { JsonLd } from "@/components/JsonLd";
 import { faqJsonLd, softwareJsonLd } from "@/lib/seo";
 import { PublicFooter } from "@/components/PublicFooter";
 import { COMPARED_ON, REPLACES } from "@/lib/compare";
 import { publicOffers } from "@/lib/offers";
+import { siteFaq, siteText } from "@/lib/site-text";
+import { InlineText } from "@/components/Markdown";
 
 export const revalidate = 600;
 
@@ -18,17 +20,18 @@ export const metadata = {
 };
 
 export default async function PricingPage() {
-  const offers = await publicOffers();
+  const [offers, hero, faq] = await Promise.all([publicOffers(), siteText("pricing.hero"), siteFaq()]);
   return (
     <div className="min-h-screen">
       <PublicHeader />
-      <JsonLd data={[softwareJsonLd(), faqJsonLd()]} />
+      <JsonLd data={[softwareJsonLd(), faqJsonLd(faq)]} />
       <main className="mx-auto max-w-5xl px-6 py-16 md:px-10">
-        <h1 className="font-display text-4xl">Pricing</h1>
-        <p className="mt-3 max-w-2xl text-muted">
-          Write free forever. Your first book is free, and every plan keeps a record of how you wrote it
-          and lets you switch AI off entirely. AI critiques craft; it never writes your novel.
-        </p>
+        <h1 className="font-display text-4xl">{hero.heading}</h1>
+        {hero.intro && (
+          <p className="mt-3 max-w-2xl text-muted">
+            <InlineText text={hero.intro} />
+          </p>
+        )}
 
         <section className="mt-12">
           <PlanCards offers={offers} />
@@ -91,10 +94,12 @@ export default async function PricingPage() {
         <section className="mt-16">
           <h2 className="font-display text-3xl">Questions</h2>
           <dl className="mt-6 space-y-6">
-            {PRICING_FAQ.map((f) => (
+            {faq.map((f) => (
               <div key={f.q} className="border-t border-line pt-4">
                 <dt className="font-display text-xl text-ink">{f.q}</dt>
-                <dd className="mt-2 max-w-3xl text-sm text-muted">{f.a}</dd>
+                <dd className="mt-2 max-w-3xl text-sm text-muted">
+                  <InlineText text={f.a} />
+                </dd>
               </div>
             ))}
           </dl>

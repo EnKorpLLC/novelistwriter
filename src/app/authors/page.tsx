@@ -3,7 +3,9 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { PlanCards } from "@/components/PlanCards";
+import { InlineText, Lines } from "@/components/Markdown";
 import { publicOffers } from "@/lib/offers";
+import { siteText } from "@/lib/site-text";
 
 export const revalidate = 600;
 
@@ -15,7 +17,14 @@ export const metadata = {
 };
 
 export default async function AuthorsPage() {
-  const offers = await publicOffers();
+  const [offers, hero, plans, earn, everyPlan, cta] = await Promise.all([
+    publicOffers(),
+    siteText("authors.hero"),
+    siteText("authors.plans"),
+    siteText("authors.earn"),
+    siteText("authors.every_plan"),
+    siteText("authors.cta"),
+  ]);
   return (
     <div className="min-h-screen">
       <PublicHeader />
@@ -23,27 +32,20 @@ export default async function AuthorsPage() {
       <main>
         <section className="hero-wash border-b border-line px-6 py-20 md:px-10">
           <div className="mx-auto max-w-5xl">
-            <p className="font-ui text-xs uppercase tracking-[0.2em] text-accent">For authors</p>
+            {hero.kicker && <p className="font-ui text-xs uppercase tracking-[0.2em] text-accent">{hero.kicker}</p>}
             <h1 className="font-display mt-4 text-5xl leading-tight text-ink md:text-6xl">
-              Write it yourself.
-              <br />
-              Prove it. Launch it.
+              <Lines text={hero.heading || ""} />
             </h1>
-            <p className="mt-6 max-w-2xl text-lg text-muted">
-              One studio from first draft to release day: a record of how you wrote it, beta readers
-              and ARCs that live where your book does, their feedback right beside each chapter as you
-              revise, and, from Pro up, polished ebook and paperback formatting plus an author site and launch pages
-              you can share anywhere. AI
-              critiques and never writes, and it turns off with one switch.
-            </p>
+            {hero.intro && (
+              <p className="mt-6 max-w-2xl text-lg text-muted">
+                <InlineText text={hero.intro} />
+              </p>
+            )}
             <div className="font-ui mt-10 flex flex-wrap gap-3">
               <Link href="/signup" className="rounded-sm bg-ink px-6 py-3 text-paper transition hover:bg-accent">
                 Start your first book free
               </Link>
-              <Link
-                href="/pricing"
-                className="rounded-sm border border-ink/20 px-6 py-3 text-ink transition hover:border-accent hover:text-accent"
-              >
+              <Link href="/pricing" className="rounded-sm border border-ink/20 px-6 py-3 text-ink transition hover:border-accent hover:text-accent">
                 Full pricing
               </Link>
             </div>
@@ -51,7 +53,7 @@ export default async function AuthorsPage() {
         </section>
 
         <section className="mx-auto max-w-5xl px-6 py-20 md:px-10">
-          <h2 className="font-display text-3xl text-ink">Pick what fits</h2>
+          <h2 className="font-display text-3xl text-ink">{plans.heading}</h2>
           <div className="mt-10">
             <PlanCards offers={offers} />
           </div>
@@ -60,41 +62,28 @@ export default async function AuthorsPage() {
         <section className="border-y border-line bg-paper-deep/40 px-6 py-16 md:px-10">
           <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-2">
             <div>
-              <h2 className="font-display text-2xl">Earn Studio for free</h2>
-              <p className="mt-3 text-sm text-muted">
-                Every link you share carries your name. When people visit, readers join your beta or
-                ARC, or a writer you invited gets going, you earn free days of Studio&apos;s reader
-                tools (AI credits not included). Bank up to four weeks and start them when your next
-                book is ready.
-              </p>
+              <h2 className="font-display text-2xl">{earn.heading}</h2>
+              {earn.intro && (
+                <p className="mt-3 text-sm text-muted">
+                  <InlineText text={earn.intro} />
+                </p>
+              )}
             </div>
             <div>
-              <h2 className="font-display text-2xl">On every plan</h2>
+              <h2 className="font-display text-2xl">{everyPlan.heading}</h2>
               <ul className="font-ui mt-3 space-y-1.5 text-sm text-muted">
-                <li>Your book stays yours: we never train on your manuscript</li>
-                <li>
-                  Export your manuscript anytime; it&apos;s never held hostage (
-                  <Link href="/your-data" className="text-accent underline">
-                    your data, your exit
-                  </Link>
-                  )
-                </li>
-                <li>
-                  Coming from Scrivener, Word, Vellum, or Atticus?{" "}
-                  <Link href="/compare" className="text-accent underline">
-                    See how to switch
-                  </Link>
-                </li>
-                <li>A private record of how you wrote every book</li>
-                <li>Public pages (Pro and up) show up in AI search answers, with AI training blocked on them</li>
-                <li>One switch to turn every AI tool off</li>
+                {(everyPlan.list || []).map((item, i) => (
+                  <li key={i}>
+                    <InlineText text={item} />
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
         </section>
 
         <section className="mx-auto max-w-5xl px-6 py-16 text-center md:px-10">
-          <h2 className="font-display text-3xl">Your first book is free</h2>
+          <h2 className="font-display text-3xl">{cta.heading}</h2>
           <div className="font-ui mt-6 flex flex-wrap justify-center gap-3">
             <Link href="/signup" className="bg-accent px-6 py-3 text-paper">
               Start writing

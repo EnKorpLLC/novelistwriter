@@ -28,6 +28,26 @@ function inline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
+/** One line of editable site text: [links](/page), **bold**, and *italic*, nothing else. */
+export function InlineText({ text }: { text: string }) {
+  return <>{inline(text, "t")}</>;
+}
+
+/** A heading where each line you typed starts a new line. */
+export function Lines({ text }: { text: string }) {
+  const parts = text.split("\n");
+  return (
+    <>
+      {parts.map((p, i) => (
+        <span key={i}>
+          {i > 0 && <br />}
+          {p}
+        </span>
+      ))}
+    </>
+  );
+}
+
 /**
  * A small, safe Markdown renderer for guides and reports edited in admin. It builds React elements
  * (never raw HTML), so nothing typed into a guide can inject markup or scripts.
