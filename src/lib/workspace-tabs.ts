@@ -1,4 +1,4 @@
-export type WorkspaceTab = "write" | "bible" | "beta" | "arc" | "publish" | "serial" | "sell" | "format" | "cover" | "tools";
+export type WorkspaceTab = "write" | "bible" | "beta" | "arc" | "publish" | "serial" | "sell" | "format" | "cover" | "audio" | "tools";
 
 /** Every tab, with the label shown in its group's second row. Ids stay stable: links like ?tab=arc keep working. */
 export const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
@@ -11,6 +11,7 @@ export const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "sell", label: "Sell" },
   { id: "format", label: "Format" },
   { id: "cover", label: "Cover" },
+  { id: "audio", label: "Audio" },
   { id: "tools", label: "Tools" },
 ];
 
@@ -21,7 +22,7 @@ export const WORKSPACE_GROUPS: { id: string; label: string; tabs: WorkspaceTab[]
   { id: "readers", label: "Readers", tabs: ["beta", "arc"] },
   { id: "launch", label: "Launch", tabs: ["publish", "serial"] },
   { id: "sell", label: "Sell", tabs: ["sell"] },
-  { id: "make", label: "Make", tabs: ["format", "cover"] },
+  { id: "make", label: "Make", tabs: ["format", "cover", "audio"] },
   { id: "tools", label: "Tools", tabs: ["tools"] },
 ];
 

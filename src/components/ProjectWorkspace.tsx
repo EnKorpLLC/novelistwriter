@@ -13,6 +13,7 @@ import { ArcPanel } from "@/components/ArcPanel";
 import { PublishPanel } from "@/components/PublishPanel";
 import { SerialPanel } from "@/components/SerialPanel";
 import { SellPanel } from "@/components/SellPanel";
+import { AudioStudio } from "@/components/AudioStudio";
 import { FormatPanel } from "@/components/FormatPanel";
 import { CoverPanel } from "@/components/CoverPanel";
 import { WORKSPACE_GROUPS, groupOf, isWorkspaceTab, tabLabel, type WorkspaceTab } from "@/lib/workspace-tabs";
@@ -984,6 +985,8 @@ export function ProjectWorkspace({
         {tab === "serial" && <SerialPanel projectId={project.id} chapters={chapters} />}
 
         {tab === "sell" && <SellPanel projectId={project.id} />}
+
+        {tab === "audio" && <AudioStudio projectId={project.id} chapters={chapters} />}
 
         {tab === "format" && (
           <FormatPanel projectId={project.id} project={project} chapters={chapters} matter={matter} />
