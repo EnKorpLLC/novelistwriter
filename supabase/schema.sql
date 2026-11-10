@@ -426,6 +426,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- See migration_reader_trust.sql for: beta_comments.author_seen_at, reader_blocks, trust_reports, profiles.catalog_suspended_at
 -- See migration_reader_library.sql for: library_entries, series_follows, reader_lists, reader_list_items, reader_follows, profiles.library_public / content_filters
 -- See migration_verify_badge.sql for: projects.verify_code, projects.verify_public
+-- See migration_serial_posting.sql for: serial_posts, projects.serial_settings
 -- See migration_launch_engine.sql for: projects.launch_plan, author_subscribers.release_project_ids, email_queue, buy_clicks, launch_team, author_thanks
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)

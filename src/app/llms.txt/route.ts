@@ -32,6 +32,7 @@ export async function GET() {
 - [Comparisons and switching guides](${appUrl("/compare")}): fair comparisons with Scrivener, Vellum, Atticus, BetaBooks, and NetGalley, and how to bring a book over
 - [Your data, your exit](${appUrl("/your-data")}): export manuscripts and reader lists anytime, on every plan
 - [Verify a book](${appUrl("/verify")}): enter a verification code (NW-XXXX-XXXX) to see a book's writing record summary; authors on every plan can post a "verified human-written" badge on any site. Free JSON API for platforms, no key: ${appUrl("/api/verify/CODE")}
+- Serial writers: copy any chapter ready to paste into Royal Road, Wattpad, Substack, AO3, Scribble Hub, Tapas, forums (BBCode), or Reddit (Markdown), free; Pro adds a posting log, chapters-ahead count per site, and release-day reminders. Nothing is posted automatically, and serials stay non-exclusive
 - Launch pages (Pro) link out to serial sites ("Read on Royal Road / Wattpad / Substack") alongside store buttons, and authors get copy-paste buttons for their own websites and newsletters
 - [Writing challenges](${appUrl("/challenges")}): free challenges with verified word counts (typed words only), streaks, and leaderboards
 - [Contact](${appUrl("/contact")})

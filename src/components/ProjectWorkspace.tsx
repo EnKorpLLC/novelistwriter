@@ -11,6 +11,7 @@ import { ProjectTools } from "@/components/ProjectTools";
 import { BetaPanel } from "@/components/BetaPanel";
 import { ArcPanel } from "@/components/ArcPanel";
 import { PublishPanel } from "@/components/PublishPanel";
+import { SerialPanel } from "@/components/SerialPanel";
 import { FormatPanel } from "@/components/FormatPanel";
 import { CoverPanel } from "@/components/CoverPanel";
 import { WORKSPACE_TABS, isWorkspaceTab, type WorkspaceTab } from "@/lib/workspace-tabs";
@@ -908,6 +909,8 @@ export function ProjectWorkspace({
         {tab === "arc" && <ArcPanel projectId={project.id} />}
 
         {tab === "publish" && <PublishPanel projectId={project.id} />}
+
+        {tab === "serial" && <SerialPanel projectId={project.id} chapters={chapters} />}
 
         {tab === "format" && (
           <FormatPanel projectId={project.id} project={project} chapters={chapters} matter={matter} />
