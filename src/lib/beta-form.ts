@@ -1,3 +1,5 @@
+import { normalizeBrief, type FeedbackBrief } from "@/lib/feedback-brief";
+
 export type BetaFormFieldType = "short" | "long" | "yesno";
 
 export type BetaFormFollowUp = {
@@ -22,6 +24,8 @@ export type BetaApplicationForm = {
   intro: string;
   contentWarnings: string;
   fields: BetaFormField[];
+  /** What feedback the author wants, how rough the draft is, and the time it takes (RX4) */
+  brief?: FeedbackBrief | null;
 };
 
 export type BetaApplicationAnswers = Record<string, string>;
@@ -82,6 +86,7 @@ export function normalizeBetaApplicationForm(raw: unknown): BetaApplicationForm 
     contentWarnings:
       typeof o.contentWarnings === "string" ? o.contentWarnings.trim().slice(0, 4000) : "",
     fields: normalizeBetaFormFields(o.fields),
+    brief: normalizeBrief(o.brief),
   };
 }
 

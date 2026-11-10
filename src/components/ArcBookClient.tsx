@@ -6,6 +6,7 @@ import { AuthorConnect, AuthorLinks } from "@/components/AuthorConnect";
 import type { LabeledLink } from "@/lib/public-profile";
 import type { MailingAddress } from "@/lib/arc";
 import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
+import { ReportConcern } from "@/components/ReportConcern";
 import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type ReviewLink = LabeledLink & { key: string };
@@ -435,6 +436,11 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
                 initialSubscribed={Boolean(data.subscribed)}
                 canSubscribe={Boolean(data.canSubscribe)}
               />
+            </div>
+          )}
+          {data.access !== "author" && (
+            <div className="mt-2">
+              <ReportConcern projectId={data.projectId} authorUserId={data.authorUserId} mode={data.loggedIn ? "author" : "book"} />
             </div>
           )}
         </div>

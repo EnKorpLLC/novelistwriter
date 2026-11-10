@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SPAM_TIP } from "@/components/EmailOptInPrompt";
+import { BlockedAuthors } from "@/components/BlockedAuthors";
 
 export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("");
@@ -247,6 +248,7 @@ export default function SettingsPage() {
         </label>
         {trustMessage && <p className="text-sm text-muted">{trustMessage}</p>}
       </section>
+      <BlockedAuthors />
       <form onSubmit={(e) => void changePassword(e)} className="font-ui mt-12 space-y-4">
         <h2 className="font-display text-2xl">Change password</h2>
         <label className="block text-sm">

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { linkInvitesForEmail } from "@/lib/beta-platform";
 import { createNotification } from "@/lib/beta-social";
+import { readerBlockedAuthor } from "@/lib/reader-safety";
 
 export async function GET(req: Request) {
   const supabase = await createClient();
@@ -203,6 +204,11 @@ export async function POST(req: Request) {
         .eq("id", conversationId);
       convo = { ...convo, reader_user_id: user.id };
     }
+  }
+
+  // A reader who blocked this author doesn't get messages from them
+  if (user.id === convo.author_user_id && (await readerBlockedAuthor(admin, convo.reader_user_id, convo.author_user_id))) {
+    return NextResponse.json({ error: "This reader isn't accepting messages from you." }, { status: 403 });
   }
 
   const { data: message, error: msgErr } = await admin

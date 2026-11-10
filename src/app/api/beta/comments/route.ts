@@ -39,6 +39,13 @@ export async function GET(req: Request) {
       .limit(3000);
 
     const commentIds = (comments || []).map((c) => c.id);
+    // The author has now seen every reader note on this book
+    await admin
+      .from("beta_comments")
+      .update({ author_seen_at: new Date().toISOString() })
+      .eq("project_id", projectId)
+      .is("author_user_id", null)
+      .is("author_seen_at", null);
     const { data: reactions } = commentIds.length
       ? await admin
           .from("beta_comment_reactions")
@@ -102,6 +109,9 @@ export async function GET(req: Request) {
         : Promise.resolve({ data: [] as { id: string; title: string; project_id: string }[] }),
     ]);
 
+  // Read separately so the hub still loads before migration_reader_trust.sql
+  const { data: seenRows } = topIds.length ? await admin.from("beta_comments").select("id, author_seen_at").in("id", topIds) : { data: [] };
+  const seenAt = new Map((seenRows || []).map((s) => [s.id as string, (s.author_seen_at as string | null) || null]));
   const titleByProject = new Map((projects || []).map((p) => [p.id, p.title]));
   const chapterTitle = new Map((chapters || []).map((c) => [c.id, c.title]));
   const repliesByParent = new Map<string, typeof replies>();
@@ -128,6 +138,7 @@ export async function GET(req: Request) {
     body: c.body,
     excerpt: c.excerpt,
     completed: Boolean(c.completed),
+    seenByAuthorAt: seenAt.get(c.id) || null,
     createdAt: c.created_at,
     projectId: c.project_id,
     projectTitle: titleByProject.get(c.project_id) || "Manuscript",

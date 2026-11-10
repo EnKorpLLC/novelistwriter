@@ -19,6 +19,7 @@ export const STATIC_PAGES = [
   { path: "/affiliates", priority: 0.5, changeFrequency: "monthly" as const },
   { path: "/lifetime", priority: 0.6, changeFrequency: "weekly" as const },
   { path: "/human-authorship-standard", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/conduct", priority: 0.4, changeFrequency: "yearly" as const },
   { path: "/guides", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/reports", priority: 0.6, changeFrequency: "monthly" as const },
   { path: "/genres", priority: 0.6, changeFrequency: "daily" as const },

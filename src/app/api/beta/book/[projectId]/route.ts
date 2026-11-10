@@ -97,6 +97,7 @@ export async function GET(
     authorUserId: project.user_id,
     authorName: author?.display_name || "Author",
     authorLinks: publicLinkList(normalizePublicLinks(author?.public_links)),
+    brief: form.brief || null,
     ...((await readerTrustForBooks(admin, [{ id: projectId, user_id: project.user_id }])).get(projectId) || {}),
     canSubscribe: authorHasStudio,
     coverUrl: coverPublicUrl(

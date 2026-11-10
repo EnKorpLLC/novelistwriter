@@ -15,6 +15,8 @@ import { catalogLabelsForProject } from "@/lib/book-keywords";
 import { isArcWindowOpen } from "@/lib/arc";
 import { readerTrustForBooks } from "@/lib/trust-badges";
 import { isBetaClosedToNew } from "@/lib/beta-access";
+import { normalizeBetaApplicationForm } from "@/lib/beta-form";
+import { hiddenAuthorsFor } from "@/lib/reader-safety";
 
 export async function GET() {
   const supabase = await createClient();
@@ -49,7 +51,7 @@ export async function GET() {
         : Promise.resolve({ data: [] as never[] }),
       admin
         .from("projects")
-        .select("id, title, genre, blurb, cover_path, updated_at, user_id, beta_ready, metadata, beta_expires_at")
+        .select("id, title, genre, blurb, cover_path, updated_at, user_id, beta_ready, metadata, beta_expires_at, beta_application_form")
         .eq("beta_ready", true)
         .order("genre", { ascending: true })
         .order("title", { ascending: true }),
@@ -131,8 +133,10 @@ export async function GET() {
     .sort((a, b) => String(b.lastReadAt || "").localeCompare(String(a.lastReadAt || "")));
 
   const shelfIds = new Set(shelf.map((s) => s.projectId));
+  // Authors this reader blocked, and authors removed from the catalog after conduct reports (RX4)
+  const hidden = await hiddenAuthorsFor(admin, user.id);
   const catalogRaw = (readyProjects || []).filter(
-    (p) => studioAuthors.has(p.user_id) && !isBetaClosedToNew(p.beta_expires_at)
+    (p) => studioAuthors.has(p.user_id) && !isBetaClosedToNew(p.beta_expires_at) && !hidden.has(p.user_id)
   );
 
   type CatalogBook = (typeof catalogRaw)[number];
@@ -169,6 +173,7 @@ export async function GET() {
           ),
           onShelf: shelfIds.has(p.id),
           endsAt: p.beta_expires_at || null,
+          brief: normalizeBetaApplicationForm(p.beta_application_form).brief || null,
         })),
     }));
 
@@ -218,7 +223,7 @@ export async function GET() {
     (arcRows || []).map((r) => [r.project_id, { status: r.status, finishedAt: r.finished_at }])
   );
   const arcCatalog = openArcProjects
-    .filter((p) => studioAuthors.has(p.user_id))
+    .filter((p) => studioAuthors.has(p.user_id) && !hidden.has(p.user_id))
     .map((p) => ({
       projectId: p.id,
       title: p.title,

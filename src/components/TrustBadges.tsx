@@ -7,10 +7,33 @@ type RecordSummary = {
   typedPercent: number;
   sessions: number;
   activeDays: number;
+  spanDays?: number;
   recordHref: string | null;
 };
 
-type TrustData = { aiOffSince?: string | null; noAiOnBook?: boolean; aiActions?: AiActionCount[] | null };
+type Pace = { books: number; since: string };
+type TrustData = { aiOffSince?: string | null; noAiOnBook?: boolean; aiActions?: AiActionCount[] | null; pace?: Pace | null };
+
+/** "7 months", "3 weeks", "12 days" */
+function spanLabel(days: number) {
+  if (days >= 60) return `${Math.round(days / 30.4)} months`;
+  if (days >= 14) return `${Math.round(days / 7)} weeks`;
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** "4 books published here since Mar 2025 (about 2 a year)": readers' own check for impossible release speeds. */
+export function PaceLine({ pace, className = "" }: { pace?: Pace | null; className?: string }) {
+  if (!pace?.books) return null;
+  const months = (Date.now() - Date.parse(pace.since)) / (30.4 * 86_400_000);
+  const perYear = pace.books >= 3 && months >= 12 ? Math.round((pace.books / months) * 12 * 10) / 10 : null;
+  return (
+    <p className={`font-ui text-xs text-muted ${className}`}>
+      <span className="text-ink">Publishing pace:</span> {pace.books} book{pace.books === 1 ? "" : "s"} published on Novelist Writer since{" "}
+      {new Date(pace.since).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+      {perYear ? ` (about ${perYear} a year)` : ""}
+    </p>
+  );
+}
 
 /** Writing record numbers the author chose to show readers: never any manuscript text. */
 export function RecordSummaryLine({ record, className = "" }: { record?: RecordSummary | null; className?: string }) {
@@ -23,8 +46,9 @@ export function RecordSummaryLine({ record, className = "" }: { record?: RecordS
         </div>
       )}
       <p>
-        <span className="text-ink">Writing record:</span> {record.typedPercent}% typed in the editor ·{" "}
-        {record.sessions.toLocaleString()} writing session{record.sessions === 1 ? "" : "s"} over{" "}
+        <span className="text-ink">Writing record:</span>{" "}
+        {record.spanDays && record.spanDays >= 7 ? `written over ${spanLabel(record.spanDays)} · ` : ""}
+        {record.typedPercent}% typed in the editor · {record.sessions.toLocaleString()} writing session{record.sessions === 1 ? "" : "s"} on{" "}
         {record.activeDays.toLocaleString()} day{record.activeDays === 1 ? "" : "s"}
         {record.recordHref && (
           <>
@@ -129,14 +153,16 @@ export function TrustBadges({
   aiOffSince,
   noAiOnBook,
   aiActions,
+  pace,
   className = "",
 }: {
   aiOffSince?: string | null;
   noAiOnBook?: boolean;
   aiActions?: AiActionCount[] | null;
+  pace?: Pace | null;
   className?: string;
 }) {
-  if (!aiOffSince && !noAiOnBook && !aiActions?.length) return null;
+  if (!aiOffSince && !noAiOnBook && !aiActions?.length && !pace?.books) return null;
   return (
     <div className={className}>
       {(noAiOnBook || aiOffSince) && (
@@ -167,6 +193,7 @@ export function TrustBadges({
       {aiActions && aiActions.length > 0 && (
         <AiActionList actions={aiActions} className={noAiOnBook || aiOffSince ? "mt-2" : ""} />
       )}
+      <PaceLine pace={pace} className={noAiOnBook || aiOffSince || aiActions?.length ? "mt-2" : ""} />
     </div>
   );
 }

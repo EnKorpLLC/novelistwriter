@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import { BetaApplyForm } from "@/components/BetaApplyForm";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
+import { FeedbackBriefCard } from "@/components/FeedbackBriefCard";
 
 export default async function BetaApplyPage({
   params,
@@ -29,6 +30,14 @@ export default async function BetaApplyPage({
           Open the book page
         </a>{" "}
         after you log in.
+      </p>
+      <FeedbackBriefCard brief={form.brief} className="mt-5" />
+      <p className="font-ui mt-3 text-xs text-muted">
+        Beta reading here follows our{" "}
+        <a href="/conduct" className="text-accent underline">
+          conduct rules
+        </a>
+        : honest, kind feedback, respect both ways, and you can report or block anyone.
       </p>
       {!form.intro && (
         <p className="mt-3 text-sm text-muted">

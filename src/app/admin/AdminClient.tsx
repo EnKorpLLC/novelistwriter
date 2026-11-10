@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { SignOutButton } from "@/components/SignOutButton";
 import { AdminModeration } from "./AdminModeration";
+import { AdminReports } from "./AdminReports";
 import { GiftForm } from "./GiftForm";
 import { AdminMetrics } from "./AdminMetrics";
 import { AdminMoney } from "./AdminMoney";
@@ -45,6 +46,7 @@ const TABS = [
   { id: "messages", label: "Messages" },
   { id: "users", label: "Users" },
   { id: "moderation", label: "Moderation" },
+  { id: "reports", label: "Reports" },
   { id: "challenges", label: "Challenges" },
   { id: "promos", label: "Promos" },
   { id: "affiliates", label: "Affiliates" },
@@ -511,6 +513,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
         {tab === "money" && <AdminMoney onNote={setNote} />}
 
         {tab === "moderation" && <AdminModeration onNote={setNote} />}
+
+        {tab === "reports" && <AdminReports onNote={setNote} />}
 
         {tab === "challenges" && <AdminChallenges onNote={setNote} />}
 

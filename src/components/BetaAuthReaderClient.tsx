@@ -8,6 +8,26 @@ import { BetaFormFields } from "@/components/BetaFormFields";
 import type { BetaApplicationForm } from "@/lib/beta-form";
 import { betaEndLabel, betaEndState } from "@/lib/beta-access";
 import { highlightPassageInElement } from "@/lib/passage-highlight";
+import { FINAL_PROMPTS, KIND_OPENERS, chapterPrompts, type FeedbackBrief } from "@/lib/feedback-brief";
+import { ReportConcern } from "@/components/ReportConcern";
+
+/** Tap a question to start your note with it; tap again to add another. */
+function PromptChips({ prompts, onPick, label }: { prompts: string[]; onPick: (p: string) => void; label: string }) {
+  return (
+    <div className="mt-2">
+      <p className="text-[11px] text-muted">{label}</p>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {prompts.map((p) => (
+          <button key={p} type="button" onClick={() => onPick(p)} className="border border-line px-2 py-1 text-left text-xs text-ink hover:border-accent">
+            {p}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const addPrompt = (body: string, prompt: string) => `${body.trim() ? `${body.trimEnd()}\n\n` : ""}${prompt}\n`;
 
 type Chapter = {
   id: string;
@@ -128,6 +148,8 @@ export function BetaAuthReaderClient({
   const [reviewBody, setReviewBody] = useState("");
   const [finishBusy, setFinishBusy] = useState(false);
   const [finishMsg, setFinishMsg] = useState("");
+  const [brief, setBrief] = useState<FeedbackBrief | null>(null);
+  const [authorUserId, setAuthorUserId] = useState("");
 
   composingRef.current = pop?.composing ?? false;
 
@@ -144,12 +166,16 @@ export function BetaAuthReaderClient({
     endsAt?: string | null;
     hasReview?: boolean;
     reviewBody?: string | null;
+    brief?: FeedbackBrief | null;
+    authorUserId?: string;
   }) {
     const list = Array.isArray(data.chapters) ? data.chapters : [];
     setChapters(list);
     setUnlocked(true);
     setGateNeedsApplication(false);
     if (data.title) setTitle(data.title);
+    setBrief(data.brief || null);
+    setAuthorUserId(data.authorUserId || "");
     setEndsAt(data.endsAt || null);
     if (data.status === "dnf") setDnf(true);
     if (data.finishedAt || data.hasReview) {
@@ -754,6 +780,7 @@ export function BetaAuthReaderClient({
           Dashboard
         </Link>
         {title ? <p className="text-sm text-muted">{title}</p> : null}
+        {authorUserId && <ReportConcern mode="author" projectId={projectId} authorUserId={authorUserId} />}
       </div>
 
       {!finished && !dnf && betaEndLabel(endsAt) && (
@@ -826,6 +853,11 @@ export function BetaAuthReaderClient({
           Whole-chapter notes for {chapter?.title || "this chapter"}. Highlight text above to comment
           on a specific sentence.
         </p>
+        <PromptChips
+          label={brief?.focus.length ? "The author is asking about these. Tap one to start:" : "Not sure where to start? Tap a question:"}
+          prompts={chapterPrompts(brief)}
+          onPick={(p) => setGeneralBody((b) => addPrompt(b, p))}
+        />
         <textarea
           className="mt-2 w-full border border-line p-3"
           rows={4}
@@ -833,6 +865,9 @@ export function BetaAuthReaderClient({
           onChange={(e) => setGeneralBody(e.target.value)}
           placeholder="What worked? What confused you?"
         />
+        <p className="mt-1 text-[11px] text-muted">
+          Honest is kind. Some easy openings: {KIND_OPENERS.join(" · ")}
+        </p>
         <button
           type="button"
           disabled={sending || !generalBody.trim()}
@@ -941,6 +976,7 @@ export function BetaAuthReaderClient({
                 placeholder="What did you think overall?"
                 autoFocus
               />
+              <PromptChips label="Questions that help:" prompts={FINAL_PROMPTS} onPick={(p) => setReviewBody((b) => addPrompt(b, p))} />
               {finishMsg && <p className="mt-2 text-xs text-danger">{finishMsg}</p>}
               <div className="mt-3 flex justify-end gap-2">
                 <button

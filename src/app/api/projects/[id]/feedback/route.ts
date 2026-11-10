@@ -44,5 +44,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 
   const feedback = await loadReaderFeedback(admin, projectId, { chapterId });
+  // Readers see "Seen by the author" once their notes have been opened here
+  await admin
+    .from("beta_comments")
+    .update({ author_seen_at: new Date().toISOString() })
+    .eq("project_id", projectId)
+    .eq("chapter_id", chapterId)
+    .is("author_user_id", null)
+    .is("author_seen_at", null);
   return NextResponse.json({ comments: feedback.comments.filter((c) => !c.fromAuthor) });
 }

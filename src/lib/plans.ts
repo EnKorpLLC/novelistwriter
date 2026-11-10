@@ -73,6 +73,7 @@ export const PLANS: PlanCopy[] = [
       "Export every comment, reply, final review, DNF reason, and ARC review as a Word document",
       "Reader insights: who joined when, how far each reader got, how often they come back, and where they drop off",
       "Reader badges and author ratings on every applicant, so you pick readers with a track record",
+      "A feedback brief readers see before applying (what you want, how rough the draft is, how long it takes), with guided questions that make honest notes easier to give",
       "Email signups on your author site and launch pages, audience lists across all your books, CSV export",
       "Beta and ARC calls on your launch pages, and your books listed in the reader catalog",
       "Launch plan: a countdown from cover reveal to reviews, with one-click steps, countdown images, ready-to-edit posts, and a readiness score",

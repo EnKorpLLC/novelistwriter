@@ -4,6 +4,8 @@ import { listPublishedBooks } from "@/lib/public-books";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { ReaderDigestCta } from "@/components/ReaderDigestCta";
+import { CompactTrust } from "@/components/TrustBadges";
+import { readerTrustForBooks } from "@/lib/trust-badges";
 import { LaunchingThisWeek } from "@/components/LaunchingThisWeek";
 import { launchingThisWeek } from "@/lib/spotlight";
 
@@ -24,6 +26,8 @@ export default async function PublishedBooksPage({
   const [books, launching] = await Promise.all([listPublishedBooks(admin), launchingThisWeek(admin)]);
   const genres = [...new Set(books.map((b) => b.genre))].sort((a, b) => a.localeCompare(b));
   const shown = genre ? books.filter((b) => b.genre === genre) : books;
+  // Badges and writing records the authors chose to show readers (RX1); the first screens' worth
+  const trust = await readerTrustForBooks(admin, shown.slice(0, 60).map((b) => ({ id: b.id, user_id: b.authorUserId }))).catch(() => new Map());
 
   return (
     <div className="min-h-screen">
@@ -88,6 +92,9 @@ export default async function PublishedBooksPage({
                     {b.authorName} · {b.genre}
                   </p>
                 </Link>
+                <div className="mt-1">
+                  <CompactTrust trust={trust.get(b.id)?.trust} record={trust.get(b.id)?.record} />
+                </div>
               </li>
             ))}
           </ul>

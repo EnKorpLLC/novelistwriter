@@ -119,6 +119,9 @@ export async function GET(
   return NextResponse.json({
     ok: true,
     title: project.title,
+    // What the author asked for shapes the questions readers see (RX4)
+    brief: normalizeBetaApplicationForm(project.beta_application_form).brief || null,
+    authorUserId: project.user_id,
     inviteId: invite!.id,
     status: invite!.status,
     finishedAt: invite!.finished_at,

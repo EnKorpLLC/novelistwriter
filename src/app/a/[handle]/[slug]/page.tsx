@@ -4,13 +4,14 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { getLaunchBook, resolveAuthor } from "@/lib/public-site";
-import { trustBadgesForBook } from "@/lib/trust-badges";
+import { readerTrustForBooks, trustBadgesForBook } from "@/lib/trust-badges";
 import { userHasStudio } from "@/lib/credits";
 import { authorPath, bookPath } from "@/lib/handles";
 import { themeStyle } from "@/lib/site-themes";
 import { PublicHeader } from "@/components/PublicHeader";
 import { AuthorLinks } from "@/components/AuthorConnect";
-import { TrustBadges } from "@/components/TrustBadges";
+import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
+import { ReportConcern } from "@/components/ReportConcern";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { LaunchTeamCard } from "@/components/LaunchTeamCard";
 import { thanksReaders } from "@/lib/author-thanks";
@@ -86,11 +87,12 @@ export default async function LaunchPage({
       />
     );
   }
-  const [trust, studio, { data: recordFlag }, thanks] = await Promise.all([
+  const [trust, studio, { data: recordFlag }, thanks, readerTrust] = await Promise.all([
     trustBadgesForBook(admin, author.userId, book.id),
     userHasStudio(author.userId),
     admin.from("projects").select("*").eq("id", book.id).maybeSingle(),
     thanksReaders(admin, author.userId),
+    readerTrustForBooks(admin, [{ id: book.id, user_id: author.userId }]).then((m) => m.get(book.id) || null).catch(() => null),
   ]);
   const path = bookPath(author.handle, book.slug);
   const recordPublic = Boolean(recordFlag?.record_public);
@@ -203,7 +205,8 @@ export default async function LaunchPage({
                 </Link>
               </div>
             )}
-            <TrustBadges {...trust} className="mt-3" />
+            <TrustBadges {...trust} pace={readerTrust?.trust.pace} className="mt-3" />
+            <RecordSummaryLine record={readerTrust?.record} className="mt-2" />
             {thanks && (
               <p className="font-ui mt-2 inline-block border border-line px-2 py-0.5 text-xs text-muted" title="This author regularly thanks their beta, ARC, and launch team readers">
                 Thanks readers
@@ -301,6 +304,11 @@ export default async function LaunchPage({
             </div>
           )}
         </section>
+        {!isOwner && (
+          <div className="mt-10 text-center">
+            <ReportConcern projectId={book.id} />
+          </div>
+        )}
       </main>
       <PublicFooter credit="launch-page" />
     </div>

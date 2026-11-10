@@ -11,6 +11,9 @@ import { ClaimReferral } from "@/components/ClaimReferral";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
 import { betaEndLabel, betaEndState, formatBetaEndDate } from "@/lib/beta-access";
 import { CompactTrust, ReaderBadgeList, RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
+import { FeedbackBriefCard } from "@/components/FeedbackBriefCard";
+import { ReportConcern } from "@/components/ReportConcern";
+import type { FeedbackBrief } from "@/lib/feedback-brief";
 import type { READER_BADGE_RULES, ReaderBadge, ReaderBadgeStats } from "@/lib/beta-social";
 import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
@@ -51,6 +54,7 @@ type CatalogBook = {
   endsAt?: string | null;
   trust?: TrustBadgeData | null;
   record?: RecordSummary | null;
+  brief?: FeedbackBrief | null;
 };
 
 type ArcCatalogBook = {
@@ -96,6 +100,7 @@ type Thread = {
   body: string;
   excerpt: string | null;
   completed: boolean;
+  seenByAuthorAt?: string | null;
   createdAt: string;
   projectId: string;
   projectTitle: string;
@@ -916,6 +921,7 @@ export default function BetaDashboardClient() {
                                   </button>
                                   <div className="flex flex-1 flex-col gap-2 p-2.5">
                                     <CompactTrust trust={b.trust} record={b.record} />
+                                    <FeedbackBriefCard brief={b.brief} compact className="text-[11px]" />
                                     {b.endsAt && (
                                       <p className="font-ui text-[11px] text-ink">
                                         Ends {formatBetaEndDate(b.endsAt)}
@@ -1196,7 +1202,23 @@ export default function BetaDashboardClient() {
                         <p className="text-xs text-muted">
                           {t.projectTitle}
                           {t.chapterTitle ? ` · ${t.chapterTitle}` : ""}
-                          {t.completed ? " · Completed" : ""}
+                        </p>
+                        <p className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
+                          {t.completed ? (
+                            <span className="border border-accent px-1.5 text-accent" title="The author worked through this note in revision">
+                              Resolved by the author
+                            </span>
+                          ) : t.replies.some((r) => r.fromAuthor) ? (
+                            <span className="border border-accent px-1.5 text-accent">The author replied</span>
+                          ) : t.reactions.length ? (
+                            <span className="border border-accent px-1.5 text-accent">The author reacted</span>
+                          ) : t.seenByAuthorAt ? (
+                            <span className="border border-line px-1.5 text-muted" title={new Date(t.seenByAuthorAt).toLocaleString()}>
+                              Seen by the author
+                            </span>
+                          ) : (
+                            <span className="text-muted">Not opened by the author yet</span>
+                          )}
                         </p>
                         {t.excerpt && (
                           <p className="mt-1 border-l-2 border-accent pl-2 text-xs italic text-muted">
@@ -1308,12 +1330,16 @@ export default function BetaDashboardClient() {
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
                   {blurbPopup.blurb}
                 </p>
+                <FeedbackBriefCard brief={blurbPopup.brief} className="mt-5" />
                 {(blurbPopup.trust || blurbPopup.record) && (
                   <div className="mt-5 space-y-2 border-t border-line pt-4">
                     <TrustBadges {...(blurbPopup.trust || {})} />
                     <RecordSummaryLine record={blurbPopup.record} />
                   </div>
                 )}
+                <div className="mt-4">
+                  <ReportConcern projectId={blurbPopup.projectId} authorUserId={blurbPopup.authorUserId} />
+                </div>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3 sm:px-5">
                 {blurbPopup.arcAction ? (

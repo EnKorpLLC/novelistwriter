@@ -14,6 +14,9 @@ import {
   formatBetaEndDate,
 } from "@/lib/beta-access";
 import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/beta-platform";
+import { DRAFT_STAGES, FEEDBACK_FOCUS, type FeedbackBrief } from "@/lib/feedback-brief";
+
+const EMPTY_BRIEF: FeedbackBrief = { focus: [], stage: "", time: "" };
 import { ShareKit } from "@/components/ShareKit";
 import { ReaderInsights } from "@/components/ReaderInsights";
 import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
@@ -155,6 +158,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
   const [formFields, setFormFields] = useState<BetaFormField[]>([]);
   const [draftIntro, setDraftIntro] = useState("");
   const [draftWarnings, setDraftWarnings] = useState("");
+  const [draftBrief, setDraftBrief] = useState<FeedbackBrief>(EMPTY_BRIEF);
   const [includeIntro, setIncludeIntro] = useState(false);
   const [includeWarnings, setIncludeWarnings] = useState(false);
   const [draftFields, setDraftFields] = useState<BetaFormField[]>([]);
@@ -246,6 +250,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
         setDraftFields(form.fields);
         setDraftIntro(form.intro);
         setDraftWarnings(form.contentWarnings);
+        setDraftBrief(form.brief || EMPTY_BRIEF);
         setIncludeIntro(Boolean(form.intro));
         setIncludeWarnings(Boolean(form.contentWarnings));
       } else if (data.error) {
@@ -798,6 +803,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
           intro: payload.intro,
           contentWarnings: payload.contentWarnings,
           fields: payload.fields,
+          brief: draftBrief,
         }),
       });
       const data = await res.json();
@@ -810,6 +816,7 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
       setDraftFields(form.fields);
       setDraftIntro(form.intro);
       setDraftWarnings(form.contentWarnings);
+      setDraftBrief(form.brief || EMPTY_BRIEF);
       setIncludeIntro(Boolean(form.intro));
       setIncludeWarnings(Boolean(form.contentWarnings));
       setNote("Application form saved.");
@@ -1283,6 +1290,55 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                       placeholder="List content or trigger warnings applicants should know…"
                     />
                   )}
+                </div>
+
+                <div className="mt-3 space-y-3 border border-line p-3">
+                  <p className="text-sm text-ink">Feedback brief</p>
+                  <p className="text-xs text-muted">
+                    Readers see this before they apply, so they know what you&apos;re asking for. Clear expectations are the main
+                    reason beta readers finish.
+                  </p>
+                  <div>
+                    <p className="text-xs text-muted">What feedback do you want?</p>
+                    <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                      {FEEDBACK_FOCUS.map((f) => (
+                        <label key={f.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={draftBrief.focus.includes(f.id)}
+                            onChange={(e) =>
+                              setDraftBrief((b) => ({ ...b, focus: e.target.checked ? [...b.focus, f.id] : b.focus.filter((x) => x !== f.id) }))
+                            }
+                          />
+                          {f.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="block text-xs text-muted">
+                    How rough is the draft?
+                    <select
+                      className="mt-1 block w-full border border-line px-2 py-1.5 text-sm text-ink"
+                      value={draftBrief.stage}
+                      onChange={(e) => setDraftBrief((b) => ({ ...b, stage: e.target.value }))}
+                    >
+                      <option value="">Not stated</option>
+                      {DRAFT_STAGES.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label}: {s.note}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-xs text-muted">
+                    Time it takes
+                    <input
+                      className="mt-1 block w-full border border-line px-2 py-1.5 text-sm text-ink"
+                      value={draftBrief.time}
+                      onChange={(e) => setDraftBrief((b) => ({ ...b, time: e.target.value }))}
+                      placeholder="About 85,000 words; most readers take 2 to 3 weeks"
+                    />
+                  </label>
                 </div>
 
                 <ul className="mt-3 space-y-3">

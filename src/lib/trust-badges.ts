@@ -11,7 +11,24 @@ export type TrustBadges = {
   noAiOnBook: boolean;
   /** AI action names run on this book; only present when the author chose to show them */
   aiActions?: AiActionCount[] | null;
+  /** How often the author publishes here, the check readers do by hand for impossible release speeds (RX1) */
+  pace?: AuthorPace | null;
 };
+
+export type AuthorPace = { books: number; since: string };
+
+/** Books each author has published on Novelist Writer, and since when. */
+export async function authorPaces(admin: SupabaseClient, authorIds: string[]): Promise<Map<string, AuthorPace>> {
+  const ids = [...new Set(authorIds)];
+  if (!ids.length) return new Map();
+  const { data } = await admin.from("projects").select("user_id, published_at").in("user_id", ids).eq("published", true).not("published_at", "is", null).limit(5000);
+  const out = new Map<string, AuthorPace>();
+  for (const r of data || []) {
+    const cur = out.get(r.user_id);
+    out.set(r.user_id, { books: (cur?.books || 0) + 1, since: !cur || r.published_at < cur.since ? r.published_at : cur.since });
+  }
+  return out;
+}
 
 /** Account badge plus per-book "No AI used" for any number of the author's books. */
 export async function loadTrustBadges(
@@ -68,6 +85,8 @@ export type RecordSummary = {
   typedPercent: number;
   sessions: number;
   activeDays: number;
+  /** First session to last, so readers see "written over 7 months" */
+  spanDays?: number;
   /** Full record page, only when the author has also made it public */
   recordHref: string | null;
 };
@@ -113,6 +132,7 @@ export async function readerTrustForBooks(
 
   const byAuthor = new Map<string, string[]>();
   for (const b of books) byAuthor.set(b.user_id, [...(byAuthor.get(b.user_id) || []), b.id]);
+  const paces = await authorPaces(admin, [...byAuthor.keys()]).catch(() => new Map<string, AuthorPace>());
   const authorBadges = new Map(
     await Promise.all(
       [...byAuthor].map(async ([authorId, projectIds]) => [authorId, await loadTrustBadges(admin, authorId, projectIds)] as const)
@@ -147,6 +167,7 @@ export async function readerTrustForBooks(
           aiOffSince: author?.aiOffSince || null,
           noAiOnBook,
           ...(noAiOnBook ? {} : { aiActions: actions.get(b.id) || null }),
+          pace: paces.get(b.user_id) || null,
         }
       : { aiOffSince: null, noAiOnBook: false };
 
@@ -160,6 +181,7 @@ export async function readerTrustForBooks(
         typedPercent: Math.round(rec.typedShare * 100),
         sessions: rec.sessions,
         activeDays: rec.activeDays,
+        spanDays: rec.spanDays,
         recordHref: f?.record_public && handle && f.slug ? `${bookPath(handle, f.slug)}/record` : null,
       };
     }

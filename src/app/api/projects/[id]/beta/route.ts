@@ -27,6 +27,7 @@ import {
   notifyFollowersOfOpening,
 } from "@/lib/audience";
 import { canRemind } from "@/lib/arc";
+import { readerBlockedAuthor } from "@/lib/reader-safety";
 import { pauseForLostStudio, projectLockedMessage } from "@/lib/studio-access";
 import { rewardAcceptedElsewhere } from "@/lib/pass-rewards";
 import { emailConfigured, renderEmail, sendEmail } from "@/lib/email";
@@ -743,6 +744,7 @@ export async function POST(
       intro: body.intro,
       contentWarnings: body.contentWarnings,
       fields: body.fields,
+      brief: body.brief,
     });
     const { error } = await supabase
       .from("projects")
@@ -908,6 +910,15 @@ export async function POST(
       { error: "Mark the book Ready before inviting readers." },
       { status: 400 }
     );
+  }
+
+  // A reader who blocked this author can't be invited by them
+  {
+    const admin = createServiceClient();
+    const { data: invitee } = await admin.from("profiles").select("id").ilike("email", trimmed).maybeSingle();
+    if (await readerBlockedAuthor(admin, invitee?.id, user.id)) {
+      return NextResponse.json({ error: "This reader isn't accepting invites from you." }, { status: 403 });
+    }
   }
 
   await upsertBetaContact(supabase, {

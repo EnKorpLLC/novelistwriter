@@ -10,6 +10,9 @@ import type { LabeledLink } from "@/lib/public-profile";
 import { AuthorConnect, AuthorLinks } from "@/components/AuthorConnect";
 import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
+import { FeedbackBriefCard } from "@/components/FeedbackBriefCard";
+import { ReportConcern } from "@/components/ReportConcern";
+import type { FeedbackBrief } from "@/lib/feedback-brief";
 import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type GateData = {
@@ -22,6 +25,7 @@ type GateData = {
   authorLinks: LabeledLink[];
   trust?: TrustBadgeData;
   record?: RecordSummary | null;
+  brief?: FeedbackBrief | null;
   endsAt?: string | null;
   canSubscribe?: boolean;
   subscribed?: boolean;
@@ -155,7 +159,13 @@ export default function BetaBookGatePage() {
       )}
       <TrustBadges {...(data.trust || {})} className="mt-2" />
       <RecordSummaryLine record={data.record} className="mt-2" />
+      <FeedbackBriefCard brief={data.brief} className="mt-3" />
       <AuthorLinks links={data.authorLinks || []} className="mt-2" />
+      {data.authorUserId && (
+        <div className="mt-2">
+          <ReportConcern projectId={data.projectId} authorUserId={data.authorUserId} mode={data.loggedIn ? "author" : "book"} />
+        </div>
+      )}
       {data.loggedIn && data.authorUserId && (
         <div className="mt-3">
           <AuthorConnect
