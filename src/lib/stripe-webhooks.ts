@@ -6,6 +6,7 @@ import { getStripe } from "@/lib/stripe";
 import { grantReferralRewardForPurchase } from "@/lib/referral";
 import { onSubscriptionTierChange } from "@/lib/studio-pass";
 import { recordCheckout } from "@/lib/money";
+import { applyLifetimePurchase, markFoundingMember } from "@/lib/offers";
 
 async function resolveUserId(session: Stripe.Checkout.Session): Promise<string | null> {
   if (session.metadata?.supabase_user_id) return session.metadata.supabase_user_id;
@@ -142,9 +143,16 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
       updated_at: new Date().toISOString(),
     });
     if (error) throw new Error(`subscribe failed: ${error.message}`);
+    if (session.metadata?.founding === "1") await markFoundingMember(admin, userId).catch(() => null);
     await onSubscriptionTierChange(admin, userId, before?.subscription_tier, tier);
     await maybeReferralReward(userId, eventId);
     return { ok: true, applied: `subscribe_${tier}` };
+  }
+
+  if (kind === "lifetime") {
+    await applyLifetimePurchase(admin, session, userId);
+    await maybeReferralReward(userId, eventId);
+    return { ok: true, applied: `lifetime_${session.metadata?.tier || "pro"}` };
   }
 
   return { ok: true, skipped: `unknown_kind_${kind || "none"}` };

@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { ClaimReferral } from "@/components/ClaimReferral";
-import { PLANS, type PlanCopy } from "@/lib/plans";
+import { FOUNDING_PERCENT, LIFETIME, PLANS, foundingPrice, type PlanCopy } from "@/lib/plans";
+
+type Offers = {
+  founding: { cap: number; left: number; percent: number };
+  lifetime: Record<"pro" | "studio", { cap: number; left: number; cents: number }>;
+};
+type Me = { foundingMember: boolean; lifetimeTier: "pro" | "studio" | null; subscriptionTier: string };
 
 function planItems(id: PlanCopy["id"]) {
   return PLANS.find((p) => p.id === id)?.items || [];
@@ -82,6 +88,21 @@ function BillingInner() {
       }
     })();
   }, []);
+
+  const [offers, setOffers] = useState<Offers | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
+  useEffect(() => {
+    void fetch("/api/billing/offers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setOffers(d.offers);
+        setMe(d.me);
+      })
+      .catch(() => null);
+  }, [success]);
+  const founding = Boolean(me?.foundingMember || (offers && offers.founding.left > 0));
+  const price = (id: PlanCopy["id"]) => (founding ? foundingPrice(planPrice(id)) : planPrice(id));
 
   async function checkout(body: Record<string, unknown>) {
     setLoading(JSON.stringify(body.kind));
@@ -212,6 +233,31 @@ function BillingInner() {
         </div>
       </section>
 
+      {me?.lifetimeTier && (
+        <p className="mt-6 border border-accent bg-accent/5 p-4 text-sm">
+          You have <strong>{LIFETIME[me.lifetimeTier].label}</strong>. Thank you for backing Novelist Writer early. Monthly AI credits
+          aren&apos;t included; credit packs above never expire.
+        </p>
+      )}
+
+      {offers && (me?.foundingMember || offers.founding.left > 0) && !me?.lifetimeTier && (
+        <div className="font-ui mt-6 border border-accent bg-accent/5 p-4 text-sm">
+          {me?.foundingMember ? (
+            <>
+              <strong>You&apos;re a founding member.</strong> Any Pro or Studio subscription you start keeps {FOUNDING_PERCENT}% off for as long as it
+              runs.
+            </>
+          ) : (
+            <>
+              <strong>Founding member pricing:</strong> the first {offers.founding.cap} subscribers keep {FOUNDING_PERCENT}% off for life.{" "}
+              <span className="text-accent">
+                {offers.founding.left} of {offers.founding.cap} spots left.
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
       <section className="mt-6 border border-accent p-6">
         <h2 className="font-display text-xl">Optional subscription</h2>
         <p className="mt-1 text-sm text-muted">
@@ -225,7 +271,8 @@ function BillingInner() {
           <div className="border border-line p-4">
             <h3 className="font-display text-lg">Pro</h3>
             <p className="mt-1 text-2xl text-ink">
-              {planPrice("pro")}<span className="text-sm text-muted">/mo</span>
+              {price("pro")}<span className="text-sm text-muted">/mo</span>
+              {founding && <span className="ml-2 text-sm text-muted line-through">{planPrice("pro")}</span>}
             </p>
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
@@ -240,7 +287,7 @@ function BillingInner() {
                 onClick={() => checkout({ kind: "subscribe", tier: "pro", interval: "monthly" })}
                 className="bg-ink px-3 py-2 text-sm text-paper disabled:opacity-50"
               >
-                Pro monthly — {planPrice("pro")}
+                Pro monthly — {price("pro")}
               </button>
               <button
                 type="button"
@@ -256,7 +303,8 @@ function BillingInner() {
           <div className="border border-accent p-4">
             <h3 className="font-display text-lg">Studio</h3>
             <p className="mt-1 text-2xl text-ink">
-              {planPrice("studio")}<span className="text-sm text-muted">/mo</span>
+              {price("studio")}<span className="text-sm text-muted">/mo</span>
+              {founding && <span className="ml-2 text-sm text-muted line-through">{planPrice("studio")}</span>}
             </p>
             <p className="text-xs text-muted">or billed yearly at checkout</p>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
@@ -273,7 +321,7 @@ function BillingInner() {
                 }
                 className="bg-accent px-3 py-2 text-sm text-paper disabled:opacity-50"
               >
-                Studio monthly — {planPrice("studio")}
+                Studio monthly — {price("studio")}
               </button>
               <button
                 type="button"
@@ -297,6 +345,40 @@ function BillingInner() {
           Manage subscription (Stripe portal)
         </button>
       </section>
+
+      {offers && (offers.lifetime.pro.left > 0 || offers.lifetime.studio.left > 0) && me?.lifetimeTier !== "studio" && (
+        <section className="mt-6 border border-line p-6">
+          <h2 className="font-display text-xl">Lifetime plans</h2>
+          <p className="mt-1 text-sm text-muted">
+            Pay once, keep the plan for life, including features we add to it later. Monthly AI credits aren&apos;t included. If you
+            subscribe now, we stop the subscription at the end of the period you&apos;ve paid for.{" "}
+            <Link href="/lifetime" className="text-accent underline">
+              Details
+            </Link>
+          </p>
+          <div className="font-ui mt-4 grid gap-3 sm:grid-cols-2">
+            {(["pro", "studio"] as const).map((t) =>
+              offers.lifetime[t].left > 0 && !(t === "pro" && me?.lifetimeTier === "pro") ? (
+                <div key={t} className="border border-line p-4">
+                  <div className="font-display text-lg">{LIFETIME[t].label}</div>
+                  <div className="mt-1 text-2xl">${(LIFETIME[t].cents / 100).toLocaleString()}</div>
+                  <div className="text-xs text-muted">
+                    one payment · {offers.lifetime[t].left} of {offers.lifetime[t].cap} spots left
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!!loading}
+                    onClick={() => checkout({ kind: "lifetime", tier: t })}
+                    className="mt-3 bg-ink px-3 py-2 text-sm text-paper disabled:opacity-50"
+                  >
+                    Get {LIFETIME[t].label}
+                  </button>
+                </div>
+              ) : null
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="mt-6 border border-line p-6">
         <h2 className="font-display text-xl">Refer a writer</h2>

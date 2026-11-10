@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { userHasStudio, rowHasStudio } from "@/lib/credits";
+import { userHasStudio, rowHasPro } from "@/lib/credits";
 
 export const READER_GRACE_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -35,7 +35,7 @@ async function reconcileProjectLocks(
     admin.from("credit_balances").select("*").eq("user_id", userId).maybeSingle(),
     admin.from("project_unlocks").select("id", { count: "exact", head: true }).eq("user_id", userId),
   ]);
-  const unlimited = bal?.subscription_tier === "pro" || rowHasStudio(bal);
+  const unlimited = rowHasPro(bal);
   const now = new Date().toISOString();
   if (unlimited) {
     const lockedIds = projects.filter((p) => p.locked_at).map((p) => p.id);

@@ -16,10 +16,10 @@ export async function getCreditBalance(userId: string): Promise<CreditBalance | 
   return data as CreditBalance | null;
 }
 
-/** True for a credit_balances row on paid Studio or a running pass (select "*" so it works before the pass migration). */
-export function rowHasStudio(row: { subscription_tier?: string | null; pass_active_until?: string | null } | null) {
+/** True for a credit_balances row on paid Studio, Lifetime Studio, or a running pass (select "*" so it works before later migrations). */
+export function rowHasStudio(row: { subscription_tier?: string | null; pass_active_until?: string | null; lifetime_tier?: string | null } | null) {
   if (!row) return false;
-  return row.subscription_tier === "studio" || Boolean(row.pass_active_until && Date.parse(row.pass_active_until) > Date.now());
+  return row.subscription_tier === "studio" || row.lifetime_tier === "studio" || Boolean(row.pass_active_until && Date.parse(row.pass_active_until) > Date.now());
 }
 
 /** Days an author site and launch pages stay public after Pro, Studio, or a Studio pass ends. */
@@ -30,12 +30,13 @@ type TierRow = {
   subscription_tier?: string | null;
   pass_active_until?: string | null;
   site_grace_until?: string | null;
+  lifetime_tier?: string | null;
 } | null;
 
-/** Pro and up: paid Pro, paid Studio, or a running Studio pass. */
+/** Pro and up: paid Pro or Studio, a lifetime plan, or a running Studio pass. */
 export function rowHasPro(row: TierRow) {
   if (!row) return false;
-  return row.subscription_tier === "pro" || rowHasStudio(row);
+  return row.subscription_tier === "pro" || row.lifetime_tier === "pro" || rowHasStudio(row);
 }
 
 /**
@@ -77,8 +78,7 @@ function passRunning(bal: CreditBalance | null): boolean {
  * running Studio pass. AI credits, BYOK, and priority AI check the subscription tier directly.
  */
 export async function userHasStudio(userId: string): Promise<boolean> {
-  const bal = await getCreditBalance(userId);
-  return bal?.subscription_tier === "studio" || passRunning(bal);
+  return rowHasStudio((await getCreditBalance(userId)) as TierRow);
 }
 
 /** Debit credits: monthly allowance first, then purchased balance, then free taste for cheap jobs */
@@ -231,7 +231,7 @@ export async function canCreateProject(userId: string): Promise<{
   const unlocks = unlockCount ?? 0;
   const tier = bal?.subscription_tier ?? "free";
 
-  if (tier === "pro" || tier === "studio" || passRunning(bal as CreditBalance | null)) {
+  if (tier === "pro" || tier === "studio" || rowHasPro(bal as TierRow) || passRunning(bal as CreditBalance | null)) {
     return { allowed: true, reason: "ok", projectCount, tier, unlocks };
   }
   // Free: 1 project + one slot per purchased unlock

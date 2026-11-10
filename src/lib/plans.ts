@@ -94,6 +94,22 @@ export const PLANS: PlanCopy[] = [
   },
 ];
 
+/** Founding members: the first FOUNDING_CAP subscribers keep FOUNDING_PERCENT off for as long as they stay subscribed. */
+export const FOUNDING_PERCENT = 20;
+export const FOUNDING_CAP = 500;
+
+/** Capped lifetime deals. One payment; no AI credits. */
+export const LIFETIME = {
+  pro: { cents: 44900, cap: 300, label: "Lifetime Pro" },
+  studio: { cents: 109900, cap: 100, label: "Lifetime Studio" },
+} as const;
+
+/** "$19" → "$15.20" */
+export function foundingPrice(price: string) {
+  const n = Number(price.replace(/[^0-9.]/g, ""));
+  return n ? `$${(n * (1 - FOUNDING_PERCENT / 100)).toFixed(2)}` : price;
+}
+
 export const PAY_AS_YOU_GO = [
   "Extra projects: $9 each, one time",
   "AI credit packs from $5",
@@ -133,6 +149,14 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "How do newsletter swaps and group promos work?",
     a: "In a newsletter swap (Studio), you feature another author's book in your newsletter and they feature yours. List sizes come from confirmed subscribers, so nobody can inflate them, and each swap's link is tagged so you both see how many readers the other side's send brought. In a group promo, authors in one genre put their books on a public page for a week or so, often on sale, and everyone shares it. Joining is on Pro; hosting is on Studio. Agreed send and share days go straight onto your marketing calendar.",
+  },
+  {
+    q: "What does founding member pricing mean?",
+    a: "The first 500 Pro or Studio subscribers pay 20% less for as long as they stay subscribed, on monthly or yearly billing, and get a Founding member badge on their author page. If you cancel and come back later, you keep the founding price. Everyone who subscribed before this offer is already a founding member. Once the 500 spots are gone, the offer ends.",
+  },
+  {
+    q: "What do Lifetime Pro and Lifetime Studio include?",
+    a: "One payment for that plan's features for as long as Novelist Writer runs, including features we add to that plan later, plus a Lifetime member badge. Lifetime plans don't include monthly AI credits (you can buy credit packs anytime). Spots are capped: 300 for Lifetime Pro at $449 and 100 for Lifetime Studio at $1,099. If you have a subscription when you buy, we stop it at the end of the period you've paid for.",
   },
   {
     q: "Do you have an affiliate program?",

@@ -20,6 +20,7 @@ export function GET() {
 - [Pricing](${appUrl("/pricing")}): Free, Pro, and Studio plans with answers to common questions
 - [Published books](${appUrl("/books")}): books by Novelist Writer authors
 - [Free author tools](${appUrl("/tools")}): KDP spine width and cover size calculator, novel word counts by genre, trim size guide, writing pace calculator
+- [Lifetime plans](${appUrl("/lifetime")}): capped one-time Lifetime Pro ($449) and Lifetime Studio ($1,099); the first 500 subscribers also keep founding member pricing (20% off) for life
 - [Affiliate program](${appUrl("/affiliates")}): 30% of what referred writers pay for Pro or Studio in their first 12 months, paid monthly through Stripe
 - Weekly reader digest: readers can opt in to one email every Thursday with new books from authors they follow, launches, new releases, free advance copies, and promotions
 - [Book promotions](${appUrl("/promos")}): themed collections of books from independent authors, often on sale, put together by the authors themselves

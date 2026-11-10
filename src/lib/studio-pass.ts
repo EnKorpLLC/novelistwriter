@@ -20,14 +20,14 @@ export type PassState = {
 export async function getPassState(admin: SupabaseClient, userId: string): Promise<PassState> {
   const { data } = await admin
     .from("credit_balances")
-    .select("subscription_tier, pass_bank_days, pass_active_until")
+    .select("*")
     .eq("user_id", userId)
     .maybeSingle();
   const until = data?.pass_active_until ? Date.parse(data.pass_active_until) : 0;
   const passActive = until > Date.now();
   return {
     tier: data?.subscription_tier || "free",
-    paidStudio: data?.subscription_tier === "studio",
+    paidStudio: data?.subscription_tier === "studio" || data?.lifetime_tier === "studio",
     bankDays: Math.max(0, Number(data?.pass_bank_days) || 0),
     activeUntil: passActive ? data!.pass_active_until : null,
     passActive,
@@ -184,9 +184,11 @@ export async function onSubscriptionTierChange(
   nextTier: string
 ) {
   try {
+    const { data: bal } = await admin.from("credit_balances").select("*").eq("user_id", userId).maybeSingle();
+    const lifetimeStudio = bal?.lifetime_tier === "studio";
     if (nextTier === "studio" && prevTier !== "studio") {
       await returnActiveDaysToBank(admin, userId);
-    } else if (prevTier === "studio" && nextTier !== "studio") {
+    } else if (prevTier === "studio" && nextTier !== "studio" && !lifetimeStudio) {
       // Paying Studio subscribers who cancel fall onto their banked days, not off a cliff
       await startPass(admin, userId);
     }

@@ -22,7 +22,7 @@ export async function passNoticeFor(
     admin.from("project_unlocks").select("id", { count: "exact", head: true }).eq("user_id", userId),
   ]);
   if (!bal || !("pass_bank_days" in bal)) return null;
-  if (bal.subscription_tier === "studio") return null;
+  if (bal.subscription_tier === "studio" || bal.lifetime_tier === "studio") return null;
 
   const bankDays = Math.max(0, Number(bal.pass_bank_days) || 0);
   const until = bal.pass_active_until ? Date.parse(bal.pass_active_until) : 0;
@@ -32,7 +32,7 @@ export async function passNoticeFor(
     const daysLeft = Math.ceil((until - now) / DAY_MS);
     if (daysLeft > WARN_DAYS) return null;
     // Pro keeps every project; Free keeps the most recent ones up to its slots
-    const slots = bal.subscription_tier === "pro" ? Infinity : 1 + (unlocks || 0);
+    const slots = bal.subscription_tier === "pro" || bal.lifetime_tier === "pro" ? Infinity : 1 + (unlocks || 0);
     const wouldLock = (projects || []).slice(slots === Infinity ? (projects || []).length : slots).map((p) => p.title);
     return { kind: "expiring", daysLeft, endsAt: bal.pass_active_until, bankDays, wouldLock };
   }

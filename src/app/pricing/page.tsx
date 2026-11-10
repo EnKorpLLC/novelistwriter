@@ -6,6 +6,9 @@ import { JsonLd } from "@/components/JsonLd";
 import { faqJsonLd, softwareJsonLd } from "@/lib/seo";
 import { PublicFooter } from "@/components/PublicFooter";
 import { COMPARED_ON, REPLACES } from "@/lib/compare";
+import { publicOffers } from "@/lib/offers";
+
+export const revalidate = 600;
 
 export const metadata = {
   alternates: { canonical: "/pricing" },
@@ -14,7 +17,8 @@ export const metadata = {
     "Write free forever. Pro adds your author site, launch pages, unlimited projects, and AI critique credits; Studio adds beta readers, ARCs, reader feedback, and insights. Readers are always free.",
 };
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const offers = await publicOffers();
   return (
     <div className="min-h-screen">
       <PublicHeader />
@@ -27,7 +31,7 @@ export default function PricingPage() {
         </p>
 
         <section className="mt-12">
-          <PlanCards />
+          <PlanCards offers={offers} />
         </section>
 
         <section className="mt-12 grid gap-6 md:grid-cols-2">

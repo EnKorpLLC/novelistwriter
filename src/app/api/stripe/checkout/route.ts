@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getStripe, appUrl } from "@/lib/stripe";
 import { CREDIT_PACKS } from "@/lib/types";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { ensureFoundingCoupon, foundingDiscountFor, loadOffers } from "@/lib/offers";
+import { LIFETIME } from "@/lib/plans";
 
 async function ensureCustomer(userId: string, email: string) {
   const admin = createServiceClient();
@@ -103,14 +105,53 @@ export async function POST(req: Request) {
     if (!price) {
       return NextResponse.json({ error: "Subscription price not configured" }, { status: 500 });
     }
+    // Founding members keep 20% off for life; new subscribers get it while spots remain
+    const admin = createServiceClient();
+    const founding = await foundingDiscountFor(admin, user.id).catch(() => false);
+    const coupon = founding ? await ensureFoundingCoupon().catch(() => null) : null;
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
       line_items: [{ price, quantity: 1 }],
+      ...(coupon ? { discounts: [{ coupon }] } : {}),
       success_url: appUrl("/billing?success=sub"),
       cancel_url: appUrl("/billing?canceled=1"),
-      metadata: { supabase_user_id: user.id, kind: "subscribe", tier },
+      metadata: { supabase_user_id: user.id, kind: "subscribe", tier, founding: coupon ? "1" : "0" },
       subscription_data: { metadata: { supabase_user_id: user.id, tier } },
+    });
+    return NextResponse.json({ url: session.url });
+  }
+
+  if (kind === "lifetime") {
+    const tier = body.tier === "studio" ? "studio" : "pro";
+    const admin = createServiceClient();
+    const offers = await loadOffers(admin);
+    if (!offers) return NextResponse.json({ error: "Lifetime plans aren't available yet." }, { status: 400 });
+    if (offers.lifetime[tier].left <= 0) return NextResponse.json({ error: `${LIFETIME[tier].label} is sold out.` }, { status: 400 });
+    const { data: bal } = await admin.from("credit_balances").select("lifetime_tier").eq("user_id", user.id).maybeSingle();
+    if (bal?.lifetime_tier === tier || (bal?.lifetime_tier === "studio" && tier === "pro")) {
+      return NextResponse.json({ error: "You already have this lifetime plan." }, { status: 400 });
+    }
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer: customerId,
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: LIFETIME[tier].cents,
+            product_data: {
+              name: `Novelist Writer ${LIFETIME[tier].label}`,
+              description: `${tier === "studio" ? "Studio" : "Pro"} features for life, including future ones. Monthly AI credits not included.`,
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: appUrl("/billing?success=lifetime"),
+      cancel_url: appUrl("/billing?canceled=1"),
+      metadata: { supabase_user_id: user.id, kind: "lifetime", tier },
+      payment_intent_data: { metadata: { supabase_user_id: user.id, kind: "lifetime", tier } },
     });
     return NextResponse.json({ url: session.url });
   }

@@ -7,6 +7,7 @@ import { grantReferralRewardForPurchase } from "@/lib/referral";
 import { onSubscriptionTierChange } from "@/lib/studio-pass";
 import { recordInvoice, recordRefund } from "@/lib/money";
 import { adjustForCharge, recordCommissionForInvoice } from "@/lib/affiliates";
+import { revokeLifetimeForCharge } from "@/lib/offers";
 import Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -130,6 +131,11 @@ export async function POST(req: Request) {
         await adjustForCharge(admin, charge.id, charge.amount ? charge.amount_refunded / charge.amount : 1, "Refunded");
       } catch (err) {
         console.error("affiliate refund adjustment failed", charge.id, err);
+      }
+      try {
+        await revokeLifetimeForCharge(admin, charge);
+      } catch (err) {
+        console.error("lifetime refund handling failed", charge.id, err);
       }
     }
     if (event.type === "charge.dispute.created") {

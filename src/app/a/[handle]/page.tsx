@@ -112,11 +112,13 @@ export default async function AuthorSitePage({
     return <SiteHolding authorName={author.name} previewBackHref={previewing ? path : null} />;
   }
 
-  const [books, studio, wins] = await Promise.all([
+  const [books, studio, wins, { data: bal }] = await Promise.all([
     listLaunchBooks(admin, author.userId),
     userHasStudio(author.userId),
     challengeWins(admin, author.userId),
+    admin.from("credit_balances").select("*").eq("user_id", author.userId).maybeSingle(),
   ]);
+  const memberBadge = bal?.lifetime_tier ? "Lifetime member" : bal?.founding_member ? "Founding member" : null;
   const { aiOffSince, noAiProjectIds } = await loadTrustBadges(
     admin,
     author.userId,
@@ -178,6 +180,11 @@ export default async function AuthorSitePage({
           <div className="min-w-0">
             <p className="font-ui text-xs uppercase tracking-wide text-muted">Author</p>
             <h1 className="font-display text-4xl">{author.name}</h1>
+            {memberBadge && (
+              <p className="font-ui mt-1 inline-block border border-accent/50 px-2 py-0.5 text-[11px] uppercase tracking-wide text-accent" title="Backed Novelist Writer early">
+                {memberBadge}
+              </p>
+            )}
           </div>
           {(!isOwner || previewing) && <VisitorShareButton path={path} title={`${author.name}'s books`} />}
         </div>

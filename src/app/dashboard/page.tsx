@@ -119,10 +119,15 @@ export default async function DashboardPage() {
             <strong className="text-ink">
               {(credits?.balance ?? 0) + (credits?.monthly_allowance_remaining ?? 0)}
             </strong>
-            {credits?.subscription_tier && credits.subscription_tier !== "free" && (
+            {(credits as { lifetime_tier?: string | null } | null)?.lifetime_tier ? (
               <span className="ml-2 uppercase tracking-wide text-accent">
-                {credits.subscription_tier}
+                Lifetime {(credits as { lifetime_tier?: string | null }).lifetime_tier}
               </span>
+            ) : (
+              credits?.subscription_tier &&
+              credits.subscription_tier !== "free" && (
+                <span className="ml-2 uppercase tracking-wide text-accent">{credits.subscription_tier}</span>
+              )
             )}
           </span>
           <Link href="/dashboard/audience" className="text-muted hover:text-ink">

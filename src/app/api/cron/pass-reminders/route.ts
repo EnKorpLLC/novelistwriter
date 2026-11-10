@@ -92,7 +92,7 @@ export async function GET(req: Request) {
   const now = Date.now();
   const { data: rows, error } = await admin
     .from("credit_balances")
-    .select("user_id, subscription_tier, pass_active_until, pass_warned_3d_at, pass_warned_1d_at, pass_ended_emailed_at")
+    .select("*")
     .not("pass_active_until", "is", null)
     .gte("pass_active_until", new Date(now - DAY_MS).toISOString())
     .lte("pass_active_until", new Date(now + 3 * DAY_MS).toISOString());
@@ -100,7 +100,7 @@ export async function GET(req: Request) {
 
   const due: { userId: string; stage: Stage }[] = [];
   for (const r of rows || []) {
-    if (r.subscription_tier === "studio") continue;
+    if (r.subscription_tier === "studio" || r.lifetime_tier === "studio") continue;
     const left = Date.parse(r.pass_active_until) - now;
     if (left <= 0) {
       if (!r.pass_ended_emailed_at) due.push({ userId: r.user_id, stage: "ended" });

@@ -3,6 +3,9 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { ShareVisitBeacon } from "@/components/ShareVisitBeacon";
 import { PlanCards } from "@/components/PlanCards";
+import { publicOffers } from "@/lib/offers";
+
+export const revalidate = 600;
 
 export const metadata = {
   alternates: { canonical: "/authors" },
@@ -11,7 +14,8 @@ export const metadata = {
     "Write your novel, prove you wrote it, and take it from first draft through beta readers and ARCs to launch. Free to start; Pro and Studio when you're ready.",
 };
 
-export default function AuthorsPage() {
+export default async function AuthorsPage() {
+  const offers = await publicOffers();
   return (
     <div className="min-h-screen">
       <PublicHeader />
@@ -49,7 +53,7 @@ export default function AuthorsPage() {
         <section className="mx-auto max-w-5xl px-6 py-20 md:px-10">
           <h2 className="font-display text-3xl text-ink">Pick what fits</h2>
           <div className="mt-10">
-            <PlanCards />
+            <PlanCards offers={offers} />
           </div>
         </section>
 
