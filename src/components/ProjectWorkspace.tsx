@@ -430,7 +430,7 @@ export function ProjectWorkspace({
   }
 
   return (
-    <div className={`flex h-dvh max-h-dvh flex-col overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
+    <div className={`flex h-dvh max-h-dvh w-full max-w-[100vw] flex-col overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
       {!focusMode && notice && <div className="shrink-0">{notice}</div>}
       {!focusMode && (
         <header className="font-ui flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
@@ -496,7 +496,7 @@ export function ProjectWorkspace({
               )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 text-sm">
             <Link
               href="/billing"
               className="border border-line px-3 py-1 text-muted hover:border-accent hover:text-ink"
@@ -504,7 +504,7 @@ export function ProjectWorkspace({
             >
               Credits: <strong className="text-ink">{credits}</strong>
             </Link>
-            <nav aria-label="Book sections" className="-mx-1 flex max-w-full overflow-x-auto">
+            <nav aria-label="Book sections" className="flex min-w-0 max-w-full overflow-x-auto">
               {WORKSPACE_GROUPS.map((g) => {
                 const on = g.tabs.includes(tab);
                 return (

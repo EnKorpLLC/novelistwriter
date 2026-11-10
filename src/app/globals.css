@@ -42,6 +42,8 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   min-height: 100vh;
+  /* A stray wide element can't shift the whole page sideways; clip (unlike hidden) keeps sticky headers working */
+  overflow-x: clip;
 }
 
 .font-display {

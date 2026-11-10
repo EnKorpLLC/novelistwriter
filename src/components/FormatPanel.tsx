@@ -327,7 +327,8 @@ a{color:inherit}
             {note && <p className="mt-2 text-sm text-ink">{note}</p>}
           </div>
 
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto]">
+          {/* Side by side only when both columns have room; the preview column is capped so it can't crowd out the settings */}
+          <div className="grid gap-8 xl:grid-cols-[minmax(20rem,1fr)_minmax(0,31rem)]">
             <div className="space-y-8">
               <section className="border border-line p-4">
                 <h3 className="font-display text-lg">Book style</h3>
@@ -532,7 +533,7 @@ a{color:inherit}
               </section>
             </div>
 
-            <div className="lg:sticky lg:top-0 lg:self-start">
+            <div className="min-w-0 xl:sticky xl:top-0 xl:self-start">
               <section className="border border-line p-4">
                 <h3 className="font-display text-lg">Preview</h3>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -559,6 +560,8 @@ a{color:inherit}
                     </option>
                   ))}
                 </select>
+                {/* A tablet preview is wider than a phone screen: scroll it sideways instead of widening the page */}
+                <div className="overflow-x-auto pb-2">
                 <div
                   className="mx-auto mt-3 border-[10px] border-ink/85 shadow-lg"
                   style={{ width: DEVICES[device].w + 20, borderRadius: DEVICES[device].radius }}
@@ -569,6 +572,7 @@ a{color:inherit}
                     sandbox="allow-same-origin"
                     style={{ width: DEVICES[device].w, height: DEVICES[device].h, display: "block", border: 0, borderRadius: DEVICES[device].radius - 8 }}
                   />
+                </div>
                 </div>
                 <p className="mt-2 text-[11px] text-muted">
                   Readers can change the font and size on their device; headings and openings keep your style.
