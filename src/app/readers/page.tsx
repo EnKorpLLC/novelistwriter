@@ -15,7 +15,12 @@ export const metadata = {
 };
 
 export default async function ReadersPage() {
-  const [hero, features, cost] = await Promise.all([siteText("readers.hero"), siteText("readers.features"), siteText("readers.cost")]);
+  const [hero, promise, features, cost] = await Promise.all([
+    siteText("readers.hero"),
+    siteText("readers.promise"),
+    siteText("readers.features"),
+    siteText("readers.cost"),
+  ]);
   return (
     <div className="min-h-screen">
       <PublicHeader />
@@ -45,6 +50,24 @@ export default async function ReadersPage() {
             </div>
           </div>
         </section>
+
+        {(promise.items || []).length > 0 && (
+          <section className="border-b border-line px-6 py-14 md:px-10">
+            <div className="mx-auto max-w-5xl">
+              <h2 className="font-display text-3xl text-ink">{promise.heading}</h2>
+              <ul className="mt-8 grid gap-6 sm:grid-cols-2 md:grid-cols-4">
+                {(promise.items || []).map((p, i) => (
+                  <li key={`${p.t}-${i}`} className="border-t-2 border-accent pt-3">
+                    <h3 className="font-display text-lg">{p.t}</h3>
+                    <p className="mt-1 text-sm text-muted">
+                      <InlineText text={p.d} />
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        )}
 
         <section className="mx-auto max-w-5xl px-6 py-20 md:px-10">
           <h2 className="font-display text-3xl text-ink">{features.heading}</h2>

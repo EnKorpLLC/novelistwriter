@@ -9,6 +9,7 @@ import { COMPARED_ON, REPLACES } from "@/lib/compare";
 import { publicOffers } from "@/lib/offers";
 import { siteFaq, siteText } from "@/lib/site-text";
 import { InlineText } from "@/components/Markdown";
+import { dollars, estimateShare } from "@/lib/direct-sale-rules";
 
 export const revalidate = 600;
 
@@ -52,8 +53,8 @@ export default async function PricingPage() {
           <div className="border border-line p-6">
             <h2 className="font-display text-2xl">Readers: always free</h2>
             <p className="font-ui mt-2 text-sm text-muted">
-              Beta reads, advance copies, comments, reader badges, and a public reader profile cost
-              nothing, with no ads.
+              Beta reads, advance copies, comments, reader badges, a library with shelves, and a public reader profile cost
+              nothing, with no ads. Ebooks readers buy direct are theirs to keep, with no coins or expiring credits.
             </p>
             <Link href="/readers" className="font-ui mt-4 inline-block text-sm text-accent underline-offset-2 hover:underline">
               What readers get →
@@ -87,6 +88,41 @@ export default async function PricingPage() {
           <p className="font-ui mt-3 text-sm">
             <Link href="/compare" className="text-accent underline">
               See detailed comparisons
+            </Link>
+          </p>
+        </section>
+
+        <section className="mt-16">
+          <h2 className="font-display text-3xl">Selling your ebook direct</h2>
+          <p className="font-ui mt-2 max-w-2xl text-sm text-muted">
+            On Pro and Studio, readers can buy your ebook right from your launch page. What you keep per sale, after our fee and Stripe&apos;s card fee.
+            Sales tax is added on top at checkout, and we handle it.
+          </p>
+          <table className="font-ui mt-6 w-full text-left text-sm">
+            <thead className="text-xs text-muted">
+              <tr className="border-b border-line">
+                <th className="py-2">Ebook price</th>
+                <th>KDP at 70%</th>
+                <th>Pro (10% + 15¢)</th>
+                <th>Studio (5% + 15¢)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[299, 499, 999].map((p) => (
+                <tr key={p} className="border-b border-line/60">
+                  <td className="py-2 pr-3 text-ink">{dollars(p)}</td>
+                  <td className="pr-3 text-muted">{dollars(Math.round(p * 0.7))}</td>
+                  <td className="pr-3 text-ink">{dollars(estimateShare(p, "pro").authorCents)}</td>
+                  <td className="text-ink">{dollars(estimateShare(p, "studio").authorCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="font-ui mt-3 text-xs text-muted">
+            KDP pays 70% on ebooks priced $2.99 to $9.99, before its delivery fee. Direct sales are open to US readers for now; your store links stay on the page
+            for everyone else. Payouts are monthly once you have $50.{" "}
+            <Link href="/seller-terms" className="text-accent underline">
+              Seller terms
             </Link>
           </p>
         </section>

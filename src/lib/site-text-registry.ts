@@ -201,11 +201,15 @@ export const SITE_TEXT: TextEntry[] = [
     default: {
       kicker: "For readers",
       heading: "Read books before anyone else. Free.",
-      intro: "Beta read and get advance copies from indie authors, right in your browser. No ads, no fees, ever.",
+      intro:
+        "Beta read and get advance copies from indie authors, right in your browser. Our promise: every book shows how it was written, there are no ads ever, nothing you buy expires, and your reading history is yours.",
       items: [
         { t: "Know how it was written", d: "Listings can show “No AI used on this book” and a writing record, so you see how a book came together before you apply." },
         { t: "Your feedback, on the page", d: "Highlight a sentence and tell the author what you felt. Clear end dates and read-by dates, with time to send your final review." },
         { t: "Badges authors notice", d: "Finish books, leave thoughtful feedback, and post ARC reviews to earn badges that authors see when you apply." },
+        { t: "Buy direct, keep it forever", d: "Buy an ebook straight from the author in dollars, never coins. It's yours to download anytime, with no copy protection, and refundable within 14 days." },
+        { t: "Your library, your history", d: "Shelves, series in order, and a TBR, free. Bring your Goodreads or StoryGraph history over in one step, and export it anytime." },
+        { t: "Picks from readers like you", d: "Recommendations come from readers who loved the same books, never from ads or paid placement." },
       ],
     },
   },
@@ -293,6 +297,22 @@ export const SITE_TEXT: TextEntry[] = [
     },
   },
   {
+    key: "readers.promise",
+    page: "For readers",
+    label: "Our promise to readers",
+    fields: ["heading", "items"],
+    paths: ["/readers"],
+    default: {
+      heading: "Our promise to readers",
+      items: [
+        { t: "Every book shows how it was written", d: "Authors can share a writing record and badges like “No AI used on this book”, checked by our [human authorship standard](/human-authorship-standard)." },
+        { t: "No ads, ever", d: "No ads, no paid placement in recommendations, and we never sell your data." },
+        { t: "Nothing you buy expires", d: "Ebooks you buy here are yours to download anytime. No coins, no credits that run out, no subscription to read what you bought." },
+        { t: "Your reading history is yours", d: "Import your shelves from Goodreads or StoryGraph, and export everything anytime." },
+      ],
+    },
+  },
+  {
     key: "readers.features",
     page: "For readers",
     label: "What you can do",
@@ -333,7 +353,8 @@ export const SITE_TEXT: TextEntry[] = [
     paths: ["/readers"],
     default: {
       heading: "What it costs",
-      intro: "Nothing. Reader accounts are free, beta reads and advance copies are free, and there are no ads. Authors pay for the tools that run their reading programs, so readers never do.",
+      intro:
+        "Nothing. Reader accounts are free, beta reads and advance copies are free, and there are no ads. Authors pay for the tools that run their reading programs, so readers never do. When you buy an ebook direct from an author, you pay the price shown in dollars (plus sales tax where it applies), keep it forever, download it anytime, and can get a refund within 14 days. [Refunds and your books](/refunds)",
       note: "Also a writer? It's the same login. Switch between your reader and author dashboards anytime.",
     },
   },
