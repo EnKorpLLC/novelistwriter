@@ -4,6 +4,7 @@ import { createNotification } from "@/lib/beta-social";
 import { notifyUser, optedInUserIds } from "@/lib/notifications";
 import { notifySeriesReleases } from "@/lib/reader-library";
 import { remindSerialReleases } from "@/lib/serial";
+import { sweepRecentChapterImages } from "@/lib/chapter-image-sweep";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { emailRedAlarms } from "@/lib/money";
@@ -90,6 +91,7 @@ export async function GET(req: Request) {
   await processEmailQueue(admin, { timeBudgetMs: 25_000 }).catch(() => null);
   await refreshActiveChallenges(admin, 120).catch(() => 0);
   await notifySeriesReleases(admin, (userId, title, body, href) => notifyUser(admin, userId, { type: "author_new_book", title, body, href })).catch(() => 0);
+  await sweepRecentChapterImages(admin, { timeBudgetMs: 5_000 }).catch(() => 0);
   await remindSerialReleases(admin, (userId, title, body, href) => notifyUser(admin, userId, { type: "marketing_reminder", title, body, href })).catch(() => 0);
   // Affiliate commissions go out once a month
   if (new Date().getUTCDate() === 1) await runAffiliatePayouts(admin, { timeBudgetMs: 8_000 }).catch(() => null);

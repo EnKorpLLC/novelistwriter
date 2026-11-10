@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { projectLockedMessage } from "@/lib/studio-access";
 import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { normalizeCoverDesign } from "@/lib/book/cover-design";
+import { createServiceClient } from "@/lib/supabase/admin";
+import { removeAllChapterImages } from "@/lib/chapter-image-sweep";
 
 export async function PATCH(
   req: Request,
@@ -78,5 +80,6 @@ export async function DELETE(
     .eq("user_id", user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await removeAllChapterImages(createServiceClient(), user.id, id).catch(() => null);
   return NextResponse.json({ ok: true });
 }
