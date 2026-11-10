@@ -52,7 +52,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     arcReaders: active.length,
     arcReviews: active.filter((a) => a.review_posts && Object.keys(a.review_posts).length > 0).length,
     preorderLinks: links.filter((l) => l.preorder).length,
-    buyLinks: links.filter((l) => !l.preorder).length,
+    buyLinks: links.filter((l) => !l.preorder && !l.serial).length,
     listSize: listSize || 0,
     published: Boolean(project.published),
   };

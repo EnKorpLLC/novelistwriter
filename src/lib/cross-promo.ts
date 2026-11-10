@@ -144,7 +144,7 @@ export async function loadPublicPromos(admin: SupabaseClient, opts: { slug?: str
           const card = cards.get(r.project_id);
           const e = extra.get(r.project_id);
           if (!card?.url) return null;
-          const links = normalizeBuyLinks(e?.buy_links).filter((l) => (e?.published ? !l.preorder : true));
+          const links = normalizeBuyLinks(e?.buy_links).filter((l) => !l.serial && (e?.published ? !l.preorder : true));
           return {
             id: card.id,
             title: card.title,

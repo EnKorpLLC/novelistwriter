@@ -81,6 +81,18 @@ function BookGrid({
                 {noAi.has(b.id) ? " · No AI used" : ""}
               </p>
             </Link>
+            {b.readLinks.length > 0 && (
+              <p className="font-ui mt-1 text-xs">
+                {b.readLinks.map((l, i) => (
+                  <span key={l.label}>
+                    {i > 0 && " · "}
+                    <a href={`/go/${b.id}?s=${encodeURIComponent(l.label)}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      Read on {l.label}
+                    </a>
+                  </span>
+                ))}
+              </p>
+            )}
           </li>
         ))}
       </ul>
@@ -234,6 +246,17 @@ export default async function AuthorSitePage({
               >
                 See the book
               </Link>
+              {featured.readLinks.map((l) => (
+                <a
+                  key={l.label}
+                  href={`/go/${featured.id}?s=${encodeURIComponent(l.label)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-ui ml-2 mt-4 inline-block border border-accent px-4 py-2 text-sm text-accent hover:bg-accent/5"
+                >
+                  Read on {l.label}
+                </a>
+              ))}
             </div>
           </section>
         )}

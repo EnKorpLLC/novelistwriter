@@ -255,6 +255,17 @@ export default async function LaunchPage({
                     Preorder on {l.label}
                   </a>
                 ))}
+              {book.readLinks.map((l) => (
+                <a
+                  key={`${l.label}-${l.url}`}
+                  href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="border border-accent px-4 py-2 text-sm text-accent hover:bg-accent/5"
+                >
+                  Read on {l.label}
+                </a>
+              ))}
               {book.arcOpen && !book.published && (
                 <Link href={`/arc/book/${book.id}`} className="bg-ink px-4 py-2 text-sm text-paper">
                   Request an advance copy

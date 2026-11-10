@@ -1,5 +1,6 @@
 import "server-only";
 import { ImageResponse } from "next/og";
+import { buttonImageSize } from "@/lib/embed-buttons";
 
 /** Social image renderer only handles PNG and JPEG, so other formats fall back to a text card. */
 export async function imageAsDataUrl(url: string | null): Promise<string | null> {
@@ -14,6 +15,41 @@ export async function imageAsDataUrl(url: string | null): Promise<string | null>
   } catch {
     return null;
   }
+}
+
+/** A PNG button for newsletters and sites where code can't go (email apps don't show SVG). */
+export function renderButtonImage(opts: { label: string; dark?: boolean; check?: boolean; muted?: boolean }) {
+  const { width, height } = buttonImageSize(opts.label, opts.check);
+  return new ImageResponse(
+    (
+      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent" }}>
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+            borderRadius: 12,
+            background: opts.muted ? (opts.dark ? "#8a8276" : "#6b6358") : opts.dark ? "#f7f2e9" : "#2c5f4a",
+            color: opts.dark && !opts.muted ? "#1a1612" : "#ffffff",
+            fontSize: 30,
+            fontWeight: 600,
+          }}
+        >
+          {/* Drawn, because the image renderer's font has no ✓ */}
+          {opts.check ? (
+            <svg width="26" height="26" viewBox="0 0 24 24">
+              <path d="M4.5 12.5l5 5L19.5 7" stroke={opts.dark && !opts.muted ? "#1a1612" : "#ffffff"} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : null}
+          <span>{opts.label}</span>
+        </div>
+      </div>
+    ),
+    { width, height }
+  );
 }
 
 export function renderShareImage(opts: {

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MAX_TROPES, type BuyLink } from "@/lib/arc";
+import { MAX_TROPES, SERIAL_SITES, type BuyLink } from "@/lib/arc";
 import { ShareKit } from "@/components/ShareKit";
 import { LaunchPlan } from "@/components/LaunchPlan";
 import { LaunchRoom } from "@/components/LaunchRoom";
 import { LaunchTeamPanel } from "@/components/LaunchTeamPanel";
 import { VerifyBadgePanel } from "@/components/VerifyBadgePanel";
+import { EmbedButtonsPanel } from "@/components/EmbedButtonsPanel";
 import { RecordBadge, WritingRecordView, type WritingRecordData } from "@/components/WritingRecordView";
 
 type LaunchState = {
@@ -362,11 +363,23 @@ export function PublishPanel({ projectId }: { projectId: string }) {
                         checked={Boolean(l.preorder)}
                         onChange={(e) =>
                           setBuyLinks((ls) =>
-                            ls.map((x, j) => (j === i ? { ...x, preorder: e.target.checked } : x))
+                            ls.map((x, j) => (j === i ? { ...x, preorder: e.target.checked, serial: e.target.checked ? false : x.serial } : x))
                           )
                         }
                       />
                       Preorder
+                    </label>
+                    <label className="flex items-center gap-1 text-xs text-muted" title="Shown as “Read on …” at every stage, for serials on Royal Road, Wattpad, and similar sites">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(l.serial)}
+                        onChange={(e) =>
+                          setBuyLinks((ls) =>
+                            ls.map((x, j) => (j === i ? { ...x, serial: e.target.checked, preorder: e.target.checked ? false : x.preorder } : x))
+                          )
+                        }
+                      />
+                      Free to read online
                     </label>
                     <button
                       type="button"
@@ -396,6 +409,22 @@ export function PublishPanel({ projectId }: { projectId: string }) {
                 >
                   + Other
                 </button>
+              </div>
+              <p className="mt-3 text-xs text-muted">
+                Posting it as a serial too? Add where readers can read it free. These show as “Read on …” buttons on your launch page and author
+                site, and clicks count in your results.
+              </p>
+              <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                {SERIAL_SITES.filter((s) => !buyLinks.some((l) => l.label === s)).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="border border-line px-2 py-1 text-accent"
+                    onClick={() => setBuyLinks((ls) => [...ls, { label: s, url: "", serial: true }])}
+                  >
+                    + {s}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -461,6 +490,8 @@ export function PublishPanel({ projectId }: { projectId: string }) {
               />
             </section>
           )}
+
+          {state.launchVisible && state.launchPath && <EmbedButtonsPanel launchPath={state.launchPath} />}
         </div>
       </div>
     </div>

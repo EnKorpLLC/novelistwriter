@@ -120,6 +120,8 @@ export type LaunchBook = {
   arcDeadline: string | null;
   buyLinks: BuyLink[];
   preorderLinks: BuyLink[];
+  /** Free-to-read serial sites (Royal Road, Wattpad…), shown at every stage */
+  readLinks: BuyLink[];
   stage: LaunchStage;
 };
 
@@ -167,8 +169,9 @@ function toLaunchBook(row: BookRow, studio: boolean): LaunchBook | null {
     betaOpen,
     arcOpen,
     arcDeadline: row.arc_deadline,
-    buyLinks: links.filter((l) => !l.preorder),
+    buyLinks: links.filter((l) => !l.preorder && !l.serial),
     preorderLinks: links.filter((l) => l.preorder),
+    readLinks: links.filter((l) => l.serial),
     stage: published ? "published" : arcOpen ? "arc" : betaOpen ? "beta" : "coming_soon",
   };
 }

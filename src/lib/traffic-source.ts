@@ -46,6 +46,7 @@ export const NETWORK_LABEL: Record<string, string> = {
   bluesky: "Bluesky",
   linkedin: "LinkedIn",
   newsletter: "Newsletter",
+  website: "Your website",
   email: "Email",
   pinterest: "Pinterest",
   bookbub: "BookBub",

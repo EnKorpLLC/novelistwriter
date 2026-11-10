@@ -25,16 +25,20 @@ export function normalizeReviewLinks(raw: unknown): LabeledLink[] {
   return normalizeLabeledLinks(raw, MAX_REVIEW_LINKS);
 }
 
-export type BuyLink = LabeledLink & { preorder?: boolean };
+export type BuyLink = LabeledLink & { preorder?: boolean; serial?: boolean };
 
-/** Store links; `preorder` marks links shown before release. */
+/** Free-to-read serial sites, offered as "Read on …" links instead of store links. */
+export const SERIAL_SITES = ["Royal Road", "Wattpad", "Substack", "Readerful", "Lantern", "Tapas", "Scribble Hub"];
+
+/** Store links; `preorder` marks links shown before release, `serial` marks free-to-read serial links shown at every stage. */
 export function normalizeBuyLinks(raw: unknown): BuyLink[] {
   const links = normalizeLabeledLinks(raw, MAX_BUY_LINKS);
   const src = Array.isArray(raw) ? raw : [];
   return links.map((l) => {
     const match = src.find(
       (s) => s && typeof s === "object" && String((s as { label?: unknown }).label || "").trim() === l.label
-    ) as { preorder?: unknown } | undefined;
+    ) as { preorder?: unknown; serial?: unknown } | undefined;
+    if (match?.serial) return { ...l, serial: true };
     return match?.preorder ? { ...l, preorder: true } : l;
   });
 }

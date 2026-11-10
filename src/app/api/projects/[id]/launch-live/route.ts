@@ -34,7 +34,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (plan.liveSentAt) {
     return NextResponse.json({ error: `You already sent your launch announcement on ${new Date(plan.liveSentAt).toLocaleDateString()}.` }, { status: 409 });
   }
-  const buy = normalizeBuyLinks(project.buy_links).filter((l) => !l.preorder);
+  const buy = normalizeBuyLinks(project.buy_links).filter((l) => !l.preorder && !l.serial);
   if (!buy.length) return NextResponse.json({ error: "Add at least one buy link (not a preorder link) on this tab first." }, { status: 400 });
 
   const admin = createServiceClient();

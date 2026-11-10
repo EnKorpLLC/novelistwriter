@@ -46,7 +46,7 @@ export async function loadBookExtras(
       };
     });
 
-  const buy = normalizeBuyLinks(project.buy_links).filter((l) => !l.preorder);
+  const buy = normalizeBuyLinks(project.buy_links).filter((l) => !l.preorder && !l.serial);
   let reviewLink: BookExtras["reviewLink"] = buy[0] ? { label: buy[0].label, url: buy[0].url } : null;
   if (store) {
     const def = STORES.find((s) => s.id === store)!;

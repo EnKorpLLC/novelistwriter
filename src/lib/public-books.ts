@@ -55,7 +55,7 @@ async function shapeRows(admin: SupabaseClient, rows: Row[]): Promise<PublishedB
     coverUrl: coverPublicUrl(projectCoverPath(r), r.updated_at ? Date.parse(r.updated_at) : undefined),
     authorUserId: r.user_id,
     authorName: nameById.get(r.user_id) || "Author",
-    buyLinks: normalizeBuyLinks(r.buy_links).filter((l) => !l.preorder),
+    buyLinks: normalizeBuyLinks(r.buy_links).filter((l) => !l.preorder && !l.serial),
     publishedAt: r.published_at,
     href:
       handleById.get(r.user_id) && r.slug

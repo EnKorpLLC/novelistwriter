@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { EmbedSnippets } from "@/components/EmbedSnippets";
+import { buttonImageSize } from "@/lib/embed-buttons";
 
 type State = { on: boolean; code: string | null; url: string | null; badgeUrl: string | null; lookupUrl: string; label: string | null; migrationNeeded?: boolean; error?: string };
 
@@ -84,6 +85,12 @@ export function VerifyBadgePanel({ projectId, title }: { projectId: string; titl
           <EmbedSnippets
             snippets={[
               { id: "html", label: "Website or Substack (HTML)", code: `<a href="${state.url}"><img src="${badge}" alt="${alt.replace(/"/g, "&quot;")}" height="22"></a>` },
+              {
+                id: "email",
+                label: "Newsletter (image)",
+                hint: "Email apps like Gmail don't show the badge above, so newsletters get this image version.",
+                code: `<a href="${state.url}"><img src="${badge.replace("/badge.svg", "/badge.png")}" alt="${alt.replace(/"/g, "&quot;")}" width="${buttonImageSize(state.label || "", true).width / 2}" height="44"></a>`,
+              },
               { id: "md", label: "Markdown", hint: "For sites that use Markdown, like many forums and GitHub-style editors.", code: `[![${alt}](${badge})](${state.url})` },
               { id: "bb", label: "BBCode (forums)", code: `[url=${state.url}][img]${badge}[/img][/url]` },
               {
