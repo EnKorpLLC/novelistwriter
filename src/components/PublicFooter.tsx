@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/reports", label: "Reports" },
   { href: "/genres", label: "Genres" },
   { href: "/human-authorship-standard", label: "How we verify" },
+  { href: "/verify", label: "Verify a book" },
   { href: "/conduct", label: "Conduct" },
   { href: "/compare", label: "Compare" },
   { href: "/pricing", label: "Pricing" },

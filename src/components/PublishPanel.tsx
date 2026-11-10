@@ -6,6 +6,7 @@ import { ShareKit } from "@/components/ShareKit";
 import { LaunchPlan } from "@/components/LaunchPlan";
 import { LaunchRoom } from "@/components/LaunchRoom";
 import { LaunchTeamPanel } from "@/components/LaunchTeamPanel";
+import { VerifyBadgePanel } from "@/components/VerifyBadgePanel";
 import { RecordBadge, WritingRecordView, type WritingRecordData } from "@/components/WritingRecordView";
 
 type LaunchState = {
@@ -430,6 +431,8 @@ export function PublishPanel({ projectId }: { projectId: string }) {
           </section>
 
           <WritingRecordSection projectId={projectId} launchPath={state.launchPath} sitePublic={state.sitePublic !== false} />
+
+          <VerifyBadgePanel projectId={projectId} title={state.title} />
 
           {state.launchVisible && state.launchPath && (
             <section className="border border-line p-4">

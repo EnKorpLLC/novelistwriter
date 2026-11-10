@@ -22,6 +22,7 @@ export const PLANS: PlanCopy[] = [
       "Story bible for characters, places, lore, and timeline",
       "1 project (add more for $9 each, one time)",
       "A private writing record of how every book came together",
+      "A free verification badge for any book to post on Royal Road, Wattpad, Substack, Amazon, or your site, linking to a page anyone can check",
       "Verified writing challenges: join one or start one with your group on any dates, with streaks and leaderboards",
       "One switch to turn every AI tool off",
       "Basic DOCX and EPUB export, front and back matter, KDP readiness checklist",
@@ -171,6 +172,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "Do I have to use AI?",
     a: "No. AI only critiques and never writes your book. One switch in Settings turns every AI tool off, and your books can show that.",
+  },
+  {
+    q: "Can I prove my book is human-written on other sites?",
+    a: "Yes, free on every plan. Turn on the verification badge in a book's Launch tab and paste it on Royal Road, Wattpad, Substack, your Amazon description, or your own site. It links to a page anyone can check, showing typed versus pasted, sessions over time, and AI use, never your text. It says “Verified human-written” once the book meets our standard with no AI used.",
   },
   {
     q: "Will AI companies train on my author site or book pages?",

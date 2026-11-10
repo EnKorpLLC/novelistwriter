@@ -266,6 +266,7 @@ export const SITE_TEXT: TextEntry[] = [
         "Export your manuscript anytime; it's never held hostage ([your data, your exit](/your-data))",
         "Coming from Scrivener, Word, Vellum, or Atticus? [See how to switch](/compare)",
         "A private record of how you wrote every book",
+        "A free “verified human-written” badge for any platform, with a [page anyone can check](/verify)",
         "Public pages (Pro and up) show up in AI search answers, with AI training blocked on them",
         "One switch to turn every AI tool off",
       ],

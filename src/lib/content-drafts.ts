@@ -67,6 +67,12 @@ A book written in one sitting, or pasted in, doesn't qualify. A book written the
 
 Nothing, unless the author chooses to share it. When they do, readers can see a summary like "written over 7 months, 140 sessions, 94% typed here" and a chart of words written per week. Readers never see the manuscript through the record.
 
+## Checking a book anywhere
+
+Authors can turn on a verification badge for any book, on every plan, and post it on Royal Road, Wattpad, Substack, an Amazon description, or their own site. Each book gets a code like NW-ABCD-2345. Anyone can [check a code](/verify) to see the record's numbers.
+
+The badge says **Verified human-written** only when the book has the Written in Novelist Writer badge and no AI tool was ever run on it. Otherwise it says Written in Novelist Writer, or shows the share that was typed. Platforms can read the same numbers through a free API, with no key needed.
+
 ## What the record can't prove
 
 No record is perfect. Someone could type out text they didn't write. The record makes that slow, visible, and pointless: it shows months of real sessions, the way a book is actually written. It's evidence, not a verdict.

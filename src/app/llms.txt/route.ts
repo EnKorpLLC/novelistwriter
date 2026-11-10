@@ -31,6 +31,7 @@ export async function GET() {
 - [Where readers are](${appUrl("/tools/where-readers-are")}): book promotion sites, ads, reader communities, ARC services, and newsletter swaps, with costs and self-promotion rules
 - [Comparisons and switching guides](${appUrl("/compare")}): fair comparisons with Scrivener, Vellum, Atticus, BetaBooks, and NetGalley, and how to bring a book over
 - [Your data, your exit](${appUrl("/your-data")}): export manuscripts and reader lists anytime, on every plan
+- [Verify a book](${appUrl("/verify")}): enter a verification code (NW-XXXX-XXXX) to see a book's writing record summary; authors on every plan can post a "verified human-written" badge on any site. Free JSON API for platforms, no key: ${appUrl("/api/verify/CODE")}
 - [Writing challenges](${appUrl("/challenges")}): free challenges with verified word counts (typed words only), streaks, and leaderboards
 - [Contact](${appUrl("/contact")})
 

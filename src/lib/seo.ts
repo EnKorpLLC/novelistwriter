@@ -19,6 +19,7 @@ export const STATIC_PAGES = [
   { path: "/affiliates", priority: 0.5, changeFrequency: "monthly" as const },
   { path: "/lifetime", priority: 0.6, changeFrequency: "weekly" as const },
   { path: "/human-authorship-standard", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/verify", priority: 0.7, changeFrequency: "monthly" as const },
   { path: "/conduct", priority: 0.4, changeFrequency: "yearly" as const },
   { path: "/guides", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/reports", priority: 0.6, changeFrequency: "monthly" as const },
@@ -126,6 +127,12 @@ export async function publicSitemapEntries(admin: SupabaseClient): Promise<Sitem
   const { data: content } = await admin.from("content_pages").select("kind, slug, updated_at").eq("status", "published").in("kind", ["guide", "report"]).limit(1000);
   for (const c of content || []) {
     entries.push({ url: appUrl(contentPath(c.kind, c.slug)), lastModified: c.updated_at || undefined, priority: c.kind === "guide" ? 0.8 : 0.6, changeFrequency: "monthly" });
+  }
+
+  // Verification pages authors turned on (only after migration_verify_badge.sql)
+  const { data: verified } = await admin.from("projects").select("verify_code, updated_at").eq("verify_public", true).not("verify_code", "is", null).limit(10000);
+  for (const v of verified || []) {
+    entries.push({ url: appUrl(`/verify/${v.verify_code}`), lastModified: v.updated_at || undefined, priority: 0.4, changeFrequency: "weekly" });
   }
 
   // Genre pages, only once a genre has enough real books and reader calls
