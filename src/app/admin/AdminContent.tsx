@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "@/components/Markdown";
+import { MarkdownToolbar, markdownShortcut } from "@/components/MarkdownToolbar";
 
 type Faq = { q: string; a: string };
 type ReportData = { generatedAt: string; period: string; minGroup: number; sections: { title: string; note: string; rows: { label: string; display: string }[] }[] };
@@ -48,6 +49,7 @@ function Editor({ onNote }: { onNote: (m: string | null) => void }) {
   const [draft, setDraft] = useState<Page | null>(null);
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -200,10 +202,20 @@ function Editor({ onNote }: { onNote: (m: string | null) => void }) {
                 The short answer (first thing readers and search engines see; 1–3 sentences)
                 <textarea rows={3} value={draft.summary} onChange={(e) => setDraft({ ...draft, summary: e.target.value })} className={input} />
               </label>
-              <label className="block text-xs text-muted">
-                Body (## heading, ### smaller heading, - list, 1. numbered, **bold**, *italic*, [link](/page), &gt; quote, - [ ] checkbox)
-                <textarea rows={22} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} className={`${input} font-mono text-[13px] leading-relaxed`} />
-              </label>
+              <div className="text-xs text-muted">
+                Body <span className="text-muted/80">(select text, then use the buttons; Preview shows how it will look)</span>
+                <div className="mt-1">
+                  <MarkdownToolbar target={bodyRef} value={draft.body} onChange={(body) => setDraft({ ...draft, body })} />
+                  <textarea
+                    ref={bodyRef}
+                    rows={22}
+                    value={draft.body}
+                    onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+                    onKeyDown={(e) => markdownShortcut(e, draft.body, (body) => setDraft({ ...draft, body }))}
+                    className="block w-full border border-line bg-paper px-2 py-1.5 font-mono text-[13px] leading-relaxed text-ink"
+                  />
+                </div>
+              </div>
               <div>
                 <p className="text-xs text-muted">Questions (shown at the end and given to search engines)</p>
                 {draft.faq.map((f, i) => (

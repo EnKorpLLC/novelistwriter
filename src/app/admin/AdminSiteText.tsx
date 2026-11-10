@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MarkdownToolbar, markdownShortcut } from "@/components/MarkdownToolbar";
 import { FIELD_LABEL, type Point, type TextBlock, type TextField } from "@/lib/site-text-registry";
 
 type Block = { key: string; page: string; label: string; fields: TextField[]; defaults: TextBlock; edited: boolean; updatedAt: string | null; value: TextBlock };
@@ -14,6 +15,27 @@ function move<T>(list: T[], i: number, by: number) {
   const next = [...list];
   [next[i], next[j]] = [next[j], next[i]];
   return next;
+}
+
+/** A paragraph box with Bold, Italic, and Link buttons. */
+function FormattedField({ label, rows, value, onChange }: { label: string; rows: number; value: string; onChange: (next: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  return (
+    <div className="text-xs text-muted">
+      {label}
+      <div className="mt-1">
+        <MarkdownToolbar target={ref} value={value} onChange={onChange} inline />
+        <textarea
+          ref={ref}
+          rows={rows}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => markdownShortcut(e, value, onChange)}
+          className="block w-full border border-line bg-paper px-2 py-1.5 text-sm text-ink"
+        />
+      </div>
+    </div>
+  );
 }
 
 function BlockEditor({ block, onSaved, onNote }: { block: Block; onSaved: () => void; onNote: (m: string | null) => void }) {
@@ -64,18 +86,8 @@ function BlockEditor({ block, onSaved, onNote }: { block: Block; onSaved: () => 
           <textarea rows={2} value={v.heading || ""} onChange={(e) => setV({ ...v, heading: e.target.value })} className={`${input} font-display text-lg`} />
         </label>
       )}
-      {block.fields.includes("intro") && (
-        <label className="block text-xs text-muted">
-          {FIELD_LABEL.intro}
-          <textarea rows={4} value={v.intro || ""} onChange={(e) => setV({ ...v, intro: e.target.value })} className={input} />
-        </label>
-      )}
-      {block.fields.includes("note") && (
-        <label className="block text-xs text-muted">
-          {FIELD_LABEL.note}
-          <textarea rows={2} value={v.note || ""} onChange={(e) => setV({ ...v, note: e.target.value })} className={input} />
-        </label>
-      )}
+      {block.fields.includes("intro") && <FormattedField label={FIELD_LABEL.intro} rows={4} value={v.intro || ""} onChange={(intro) => setV({ ...v, intro })} />}
+      {block.fields.includes("note") && <FormattedField label={FIELD_LABEL.note} rows={2} value={v.note || ""} onChange={(note) => setV({ ...v, note })} />}
       {block.fields.includes("items") && (
         <div>
           <p className="text-xs text-muted">{FIELD_LABEL.items}</p>
@@ -196,8 +208,8 @@ export function AdminSiteText({ onNote }: { onNote: (msg: string | null) => void
     <div className="mt-6 text-sm">
       <p className="max-w-3xl text-muted">
         Change the wording here and it goes live straight away. Anything you don&apos;t change keeps the original wording, and every
-        section can be put back. In text, <code>[words](/page)</code> makes a link, <code>**bold**</code> bolds, and Enter in a heading
-        starts a new line. Prices stay as they are, since Stripe charges them.
+        section can be put back. Select words and use the Bold, Italic, and Link buttons; in a heading, Enter starts a new line. Prices
+        stay as they are, since Stripe charges them.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {pages.map((p) => (
