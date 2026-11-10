@@ -85,6 +85,15 @@ function textInline(html: string) {
 
 /* ---------- Blocks ---------- */
 
+/**
+ * Images aren't pasted as links to our storage (every reader on the other site would load them from us).
+ * A marker shows where to upload the image on that site instead.
+ */
+function imageMarker(b: Extract<Block, { type: "image" }>) {
+  if (b.role === "break") return "* * *";
+  return `[Image${b.alt ? `: ${b.alt}` : ""}. Upload it here on this site]`;
+}
+
 const STARS_HTML = '<p style="text-align: center">* * *</p>';
 
 function richBlocks(blocks: Block[], breakAs: "hr" | "stars"): string {
@@ -103,6 +112,9 @@ function richBlocks(blocks: Block[], breakAs: "hr" | "stars"): string {
           return breakAs === "hr" ? "<hr />" : STARS_HTML;
         case "pre":
           return `<pre>${escapeXml(b.text)}</pre>`;
+        case "image":
+          if (b.role === "break") return breakAs === "hr" ? "<hr />" : STARS_HTML;
+          return `<p style="text-align: center"><em>${escapeXml(imageMarker(b))}</em></p>`;
       }
     })
     .join("\n");
@@ -124,6 +136,8 @@ function bbBlocks(blocks: Block[]): string {
           return "[center]* * *[/center]";
         case "pre":
           return `[code]${b.text}[/code]`;
+        case "image":
+          return b.role === "break" ? "[center]* * *[/center]" : `[center][i]${imageMarker(b)}[/i][/center]`;
       }
     })
     .join("\n\n");
@@ -151,6 +165,8 @@ function mdBlocks(blocks: Block[]): string {
             .split("\n")
             .map((l) => `    ${l}`)
             .join("\n");
+        case "image":
+          return b.role === "break" ? "* * *" : `*${imageMarker(b).replace(/([\\*_`~[\]^#>])/g, "\\$1")}*`;
       }
     })
     .join("\n\n");
@@ -171,6 +187,8 @@ function textBlocks(blocks: Block[]): string {
           return "* * *";
         case "pre":
           return b.text;
+        case "image":
+          return imageMarker(b);
       }
     })
     .join("\n\n");

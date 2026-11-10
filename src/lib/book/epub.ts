@@ -50,6 +50,52 @@ ${body}
 </html>`;
 }
 
+const IMAGE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif" };
+const MAX_IMAGES = 150;
+// Stores reject very large ebooks, and Kindle charges delivery by size
+const MAX_IMAGE_BYTES = 60 * 1024 * 1024;
+
+/**
+ * Stores won't accept ebooks that load pictures from the web, so chapter images are downloaded and packed
+ * into the file. An image that can't be fetched is left out rather than failing the whole build.
+ */
+async function packageImages(zip: JSZip, items: { body: string }[]): Promise<{ href: string; type: string }[]> {
+  const srcs = [...new Set(items.flatMap((it) => [...it.body.matchAll(/<img src="(https:\/\/[^"]+)"/g)].map((m) => m[1])))].slice(0, MAX_IMAGES);
+  if (!srcs.length) return [];
+  const local = new Map<string, string>();
+  const out: { href: string; type: string }[] = [];
+  let total = 0;
+  for (let i = 0; i < srcs.length; i += 6) {
+    const batch = await Promise.all(
+      srcs.slice(i, i + 6).map(async (url) => {
+        try {
+          const res = await fetch(url.replace(/&amp;/g, "&"), { signal: AbortSignal.timeout(15000) });
+          const type = (res.headers.get("content-type") || "").split(";")[0];
+          if (!res.ok || !IMAGE_TYPES[type]) return null;
+          return { url, type, data: new Uint8Array(await res.arrayBuffer()) };
+        } catch {
+          return null;
+        }
+      })
+    );
+    for (const b of batch) {
+      if (!b || total + b.data.length > MAX_IMAGE_BYTES) continue;
+      total += b.data.length;
+      const href = `images/img-${out.length + 1}.${IMAGE_TYPES[b.type]}`;
+      zip.file(`OEBPS/${href}`, b.data);
+      out.push({ href, type: b.type });
+      local.set(b.url, href);
+    }
+  }
+  for (const it of items) {
+    it.body = it.body.replace(/<img src="(https:\/\/[^"]+)"([^>]*)\/>/g, (all, url: string, rest: string) => {
+      const href = local.get(url);
+      return href ? `<img src="../${href}"${rest}/>` : "";
+    });
+  }
+  return out;
+}
+
 /** A styled EPUB 3 (with an EPUB 2 table of contents for older readers). */
 export async function buildStyledEpub(opts: {
   book: Book;
@@ -132,6 +178,7 @@ export async function buildStyledEpub(opts: {
     });
   });
 
+  const images = await packageImages(zip, items);
   for (const it of items) zip.file(`OEBPS/${it.href}`, xhtml(it.title, it.body, lang));
 
   // Navigation: chapters plus back matter; front matter is reached through the landmarks
@@ -204,6 +251,7 @@ ${seriesMeta}
 <item id="css" href="styles/book.css" media-type="text/css"/>
 ${fontFiles.map((f, i) => `<item id="font${i + 1}" href="${f.href}" media-type="font/ttf"/>`).join("\n")}
 ${coverHref ? `<item id="cover-image" href="${coverHref}" media-type="${MEDIA[opts.cover!.type]}" properties="cover-image"/>` : ""}
+${images.map((img, i) => `<item id="img${i + 1}" href="${img.href}" media-type="${img.type}"/>`).join("\n")}
 ${items.map((it) => `<item id="${it.id}" href="${it.href}" media-type="application/xhtml+xml"/>`).join("\n")}
 </manifest>
 <spine toc="ncx">

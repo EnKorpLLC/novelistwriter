@@ -67,6 +67,15 @@ export function renderBlocks(blocks: Block[], opts: { opening: Opening; ornament
       case "pre":
         out.push(`<pre>${escapeXml(b.text)}</pre>`);
         break;
+      case "image":
+        if (b.role === "break") {
+          out.push(`<div class="scene-break-image" role="separator"><img src="${escapeXml(b.src)}" alt=""/></div>`);
+          afterBreak = true;
+        } else {
+          out.push(`<figure class="illustration"><img src="${escapeXml(b.src)}" alt="${escapeXml(b.alt)}"/></figure>`);
+          first = false;
+        }
+        break;
     }
   }
   return out.join("\n");

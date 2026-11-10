@@ -85,6 +85,7 @@ p.center, p.right, p.scene-break { hyphens: manual; }
 a { color: inherit; text-decoration: none; }
 h1, h2, h3, h4, .chapter-head, .chapter-label { break-after: avoid; break-inside: avoid; }
 p.scene-break { break-after: avoid; }
+figure.illustration img { max-height: ${Math.max(1, h - m.top - m.bottom - 0.25).toFixed(2)}in; }
 .dropcap { font-size: 3.55em; line-height: 0.8; margin: 0.05em 0.07em 0 0; }
 
 .print-front { page: front; break-before: right; }

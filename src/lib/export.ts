@@ -100,6 +100,12 @@ function parasFromHtml(html: string): Paragraph[] {
 
   const normalized = html
     .replace(/<hr\s*\/?>/gi, "<p style=\"text-align: center\">⁂</p>")
+    // Word files mark where each image goes; the styled EPUB and print PDF carry the images themselves
+    .replace(/<img\b([^>]*)>/gi, (_m, attrs: string) =>
+      /data-role="break"/i.test(attrs)
+        ? "<p style=\"text-align: center\">⁂</p>"
+        : `<p style="text-align: center">[Image${/alt="([^"]+)"/i.exec(attrs)?.[1] ? `: ${/alt="([^"]+)"/i.exec(attrs)![1]}` : ""}]</p>`
+    )
     .replace(/<\/div>/gi, "")
     .replace(/<div[^>]*>/gi, "");
 

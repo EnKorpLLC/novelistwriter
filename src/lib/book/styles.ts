@@ -193,6 +193,10 @@ p.first, p.noindent, p.center, p.right, p.scene-break { text-indent: 0; }
 p.center { text-align: center; }
 p.right { text-align: right; }
 p.scene-break { text-align: center; margin: 1.1em 0; letter-spacing: 0.2em; }
+figure.illustration { margin: 1.2em 0; padding: 0; text-align: center; page-break-inside: avoid; break-inside: avoid; }
+figure.illustration img { max-width: 100%; max-height: 95vh; height: auto; }
+div.scene-break-image { text-align: center; margin: 1.1em 0; page-break-inside: avoid; break-inside: avoid; }
+div.scene-break-image img { max-width: 30%; max-height: 3em; height: auto; }
 .dropcap { float: left; font-family: ${headingStack}; font-size: 3.4em; line-height: 0.85; margin: 0.06em 0.08em 0 0; }
 .lead { font-variant: small-caps; letter-spacing: 0.04em; }
 blockquote { margin: 0.8em 1.6em; }

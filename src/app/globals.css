@@ -78,6 +78,28 @@ body {
   margin-bottom: 1em;
 }
 
+/* Images in chapters: editor, beta and ARC readers, sample pages */
+.ProseMirror img,
+.manuscript-prose img,
+.book-sample img,
+.chapter-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.5em auto;
+}
+.ProseMirror img[data-role="break"],
+.manuscript-prose img[data-role="break"],
+.book-sample img[data-role="break"] {
+  max-width: 30%;
+  max-height: 4em;
+  margin: 1.25em auto;
+}
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Shared manuscript reading styles (editor + beta reader) */
 .manuscript-prose {
   font-family: var(--font-body);

@@ -18,7 +18,9 @@ export type Block =
   | { type: "quote"; blocks: Block[] }
   | { type: "list"; ordered: boolean; items: string[] }
   | { type: "break" }
-  | { type: "pre"; text: string };
+  | { type: "pre"; text: string }
+  /** "break" images are small ornaments standing in for a scene break */
+  | { type: "image"; src: string; alt: string; role: "full" | "break" };
 
 type Node = { tag: string; attrs: string; children: Node[] } | { text: string };
 
@@ -106,6 +108,29 @@ function alignOf(attrs: string): "left" | "center" | "right" {
 
 const SCENE_BREAK_TEXT = /^\s*(?:(?:\*\s*){3,}|(?:•\s*){3,}|(?:~\s*){1,}|#|⁂|§|◆|-{3,}|—{2,}|_{3,})\s*$/;
 
+function attr(attrs: string, name: string): string {
+  return decodeEntities(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, "i").exec(attrs)?.[1] || "");
+}
+
+/** Only web images (our uploads); data: URLs and anything else are dropped. */
+function imageBlock(n: { attrs: string }): Block | null {
+  const src = attr(n.attrs, "src");
+  if (!/^https:\/\//i.test(src)) return null;
+  return { type: "image", src, alt: attr(n.attrs, "alt").slice(0, 300), role: attr(n.attrs, "data-role") === "break" ? "break" : "full" };
+}
+
+function imagesIn(nodes: Node[]): Block[] {
+  const out: Block[] = [];
+  for (const n of nodes) {
+    if ("text" in n) continue;
+    if (n.tag === "img") {
+      const b = imageBlock(n);
+      if (b) out.push(b);
+    } else out.push(...imagesIn(n.children));
+  }
+  return out;
+}
+
 function toBlocks(nodes: Node[]): Block[] {
   const blocks: Block[] = [];
   for (const n of nodes) {
@@ -115,7 +140,17 @@ function toBlocks(nodes: Node[]): Block[] {
       continue;
     }
     switch (n.tag) {
+      case "img": {
+        const b = imageBlock(n);
+        if (b) blocks.push(b);
+        break;
+      }
+      case "figure":
+        blocks.push(...imagesIn(n.children));
+        break;
       case "p": {
+        // Images pasted inside a paragraph come out as their own blocks, ahead of the paragraph's text
+        blocks.push(...imagesIn(n.children));
         const text = plainText(n.children);
         if (!text.trim()) break;
         if (SCENE_BREAK_TEXT.test(text)) blocks.push({ type: "break" });
@@ -162,8 +197,9 @@ function toBlocks(nodes: Node[]): Block[] {
         blocks.push(...toBlocks(n.children));
     }
   }
-  // No scene break at the very start or end of a chapter, and never two in a row
-  return blocks.filter((b, i, all) => b.type !== "break" || (i > 0 && i < all.length - 1 && all[i - 1].type !== "break"));
+  // No scene break at the very start or end of a chapter, and never two in a row (an image scene break counts as one)
+  const isBreak = (b: Block | undefined) => b?.type === "break" || (b?.type === "image" && b.role === "break");
+  return blocks.filter((b, i, all) => !isBreak(b) || (i > 0 && i < all.length - 1 && !isBreak(all[i - 1])));
 }
 
 export function htmlToBlocks(html: string | null | undefined, fallbackText?: string | null): Block[] {

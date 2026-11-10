@@ -22,6 +22,8 @@ function blocksToEditorHtml(blocks: Block[]): string {
           return `<p style="text-align: center">* * *</p>`;
         case "pre":
           return `<p>${b.text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`;
+        case "image":
+          return `<img src="${b.src.replace(/"/g, "&quot;")}" alt="${b.alt.replace(/"/g, "&quot;")}" data-role="${b.role}">`;
       }
     })
     .join("");

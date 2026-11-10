@@ -20,6 +20,7 @@ import {
 } from "@/lib/draft-cache";
 import { FontSize } from "@/lib/tiptap-font-size";
 import { SearchHighlight, getSearchState } from "@/lib/tiptap-search-highlight";
+import { ChapterImage } from "@/lib/tiptap-chapter-image";
 import { EditorToolbar } from "@/components/EditorToolbar";
 import { FindReplaceBar } from "@/components/FindReplaceBar";
 import { createWritingSessionTracker } from "@/lib/writing-session";
@@ -116,6 +117,7 @@ export function ManuscriptEditor({
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Placeholder.configure({ placeholder: "Write your chapter…" }),
       CharacterCount,
+      ChapterImage,
       SearchHighlight,
       createSuppressScrollExtension(suppressScrollRef),
     ],
@@ -338,6 +340,7 @@ export function ManuscriptEditor({
     <div className="flex h-full min-h-0 flex-col">
       <EditorToolbar
         editor={editor}
+        projectId={projectId}
         onLookUp={onLookUp}
         onFind={() => openFind(false)}
         onReplace={() => openFind(true)}

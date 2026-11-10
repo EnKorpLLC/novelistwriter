@@ -48,6 +48,7 @@ export function printChecklist(input: {
   hasTitlePage: boolean;
   hasCopyright: boolean;
   isbnPrint: string;
+  hasImages?: boolean;
 }): CheckItem[] {
   const { pages, format } = input;
   const m = printMargins(format.trim, pages);
@@ -78,7 +79,14 @@ export function printChecklist(input: {
       detail: `${m.outside}" outside, ${m.top}" top, ${m.bottom}" bottom (KDP minimum 0.25")`,
     },
     { id: "fonts", label: "Fonts embedded", ok: true, detail: "Open-licensed fonts, embedded when you save the PDF" },
-    { id: "bleed", label: "No bleed needed", ok: true, detail: "Text-only interior; choose \"No bleed\" when you upload" },
+    {
+      id: "bleed",
+      label: "No bleed needed",
+      ok: true,
+      detail: input.hasImages
+        ? "Images sit inside the margins; choose \"No bleed\" when you upload"
+        : "Text-only interior; choose \"No bleed\" when you upload",
+    },
     { id: "title", label: "Title page", ok: input.hasTitlePage },
     { id: "copyright", label: "Copyright page", ok: input.hasCopyright },
     {

@@ -1,9 +1,12 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
+import { ChapterImageButton } from "@/components/ChapterImageButton";
 
 type Props = {
   editor: Editor | null;
+  /** Shows the Image button when set */
+  projectId?: string;
   onLookUp?: () => void;
   onFind?: () => void;
   onReplace?: () => void;
@@ -44,7 +47,7 @@ function Btn({
   );
 }
 
-export function EditorToolbar({ editor, onLookUp, onFind, onReplace }: Props) {
+export function EditorToolbar({ editor, projectId, onLookUp, onFind, onReplace }: Props) {
   if (!editor) return null;
 
   return (
@@ -165,6 +168,7 @@ export function EditorToolbar({ editor, onLookUp, onFind, onReplace }: Props) {
       >
         ⁂
       </Btn>
+      {projectId && <ChapterImageButton editor={editor} projectId={projectId} />}
 
       <span className="mx-1 h-4 w-px bg-line" />
 

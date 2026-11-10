@@ -3,12 +3,73 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PRINT_SIZES, TRIM_SIZES, normalizeDetails, normalizeFormat, type FormatSettings } from "@/lib/book/format";
-import { buildBook, type BookExtras, type ChapterInput, type MatterInput } from "@/lib/book/model";
+import { buildBook, type Block, type Book, type BookExtras, type ChapterInput, type MatterInput } from "@/lib/book/model";
 import { getStyle } from "@/lib/book/styles";
-import { TRIM_INCHES, estimatePages, kdpGutter, printMargins, renderPrintDocument } from "@/lib/book/print";
-import { printChecklist } from "@/lib/kdp-checklist";
+import { TRIM_INCHES, estimatePages, kdpGutter, printMargins, renderPrintDocument, type PrintMargins } from "@/lib/book/print";
+import { printChecklist, type CheckItem } from "@/lib/kdp-checklist";
 
 const SAMPLE_CHAPTERS = 3;
+
+function imagesOf(blocks: Block[]): Extract<Block, { type: "image" }>[] {
+  return blocks.flatMap((b) => (b.type === "image" ? [b] : b.type === "quote" ? imagesOf(b.blocks) : []));
+}
+
+/** Print wants about 300 pixels per inch at the size each image actually prints. */
+function useImageResolution(book: Book, trim: { w: number; h: number }, m: PrintMargins): CheckItem | null {
+  const images = useMemo(
+    () => [...book.front, ...book.chapters, ...book.back].flatMap((s) => imagesOf(s.blocks)),
+    [book]
+  );
+  const [low, setLow] = useState<{ count: number; worst: number } | null>(null);
+  const textW = trim.w - m.inside - m.outside;
+  const textH = trim.h - m.top - m.bottom - 0.25;
+  const key = images.map((i) => `${i.role}:${i.src}`).join("|");
+
+  useEffect(() => {
+    if (!images.length) return;
+    let cancelled = false;
+    void Promise.all(
+      images.map(
+        (img) =>
+          new Promise<number | null>((resolve) => {
+            const el = new Image();
+            el.onload = () => {
+              const w = el.naturalWidth;
+              const h = el.naturalHeight || 1;
+              // Shown at its natural size (96 per inch) unless the page or the ornament limit is smaller
+              const maxW = img.role === "break" ? textW * 0.3 : textW;
+              const maxH = img.role === "break" ? 0.5 : textH;
+              const printedW = Math.min(maxW, w / 96, (w / h) * maxH);
+              resolve(printedW > 0 ? w / printedW : null);
+            };
+            el.onerror = () => resolve(null);
+            el.src = img.src;
+          })
+      )
+    ).then((dpis) => {
+      if (cancelled) return;
+      const lows = dpis.filter((d): d is number => d !== null && d < 300);
+      setLow({ count: lows.length, worst: lows.length ? Math.round(Math.min(...lows)) : 0 });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, textW, textH]);
+
+  if (!images.length) return null;
+  const n = images.length;
+  return {
+    id: "images",
+    label: "Images sharp enough to print",
+    ok: low ? (low.count === 0 ? true : low.worst < 200 ? false : null) : null,
+    detail: !low
+      ? `Checking ${n} image${n === 1 ? "" : "s"}…`
+      : low.count === 0
+        ? `${n} image${n === 1 ? "" : "s"}, all at 300 pixels per inch or more. On a black-and-white interior, color images print in grayscale.`
+        : `${low.count} of ${n} images print below 300 pixels per inch (lowest about ${low.worst}), so they may look soft. Replace them with larger files.`,
+  };
+}
 
 type Status =
   | { doc: string; state: "layout"; pages: number }
@@ -150,15 +211,20 @@ export function PrintStudio(props: {
     void saveFormat(patch);
   }
 
+  const imageCheck = useImageResolution(book, TRIM_INCHES[format.trim], margins);
   const checks =
     current.state === "done" && !sample
-      ? printChecklist({
-          pages: current.pages,
-          format,
-          hasTitlePage: book.front.some((s) => s.special === "title"),
-          hasCopyright: book.front.some((s) => s.kind === "front_copyright"),
-          isbnPrint: details.isbnPrint,
-        })
+      ? [
+          ...printChecklist({
+            pages: current.pages,
+            format,
+            hasTitlePage: book.front.some((s) => s.special === "title"),
+            hasCopyright: book.front.some((s) => s.kind === "front_copyright"),
+            isbnPrint: details.isbnPrint,
+            hasImages: imageCheck !== null,
+          }),
+          ...(imageCheck ? [imageCheck] : []),
+        ]
       : [];
 
   const select = "mt-1 block w-full border border-line bg-paper px-2 py-1.5 text-sm text-ink";

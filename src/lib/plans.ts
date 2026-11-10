@@ -20,6 +20,7 @@ export const PLANS: PlanCopy[] = [
     items: [
       "Full writing studio: chapters, scene notes, focus mode, find and replace",
       "Story bible for characters, places, lore, and timeline",
+      "Images in chapters: maps, illustrations, chapter art, and image scene breaks",
       "1 project (add more for $9 each, one time)",
       "A private writing record of how every book came together",
       "A free verification badge for any book to post on Royal Road, Wattpad, Substack, Amazon, or your site, linking to a page anyone can check",
@@ -41,8 +42,8 @@ export const PLANS: PlanCopy[] = [
     items: [
       "Everything in Free",
       "Unlimited projects",
-      "Book formatting: 8 book styles with drop caps, chapter openings, and scene-break ornaments, downloaded as a polished, store-ready ebook",
-      "Print-ready paperback PDFs: 5 trim sizes, running heads and page numbers, margins that follow KDP's page-count rules, and a checklist before you upload",
+      "Book formatting: 8 book styles with drop caps, chapter openings, and scene-break ornaments, downloaded as a polished, store-ready ebook with your maps and illustrations packed inside",
+      "Print-ready paperback PDFs: 5 trim sizes, running heads and page numbers, margins that follow KDP's page-count rules, and a checklist before you upload, including whether each image is sharp enough to print",
       "Cover builder: design your front, spine, and back cover with your own art and our fonts, then save the ebook cover and a print-ready paperback cover PDF",
       "Cover tools: ebook cover checks, the exact paperback wrap size and spine width for KDP or IngramSpark, and a cover template for your designer",
       "Marketing images from your cover: a 3D book, plus ready-sized ads and posts for Facebook, Instagram, stories, Pinterest, and BookBub",
