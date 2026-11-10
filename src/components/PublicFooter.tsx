@@ -1,26 +1,47 @@
 import Link from "next/link";
 
-const LINKS = [
-  { href: "/books", label: "Published books" },
-  { href: "/promos", label: "Book promotions" },
-  { href: "/authors", label: "For authors" },
-  { href: "/readers", label: "For readers" },
-  { href: "/challenges", label: "Challenges" },
-  { href: "/tools", label: "Free tools" },
-  { href: "/guides", label: "Guides" },
-  { href: "/reports", label: "Reports" },
-  { href: "/genres", label: "Genres" },
-  { href: "/human-authorship-standard", label: "How we verify" },
-  { href: "/verify", label: "Verify a book" },
-  { href: "/conduct", label: "Conduct" },
-  { href: "/compare", label: "Compare" },
-  { href: "/works-with", label: "Works with" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/affiliates", label: "Affiliates" },
-  { href: "/your-data", label: "Your data" },
-  { href: "/contact", label: "Contact" },
-  { href: "/refunds", label: "Refunds" },
-  { href: "/privacy", label: "Privacy" },
+/** Grouped so 20-odd links read as navigation, two columns on phones and four on wider screens. */
+const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
+  {
+    title: "Books",
+    links: [
+      { href: "/books", label: "Published books" },
+      { href: "/genres", label: "Genres" },
+      { href: "/promos", label: "Book promotions" },
+      { href: "/challenges", label: "Challenges" },
+    ],
+  },
+  {
+    title: "For authors",
+    links: [
+      { href: "/authors", label: "What authors get" },
+      { href: "/pricing", label: "Pricing" },
+      { href: "/tools", label: "Free tools" },
+      { href: "/guides", label: "Guides" },
+      { href: "/compare", label: "Compare" },
+      { href: "/works-with", label: "Works with" },
+      { href: "/affiliates", label: "Affiliates" },
+    ],
+  },
+  {
+    title: "Trust",
+    links: [
+      { href: "/readers", label: "For readers" },
+      { href: "/human-authorship-standard", label: "How we verify" },
+      { href: "/verify", label: "Verify a book" },
+      { href: "/reports", label: "Reports" },
+      { href: "/conduct", label: "Conduct" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { href: "/contact", label: "Contact" },
+      { href: "/your-data", label: "Your data" },
+      { href: "/refunds", label: "Refunds" },
+      { href: "/privacy", label: "Privacy" },
+    ],
+  },
 ];
 
 /** Follow links appear once each account exists and its URL is set in the environment */
@@ -48,28 +69,39 @@ export function PublicFooter({ credit }: { credit?: "author-site" | "launch-page
   }
   return (
     <footer className="font-ui border-t border-line px-6 py-10 text-sm text-muted md:px-10">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4">
-        <Link href="/" className="font-display text-ink">
-          Novelist Writer
-        </Link>
-        <nav className="flex flex-wrap gap-4">
-          {LINKS.map((l) => (
-            <Link key={l.href} href={l.href} className="hover:text-ink">
-              {l.label}
-            </Link>
+      <div className="mx-auto grid max-w-5xl gap-8 sm:grid-cols-[1fr_3fr]">
+        <div>
+          <Link href="/" className="font-display text-lg text-ink">
+            Novelist Writer
+          </Link>
+          <p className="mt-1 max-w-xs text-xs">Write it yourself. Prove it.</p>
+          {SOCIAL.length > 0 && (
+            <p className="mt-3 flex flex-wrap gap-3 text-xs">
+              {SOCIAL.map((s) => (
+                <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer me" className="hover:text-ink">
+                  {s.label}
+                </a>
+              ))}
+            </p>
+          )}
+        </div>
+        <nav aria-label="Site" className="grid grid-cols-2 gap-6 md:grid-cols-4">
+          {COLUMNS.map((c) => (
+            <div key={c.title}>
+              <p className="text-[11px] uppercase tracking-wide text-ink">{c.title}</p>
+              <ul className="mt-2 space-y-1.5">
+                {c.links.map((l) => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="hover:text-ink">
+                      {l.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
         </nav>
       </div>
-      {SOCIAL.length > 0 && (
-        <div className="mx-auto mt-4 flex max-w-5xl flex-wrap gap-4 text-xs">
-          <span>Follow us:</span>
-          {SOCIAL.map((s) => (
-            <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer me" className="hover:text-ink">
-              {s.label}
-            </a>
-          ))}
-        </div>
-      )}
     </footer>
   );
 }

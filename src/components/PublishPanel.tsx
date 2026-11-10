@@ -8,7 +8,6 @@ import { LaunchRoom } from "@/components/LaunchRoom";
 import { LaunchTeamPanel } from "@/components/LaunchTeamPanel";
 import { VerifyBadgePanel } from "@/components/VerifyBadgePanel";
 import { EmbedButtonsPanel } from "@/components/EmbedButtonsPanel";
-import { DirectSalePanel } from "@/components/DirectSalePanel";
 import { RecordBadge, WritingRecordView, type WritingRecordData } from "@/components/WritingRecordView";
 
 type LaunchState = {
@@ -112,6 +111,24 @@ function WritingRecordSection({
   );
 }
 
+/** A section that starts folded, so the tab opens on what's used most. */
+function Fold({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+  return (
+    <details className="group border border-line">
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span>
+          <span className="font-display block text-lg">{title}</span>
+          <span className="block text-xs text-muted">{hint}</span>
+        </span>
+        <span className="mt-1 text-muted transition group-open:rotate-45" aria-hidden="true">
+          +
+        </span>
+      </summary>
+      <div className="space-y-5 border-t border-line p-3 sm:p-4">{children}</div>
+    </details>
+  );
+}
+
 /** The Launch tab: the book's public launch page, its stage, and where to buy or preorder. */
 export function PublishPanel({ projectId }: { projectId: string }) {
   const [state, setState] = useState<LaunchState | null>(null);
@@ -190,10 +207,10 @@ export function PublishPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="font-ui mx-auto max-w-3xl space-y-8">
           <div>
-            <h2 className="font-display text-2xl">Launch</h2>
+            <h2 className="font-display text-2xl">Launch page</h2>
             <p className="mt-1 text-sm text-muted">
               Your book&apos;s public launch page. It changes with the book: coming soon, beta or
               ARC open, then out now with buy buttons. Your website and social links come from your{" "}
@@ -222,12 +239,6 @@ export function PublishPanel({ projectId }: { projectId: string }) {
           )}
 
           {note && <p className="text-sm text-ink">{note}</p>}
-
-          <LaunchRoom projectId={projectId} />
-
-          <LaunchPlan key={state.releaseDate || "none"} projectId={projectId} />
-
-          {state.sitePublic !== false && <LaunchTeamPanel projectId={projectId} />}
 
           <section className="border border-line p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -460,14 +471,31 @@ export function PublishPanel({ projectId }: { projectId: string }) {
             </div>
           </section>
 
-          <DirectSalePanel projectId={projectId} published={state.published} launchPath={state.launchPath} />
+          <p className="border border-dashed border-line px-4 py-3 text-sm text-muted">
+            Selling the ebook here, discount codes, bundles, and free copies for joining your list are in the{" "}
+            <a href={`/project/${projectId}?tab=sell`} className="text-accent underline">
+              Sell
+            </a>{" "}
+            tab.
+          </p>
 
-          <WritingRecordSection projectId={projectId} launchPath={state.launchPath} sitePublic={state.sitePublic !== false} />
+          <LaunchRoom projectId={projectId} />
 
-          <VerifyBadgePanel projectId={projectId} title={state.title} />
+          <LaunchPlan key={state.releaseDate || "none"} projectId={projectId} />
+
+          {state.sitePublic !== false && (
+            <Fold title="Launch team" hint="Readers who share, review, and ask their library on launch day">
+              <LaunchTeamPanel projectId={projectId} />
+            </Fold>
+          )}
+
+          <Fold title="Proof it's your writing" hint="Writing record on your launch page, and a verification badge for other sites">
+            <WritingRecordSection projectId={projectId} launchPath={state.launchPath} sitePublic={state.sitePublic !== false} />
+            <VerifyBadgePanel projectId={projectId} title={state.title} />
+          </Fold>
 
           {state.launchVisible && state.launchPath && (
-            <section className="border border-line p-4">
+            <Fold title="Share and embed" hint="Ready-to-post copy, a newsletter block, and buttons for your website">
               <ShareKit
                 heading="Share your launch page"
                 path={state.launchPath}
@@ -491,10 +519,9 @@ export function PublishPanel({ projectId }: { projectId: string }) {
                   buttonLabel: state.published ? "Get the book" : "See the book",
                 }}
               />
-            </section>
+              <EmbedButtonsPanel launchPath={state.launchPath} />
+            </Fold>
           )}
-
-          {state.launchVisible && state.launchPath && <EmbedButtonsPanel launchPath={state.launchPath} />}
         </div>
       </div>
     </div>

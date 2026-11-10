@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ManuscriptEditor } from "@/components/ManuscriptEditor";
@@ -12,9 +12,10 @@ import { BetaPanel } from "@/components/BetaPanel";
 import { ArcPanel } from "@/components/ArcPanel";
 import { PublishPanel } from "@/components/PublishPanel";
 import { SerialPanel } from "@/components/SerialPanel";
+import { SellPanel } from "@/components/SellPanel";
 import { FormatPanel } from "@/components/FormatPanel";
 import { CoverPanel } from "@/components/CoverPanel";
-import { WORKSPACE_TABS, isWorkspaceTab, type WorkspaceTab } from "@/lib/workspace-tabs";
+import { WORKSPACE_GROUPS, groupOf, isWorkspaceTab, tabLabel, type WorkspaceTab } from "@/lib/workspace-tabs";
 import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
 import { clientLocalDay } from "@/lib/local-day";
@@ -180,9 +181,11 @@ export function ProjectWorkspace({
     [project.id, pathname, router, tab]
   );
 
+  const lastInGroup = useRef<Record<string, WorkspaceTab>>({});
   const selectTab = useCallback(
     (next: WorkspaceTab) => {
       setTab(next);
+      lastInGroup.current[groupOf(next).id] = next;
       try {
         localStorage.setItem(tabStorageKey(project.id), next);
       } catch {
@@ -501,16 +504,23 @@ export function ProjectWorkspace({
             >
               Credits: <strong className="text-ink">{credits}</strong>
             </Link>
-            {WORKSPACE_TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => selectTab(t.id)}
-                className={`px-3 py-1 ${tab === t.id ? "bg-accent text-paper" : "text-muted hover:text-ink"}`}
-              >
-                {t.label}
-              </button>
-            ))}
+            <nav aria-label="Book sections" className="-mx-1 flex max-w-full overflow-x-auto">
+              {WORKSPACE_GROUPS.map((g) => {
+                const on = g.tabs.includes(tab);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    aria-current={on ? "page" : undefined}
+                    // Opens the group on whichever of its tabs was used last
+                    onClick={() => selectTab(on ? tab : lastInGroup.current[g.id] || g.tabs[0])}
+                    className={`shrink-0 whitespace-nowrap px-3 py-1 ${on ? "bg-accent text-paper" : "text-muted hover:text-ink"}`}
+                  >
+                    {g.label}
+                  </button>
+                );
+              })}
+            </nav>
             <button
               type="button"
               onClick={() => setLookupOpen(true)}
@@ -528,6 +538,22 @@ export function ProjectWorkspace({
             </button>
           </div>
         </header>
+      )}
+
+      {!focusMode && groupOf(tab).tabs.length > 1 && (
+        <nav aria-label={`${groupOf(tab).label} sections`} className="font-ui flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-paper-deep/30 px-4 py-1.5 text-sm">
+          {groupOf(tab).tabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-current={tab === t ? "page" : undefined}
+              onClick={() => selectTab(t)}
+              className={`shrink-0 whitespace-nowrap rounded-sm px-3 py-1 ${tab === t ? "bg-paper text-ink shadow-sm" : "text-muted hover:text-ink"}`}
+            >
+              {tabLabel(t)}
+            </button>
+          ))}
+        </nav>
       )}
 
       {focusMode && (
@@ -956,6 +982,8 @@ export function ProjectWorkspace({
         {tab === "publish" && <PublishPanel projectId={project.id} />}
 
         {tab === "serial" && <SerialPanel projectId={project.id} chapters={chapters} />}
+
+        {tab === "sell" && <SellPanel projectId={project.id} />}
 
         {tab === "format" && (
           <FormatPanel projectId={project.id} project={project} chapters={chapters} matter={matter} />

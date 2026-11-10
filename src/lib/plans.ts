@@ -182,7 +182,7 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   },
   {
     q: "How does selling my ebook direct work?",
-    a: "On Pro and Studio, turn on Sell direct in a book's Launch tab and set your price. Readers in the US buy from your launch page, and the book goes into their library to download anytime. We're the seller, so we collect and pay sales tax for you. Our fee is 10% + 15¢ per sale on Pro and 5% + 15¢ on Studio, plus Stripe's card fee; on a $4.99 ebook you keep about $3.90 on Pro or $4.15 on Studio. Each sale is held 14 days for refunds, then paid out on the 1st of the month once you have $50. Your store links stay on the page too. You can run sale prices, share discount codes, bundle a series at one price, and on Studio give a book free to readers who join your list. [Seller terms](/seller-terms)",
+    a: "On Pro and Studio, turn on selling in a book's Sell tab and set your price. Readers in the US buy from your launch page, and the book goes into their library to download anytime. We're the seller, so we collect and pay sales tax for you. Our fee is 10% + 15¢ per sale on Pro and 5% + 15¢ on Studio, plus Stripe's card fee; on a $4.99 ebook you keep about $3.90 on Pro or $4.15 on Studio. Each sale is held 14 days for refunds, then paid out on the 1st of the month once you have $50. Your store links stay on the page too. You can run sale prices, share discount codes, bundle a series at one price, and on Studio give a book free to readers who join your list. [Seller terms](/seller-terms)",
   },
   {
     q: "Can I prove my book is human-written on other sites?",

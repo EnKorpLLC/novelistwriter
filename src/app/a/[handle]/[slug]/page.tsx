@@ -112,6 +112,11 @@ export default async function LaunchPage({
   const magnet = studio && recordFlag && normalizeDirectSale(recordFlag.direct_sale).magnet;
   const bundles = book.stage === "published" ? await bundlesForBook(admin, book.id).catch(() => []) : [];
   const canBuyHere = direct?.canBuy ?? (bundles.length ? await buyerCountryAllowed() : false);
+  // The first store is the main button unless buying direct is; the rest go in a quieter line
+  const storeLinks = book.published ? book.buyLinks : book.preorderLinks;
+  const directIsMain = Boolean(direct && !isOwner && direct.canBuy && book.published);
+  const mainStore = directIsMain ? null : storeLinks[0] || null;
+  const otherStores = directIsMain ? storeLinks : storeLinks.slice(1);
 
   const stageLine =
     book.stage === "published"
@@ -237,51 +242,21 @@ export default async function LaunchPage({
               </ul>
             )}
 
-            <div className="font-ui mt-6 flex flex-wrap gap-3">
-              {sampleOn && (
-                <Link href={`${path}/sample`} className="border border-accent px-4 py-2 text-sm text-accent hover:bg-accent/5">
-                  Read the first chapter
-                </Link>
-              )}
+            {/* One main action for the book's stage; everything else is quieter, so readers know where to start */}
+            <div className="font-ui mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap [&>*]:text-center">
               {direct && !isOwner && <BuyDirectButton projectId={book.id} price={direct.price} canBuy={direct.canBuy} />}
-              {!isOwner && canBuyHere && bundles.map((b) => <BuyBundleButton key={b.id} bundle={b} fromProjectId={book.id} />)}
-              {book.stage === "published" &&
-                book.buyLinks.map((l) => (
-                  <a
-                    key={`${l.label}-${l.url}`}
-                    href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
-                  >
-                    Buy on {l.label}
-                  </a>
-                ))}
-              {!book.published &&
-                book.preorderLinks.map((l) => (
-                  <a
-                    key={`${l.label}-${l.url}`}
-                    href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-accent px-4 py-2 text-sm text-paper hover:bg-accent-soft"
-                  >
-                    Preorder on {l.label}
-                  </a>
-                ))}
-              {book.readLinks.map((l) => (
-                <a
-                  key={`${l.label}-${l.url}`}
-                  href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="border border-accent px-4 py-2 text-sm text-accent hover:bg-accent/5"
-                >
-                  Read on {l.label}
+              {book.stage === "published" && !(direct && !isOwner && direct.canBuy) && mainStore && (
+                <a href={`/go/${book.id}?s=${encodeURIComponent(mainStore.label)}`} target="_blank" rel="noopener noreferrer" className="bg-accent px-5 py-2.5 text-sm text-paper hover:bg-accent-soft">
+                  Buy on {mainStore.label}
                 </a>
-              ))}
+              )}
+              {!book.published && mainStore && (
+                <a href={`/go/${book.id}?s=${encodeURIComponent(mainStore.label)}`} target="_blank" rel="noopener noreferrer" className="bg-accent px-5 py-2.5 text-sm text-paper hover:bg-accent-soft">
+                  Preorder on {mainStore.label}
+                </a>
+              )}
               {book.arcOpen && !book.published && (
-                <Link href={`/arc/book/${book.id}`} className="bg-ink px-4 py-2 text-sm text-paper">
+                <Link href={`/arc/book/${book.id}`} className="bg-ink px-5 py-2.5 text-sm text-paper">
                   Request an advance copy
                   {book.arcDeadline
                     ? ` · read by ${new Date(book.arcDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`
@@ -289,14 +264,46 @@ export default async function LaunchPage({
                 </Link>
               )}
               {book.betaOpen && !book.published && (
-                <Link href={`/beta/book/${book.id}`} className="border border-ink/30 px-4 py-2 text-sm text-ink">
+                <Link href={`/beta/book/${book.id}`} className="border border-ink/30 px-5 py-2.5 text-sm text-ink">
                   Apply to beta read
                 </Link>
               )}
-              {(!isOwner || previewing) && (
-                <VisitorShareButton path={path} title={`${book.title} by ${author.name}`} />
-              )}
             </div>
+            {!isOwner && canBuyHere && bundles.length > 0 && (
+              <div className="font-ui mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                {bundles.map((b) => (
+                  <BuyBundleButton key={b.id} bundle={b} fromProjectId={book.id} />
+                ))}
+              </div>
+            )}
+            {(otherStores.length > 0 || sampleOn || book.readLinks.length > 0 || !isOwner || previewing) && (
+              <div className="font-ui mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
+                {otherStores.length > 0 && (
+                  <span>
+                    {book.published ? (mainStore && !(direct && !isOwner && direct.canBuy) ? "Also on" : "On") : "Also preorder on"}{" "}
+                    {otherStores.map((l, i) => (
+                      <span key={`${l.label}-${l.url}`}>
+                        {i > 0 && " · "}
+                        <a href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                          {l.label}
+                        </a>
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {sampleOn && (
+                  <Link href={`${path}/sample`} className="text-accent hover:underline">
+                    Read the first chapter
+                  </Link>
+                )}
+                {book.readLinks.map((l) => (
+                  <a key={`${l.label}-${l.url}`} href={`/go/${book.id}?s=${encodeURIComponent(l.label)}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                    Read on {l.label}
+                  </a>
+                ))}
+                {(!isOwner || previewing) && <VisitorShareButton path={path} title={`${book.title} by ${author.name}`} />}
+              </div>
+            )}
             {magnet && (!isOwner || previewing) && (
               <div className="mt-5">
                 <MagnetForm projectId={book.id} title={book.title} authorName={author.name} />

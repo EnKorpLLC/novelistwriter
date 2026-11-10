@@ -25,7 +25,7 @@ export default function SellerTermsPage() {
     },
     {
       t: "Fees",
-      d: `On Pro, ${pct(SALE_FEES.pro.pct)} + ${SALE_FEES.pro.fixedCents}¢ per sale. On Studio, ${pct(SALE_FEES.studio.pct)} + ${SALE_FEES.studio.fixedCents}¢. Stripe's card processing (about 2.9% + 30¢) also comes out of each sale. Your Launch tab shows what you keep at your price.`,
+      d: `On Pro, ${pct(SALE_FEES.pro.pct)} + ${SALE_FEES.pro.fixedCents}¢ per sale. On Studio, ${pct(SALE_FEES.studio.pct)} + ${SALE_FEES.studio.fixedCents}¢. Stripe's card processing (about 2.9% + 30¢) also comes out of each sale. Each book's Sell tab shows what you keep at your price.`,
     },
     {
       t: "Sales tax",

@@ -7,6 +7,7 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { DeleteProjectButton } from "@/components/DeleteProjectButton";
 import { ClaimReferral } from "@/components/ClaimReferral";
 import { DashboardRoleNav } from "@/components/DashboardRoleNav";
+import { DashboardMenus } from "@/components/DashboardMenus";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { TIMEZONE_COOKIE, resolveWritingDay } from "@/lib/local-day";
 import { normalizeRoles, linkInvitesForEmail } from "@/lib/beta-platform";
@@ -131,11 +132,11 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen">
       <ClaimReferral />
-      <header className="font-ui flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4">
+      <header className="font-ui flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-6 sm:py-4">
         <Link href="/dashboard" className="font-display text-xl">
           Novelist Writer
         </Link>
-        <div className="flex flex-wrap items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
           <DashboardRoleNav roles={normalizeRoles(profile)} side="author" />
           <span className="text-muted">
             Credits:{" "}
@@ -153,38 +154,7 @@ export default async function DashboardPage() {
               )
             )}
           </span>
-          <Link href="/dashboard/audience" className="text-muted hover:text-ink">
-            Audience
-          </Link>
-          <Link href="/dashboard/marketing" className="text-muted hover:text-ink">
-            Marketing
-          </Link>
-          <Link href="/dashboard/box-sets" className="text-muted hover:text-ink">
-            Box sets
-          </Link>
-          <Link href="/dashboard/challenges" className="text-muted hover:text-ink">
-            Challenges
-          </Link>
-          <Link href="/dashboard/affiliate" className="text-muted hover:text-ink">
-            Affiliate
-          </Link>
-          <Link href="/dashboard/share" className="text-muted hover:text-ink">
-            Share &amp; earn
-          </Link>
-          <Link href="/dashboard/profile" className="text-muted hover:text-ink">
-            Public profile
-          </Link>
-          <Link href="/billing" className="text-accent hover:underline">
-            Billing
-          </Link>
-          <Link href="/settings" className="text-muted hover:text-ink">
-            Settings
-          </Link>
-          {(isPlatformAdminEmail(user.email) || profile?.is_platform_admin) && (
-            <Link href="/admin" className="text-accent hover:underline">
-              Admin
-            </Link>
-          )}
+          <DashboardMenus admin={Boolean(isPlatformAdminEmail(user.email) || profile?.is_platform_admin)} />
           <SignOutButton />
         </div>
       </header>

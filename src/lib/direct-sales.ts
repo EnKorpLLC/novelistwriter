@@ -88,7 +88,7 @@ export async function refreshSellerPayouts(admin: SupabaseClient, userId: string
   return enabled;
 }
 
-/** Can this book be bought right now? Reasons are written for the author's Launch tab. */
+/** Can this book be bought right now? Reasons are written for the author's Sell tab. */
 export async function saleReadiness(admin: SupabaseClient, project: { user_id: string; published?: boolean | null; direct_sale?: unknown }) {
   const s = normalizeDirectSale(project.direct_sale);
   const status = await sellerStatus(admin, project.user_id);
@@ -373,7 +373,7 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
     type: "book_sale",
     title: meta.bundle_id ? `You sold ${what}` : `You sold a copy of ${what}`,
     body: `${dollars(priceCents)} sale; ${dollars(authorShare)} is yours after fees. Payouts go out monthly.`,
-    href: `/project/${projectIds[0]}?tab=publish`,
+    href: `/project/${projectIds[0]}?tab=sell`,
   }).catch(() => null);
   return { ok: true, applied: meta.bundle_id ? "bundle_purchase" : "book_purchase" };
 }

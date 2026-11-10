@@ -1,4 +1,4 @@
-/** Direct sales rules shared by the Launch tab, checkout, and payouts. Client-safe. */
+/** Direct sales rules shared by the Sell tab, checkout, and payouts. Client-safe. */
 
 export const SALE_FEES = {
   pro: { pct: 0.1, fixedCents: 15 },

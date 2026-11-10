@@ -230,7 +230,7 @@ function DiscountCodes({ projectId, launchPath }: { projectId: string; launchPat
 const toCents = (v: string) => Math.round(Number(v.replace(/[^0-9.]/g, "")) * 100);
 const toDollars = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
 
-/** Launch tab: sell this ebook straight from the launch page (Pro and Studio). */
+/** Sell tab: sell this ebook straight from the launch page (Pro and Studio). */
 export function DirectSalePanel({ projectId, published, launchPath }: { projectId: string; published: boolean; launchPath: string | null }) {
   const [seller, setSeller] = useState<Seller | null>(null);
   const [sale, setSale] = useState<DirectSale>(normalizeDirectSale(null));
@@ -279,7 +279,7 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
     const res = await fetch("/api/sales/seller", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, returnPath: `/project/${projectId}?tab=publish` }),
+      body: JSON.stringify({ action, returnPath: `/project/${projectId}?tab=sell` }),
     });
     const d = await res.json().catch(() => ({}));
     setBusy(false);
