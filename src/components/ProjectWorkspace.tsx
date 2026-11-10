@@ -52,6 +52,7 @@ type Props = {
 };
 
 const SIDE_PANE_KEY = "nw_write_side_pane";
+const SIDE_COLLAPSED_KEY = "nw_write_side_collapsed";
 
 function chapterStorageKey(projectId: string) {
   return `nw_active_chapter_${projectId}`;
@@ -114,10 +115,13 @@ export function ProjectWorkspace({
   const [sidePane, setSidePane] = useState<"ai" | "feedback">("ai");
   const [feedbackTotal, setFeedbackTotal] = useState(0);
   const [feedbackStudio, setFeedbackStudio] = useState(false);
+  /** Desktop only: fold the side column away to give the editor the full width */
+  const [sideCollapsed, setSideCollapsed] = useState(false);
 
   useEffect(() => {
     try {
       if (localStorage.getItem(SIDE_PANE_KEY) === "feedback") setSidePane("feedback");
+      if (localStorage.getItem(SIDE_COLLAPSED_KEY) === "1") setSideCollapsed(true);
     } catch {
       /* ignore */
     }
@@ -130,6 +134,15 @@ export function ProjectWorkspace({
       })
       .catch(() => null);
   }, [project.id]);
+
+  function collapseSide(next: boolean) {
+    setSideCollapsed(next);
+    try {
+      localStorage.setItem(SIDE_COLLAPSED_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }
 
   function chooseSidePane(next: "ai" | "feedback") {
     setSidePane(next);
@@ -794,15 +807,36 @@ export function ProjectWorkspace({
                 )}
               </div>
 
+              {showSideColumn && sideCollapsed && (
+                <div className="font-ui hidden w-10 shrink-0 flex-col items-center gap-3 border-l border-line bg-paper-deep/30 py-2 lg:flex">
+                  <button
+                    type="button"
+                    onClick={() => collapseSide(false)}
+                    className="px-2 py-1 text-sm text-muted hover:text-ink"
+                    title="Show the side panel"
+                    aria-label="Show the side panel"
+                  >
+                    «
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => collapseSide(false)}
+                    className="text-xs text-muted hover:text-ink [writing-mode:vertical-rl]"
+                  >
+                    {showFeedback ? `Reader feedback${feedbackTotal ? ` (${feedbackTotal})` : ""}` : "AI Actions"}
+                  </button>
+                </div>
+              )}
+
               {showSideColumn && (
                 <div
-                  className={`min-h-0 w-full shrink-0 flex-col overflow-hidden lg:flex lg:w-[360px] ${
+                  className={`min-h-0 w-full shrink-0 flex-col overflow-hidden lg:w-[360px] ${sideCollapsed ? "lg:hidden" : "lg:flex"} ${
                     writePane === "critique" ? "flex" : "hidden"
                   }`}
                 >
-                  {!aiDisabled && feedbackTab && (
-                    <div className="font-ui flex shrink-0 border-b border-l border-line text-xs">
-                      {(
+                  <div className={`font-ui shrink-0 border-b border-l border-line text-xs ${!aiDisabled && feedbackTab ? "flex" : "hidden lg:flex"}`}>
+                    {!aiDisabled && feedbackTab ? (
+                      (
                         [
                           ["ai", "AI Actions"],
                           ["feedback", feedbackTotal ? `Reader feedback (${feedbackTotal})` : "Reader feedback"],
@@ -818,9 +852,20 @@ export function ProjectWorkspace({
                         >
                           {label}
                         </button>
-                      ))}
-                    </div>
-                  )}
+                      ))
+                    ) : (
+                      <span className="hidden flex-1 px-3 py-2 text-muted lg:block">{showFeedback ? "Reader feedback" : "AI Actions"}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => collapseSide(true)}
+                      className="hidden border-l border-line px-3 text-muted hover:text-ink lg:block"
+                      title="Hide the side panel"
+                      aria-label="Hide the side panel"
+                    >
+                      »
+                    </button>
+                  </div>
                   <div className="min-h-0 flex-1">
                     {showFeedback ? (
                       <ChapterFeedbackPanel
