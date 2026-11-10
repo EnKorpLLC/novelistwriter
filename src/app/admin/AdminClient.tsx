@@ -11,6 +11,7 @@ import { AdminChallenges } from "./AdminChallenges";
 import { AdminPromos } from "./AdminPromos";
 import { AdminAffiliates } from "./AdminAffiliates";
 import { AdminSocial } from "./AdminSocial";
+import { AdminContent } from "./AdminContent";
 
 type Message = {
   id: string;
@@ -47,6 +48,7 @@ const TABS = [
   { id: "promos", label: "Promos" },
   { id: "affiliates", label: "Affiliates" },
   { id: "social", label: "Social" },
+  { id: "content", label: "Content" },
   { id: "gifts", label: "Studio days" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -515,6 +517,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
         {tab === "affiliates" && <AdminAffiliates onNote={setNote} />}
 
         {tab === "social" && <AdminSocial onNote={setNote} />}
+
+        {tab === "content" && <AdminContent onNote={setNote} />}
 
         {tab === "gifts" && (
           <section className="mt-6 max-w-xl space-y-4">

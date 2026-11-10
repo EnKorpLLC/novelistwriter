@@ -5,6 +5,8 @@ import { authorPath, bookPath } from "@/lib/handles";
 import { rowHasStudio, rowSitePublic } from "@/lib/credits";
 import { isArcWindowOpen } from "@/lib/arc";
 import { PLANS, PRICING_FAQ } from "@/lib/plans";
+import { contentPath } from "@/lib/content";
+import { GENRE_MIN_ITEMS, loadGenreHubs } from "@/lib/genre-pages";
 
 /** Public marketing pages, always in the sitemap. */
 export const STATIC_PAGES = [
@@ -16,6 +18,10 @@ export const STATIC_PAGES = [
   { path: "/promos", priority: 0.7, changeFrequency: "daily" as const },
   { path: "/affiliates", priority: 0.5, changeFrequency: "monthly" as const },
   { path: "/lifetime", priority: 0.6, changeFrequency: "weekly" as const },
+  { path: "/human-authorship-standard", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/guides", priority: 0.8, changeFrequency: "weekly" as const },
+  { path: "/reports", priority: 0.6, changeFrequency: "monthly" as const },
+  { path: "/genres", priority: 0.6, changeFrequency: "daily" as const },
   { path: "/challenges", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/tools", priority: 0.8, changeFrequency: "monthly" as const },
   { path: "/tools/spine-calculator", priority: 0.8, changeFrequency: "monthly" as const },
@@ -113,6 +119,17 @@ export async function publicSitemapEntries(admin: SupabaseClient): Promise<Sitem
   const { data: challenges } = await admin.from("challenges").select("slug, updated_at").eq("is_public", true).limit(1000);
   for (const c of challenges || []) {
     entries.push({ url: appUrl(`/challenges/${c.slug}`), lastModified: c.updated_at || undefined, priority: 0.6, changeFrequency: "daily" });
+  }
+
+  // Published guides and reports (only after migration_search_content.sql)
+  const { data: content } = await admin.from("content_pages").select("kind, slug, updated_at").eq("status", "published").in("kind", ["guide", "report"]).limit(1000);
+  for (const c of content || []) {
+    entries.push({ url: appUrl(contentPath(c.kind, c.slug)), lastModified: c.updated_at || undefined, priority: c.kind === "guide" ? 0.8 : 0.6, changeFrequency: "monthly" });
+  }
+
+  // Genre pages, only once a genre has enough real books and reader calls
+  for (const g of await loadGenreHubs(admin).catch(() => [])) {
+    if (g.total >= GENRE_MIN_ITEMS) entries.push({ url: appUrl(`/genres/${g.key}`), priority: 0.6, changeFrequency: "daily" });
   }
 
   return entries;

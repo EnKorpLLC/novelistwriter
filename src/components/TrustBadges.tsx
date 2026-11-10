@@ -34,6 +34,10 @@ export function RecordSummaryLine({ record, className = "" }: { record?: RecordS
             </a>
           </>
         )}
+        {" · "}
+        <a href="/human-authorship-standard" className="text-accent underline">
+          How we verify
+        </a>
       </p>
     </div>
   );
@@ -153,6 +157,11 @@ export function TrustBadges({
               AI tools off since {monthYear(aiOffSince)}
             </li>
           )}
+          <li className="self-center">
+            <a href="/human-authorship-standard" className="text-muted underline hover:text-ink">
+              How we verify
+            </a>
+          </li>
         </ul>
       )}
       {aiActions && aiActions.length > 0 && (

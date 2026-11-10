@@ -22,6 +22,9 @@ export function PublicHeader() {
         <Link href="/tools" className="text-muted hover:text-ink">
           Free tools
         </Link>
+        <Link href="/guides" className="text-muted hover:text-ink">
+          Guides
+        </Link>
         <Link href="/login" className="text-muted hover:text-ink">
           Log in
         </Link>

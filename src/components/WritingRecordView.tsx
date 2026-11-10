@@ -30,14 +30,11 @@ export function RecordBadge({ badge, href }: { badge: WritingRecordData["badge"]
       ? "Typed in the Novelist Writer editor across many sessions and weeks."
       : "Written before Novelist Writer kept records.";
   const cls = "border border-accent px-2 py-0.5 text-[11px] text-accent";
-  return href ? (
-    <a href={href} className={`font-ui ${cls} hover:bg-accent hover:text-paper`} title={title}>
+  // Without a public record page, the badge explains itself through the standard it follows
+  return (
+    <a href={href || "/human-authorship-standard"} className={`font-ui ${cls} hover:bg-accent hover:text-paper`} title={title}>
       {label}
     </a>
-  ) : (
-    <span className={`font-ui ${cls}`} title={title}>
-      {label}
-    </span>
   );
 }
 
