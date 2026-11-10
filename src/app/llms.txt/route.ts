@@ -30,6 +30,7 @@ export async function GET() {
 - [Book promotions](${appUrl("/promos")}): themed collections of books from independent authors, often on sale, put together by the authors themselves
 - [Where readers are](${appUrl("/tools/where-readers-are")}): book promotion sites, ads, reader communities, ARC services, and newsletter swaps, with costs and self-promotion rules
 - [Comparisons and switching guides](${appUrl("/compare")}): fair comparisons with Scrivener, Vellum, Atticus, BetaBooks, and NetGalley, and how to bring a book over
+- [Works with](${appUrl("/works-with")}): import from Word, Google Docs, Scrivener, Vellum, and Atticus; per-store ebooks for Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble; paperbacks for KDP Print and IngramSpark; serial sites; newsletter tools; Goodreads and StoryGraph
 - [Your data, your exit](${appUrl("/your-data")}): export manuscripts and reader lists anytime, on every plan
 - [Verify a book](${appUrl("/verify")}): enter a verification code (NW-XXXX-XXXX) to see a book's writing record summary; authors on every plan can post a "verified human-written" badge on any site. Free JSON API for platforms, no key: ${appUrl("/api/verify/CODE")}
 - Serial writers: copy any chapter ready to paste into Royal Road, Wattpad, Substack, AO3, Scribble Hub, Tapas, forums (BBCode), or Reddit (Markdown), free; Pro adds a posting log, chapters-ahead count per site, and release-day reminders. Nothing is posted automatically, and serials stay non-exclusive

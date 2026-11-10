@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/verify", label: "Verify a book" },
   { href: "/conduct", label: "Conduct" },
   { href: "/compare", label: "Compare" },
+  { href: "/works-with", label: "Works with" },
   { href: "/pricing", label: "Pricing" },
   { href: "/affiliates", label: "Affiliates" },
   { href: "/your-data", label: "Your data" },

@@ -35,6 +35,7 @@ export const STATIC_PAGES = [
   ...["scrivener", "vellum", "atticus", "betabooks", "netgalley"].map((s) => ({ path: `/compare/${s}`, priority: 0.6, changeFrequency: "monthly" as const })),
   ...["scrivener", "word", "vellum", "atticus"].map((s) => ({ path: `/switch/${s}`, priority: 0.6, changeFrequency: "monthly" as const })),
   { path: "/your-data", priority: 0.4, changeFrequency: "yearly" as const },
+  { path: "/works-with", priority: 0.6, changeFrequency: "monthly" as const },
   { path: "/contact", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/privacy", priority: 0.3, changeFrequency: "yearly" as const },
 ];
