@@ -13,6 +13,118 @@ type Seller = {
   summary: { sales: number; freeCopies: number; refunds: number; earnedCents: number; onHoldCents: number; readyCents: number; paidCents: number } | null;
 };
 
+type BundleRow = { id: string; title: string; projectIds: string[]; priceCents: number; active: boolean };
+type BookRow = { id: string; title: string; published: boolean; priceCents: number };
+
+/** Several books at one price, like a series. Shown on each included book's launch page. */
+function Bundles({ projectId }: { projectId: string }) {
+  const [bundles, setBundles] = useState<BundleRow[]>([]);
+  const [books, setBooks] = useState<BookRow[]>([]);
+  const [picked, setPicked] = useState<string[]>([projectId]);
+  const [title, setTitle] = useState("");
+  const [price, setPrice] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const r = await fetch("/api/sales/bundles").catch(() => null);
+    if (!r?.ok) return;
+    const d = await r.json();
+    setBundles(d.bundles || []);
+    setBooks(d.books || []);
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function send(method: string, body: unknown) {
+    const r = await fetch("/api/sales/bundles", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    setMsg(r.ok ? null : d.error || "Something went wrong");
+    await load();
+    return r.ok;
+  }
+
+  const byId = new Map(books.map((b) => [b.id, b]));
+  const separate = picked.reduce((n, id) => n + (byId.get(id)?.priceCents || 0), 0);
+  const mine = bundles.filter((b) => b.projectIds.includes(projectId));
+  if (books.length < 2) return null;
+  return (
+    <div className="mt-5 border-t border-line pt-3">
+      <p className="text-ink">Bundles</p>
+      <p className="text-xs text-muted">Sell several of your books together at one price, like a whole series. Readers get each book as its own ebook. Every book in a bundle has to be out.</p>
+      {mine.length > 0 && (
+        <ul className="mt-2 space-y-1.5 text-xs">
+          {mine.map((b) => {
+            const regular = b.projectIds.reduce((n, id) => n + (byId.get(id)?.priceCents || 0), 0);
+            return (
+              <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <strong className={b.active ? "" : "text-muted line-through"}>{b.title}</strong>
+                <span className="text-muted">
+                  {b.projectIds.length} books · {dollars(b.priceCents)}
+                  {regular > b.priceCents ? ` (saves ${dollars(regular - b.priceCents)})` : ""}
+                  {b.projectIds.some((id) => !byId.get(id)?.published) ? " · waiting for every book to be out" : ""}
+                </span>
+                <button type="button" className="text-muted underline" onClick={() => void send("PATCH", { id: b.id, active: !b.active })}>
+                  {b.active ? "Turn off" : "Turn on"}
+                </button>
+                <button type="button" className="text-danger underline" onClick={() => void send("DELETE", { id: b.id })}>
+                  Delete
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <details className="mt-2 text-xs">
+        <summary className="cursor-pointer text-accent">Make a bundle</summary>
+        <form
+          className="mt-2 space-y-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (await send("POST", { title, projectIds: picked, priceCents: toCents(price) })) {
+              setTitle("");
+              setPrice("");
+              setPicked([projectId]);
+            }
+          }}
+        >
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="The Ember Trilogy" className="w-64 border border-line bg-paper px-2 py-1" />
+          <ul className="space-y-0.5">
+            {books.map((b) => (
+              <li key={b.id}>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={picked.includes(b.id)}
+                    onChange={(e) => setPicked((p) => (e.target.checked ? [...p, b.id] : p.filter((x) => x !== b.id)))}
+                  />
+                  {picked.includes(b.id) && <span className="text-muted">{picked.indexOf(b.id) + 1}.</span>}
+                  {b.title}
+                  <span className="text-muted">
+                    {dollars(b.priceCents)}
+                    {b.published ? "" : " · not out yet"}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap items-center gap-2">
+            <label>
+              Bundle price{" "}
+              <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder={separate ? ((separate * 0.7) / 100).toFixed(2) : "9.99"} className="w-20 border border-line bg-paper px-2 py-1" />
+            </label>
+            {picked.length > 1 && <span className="text-muted">{dollars(separate)} if bought one at a time. Books are listed in the order you tick them.</span>}
+            <button type="submit" disabled={picked.length < 2} className="bg-accent px-3 py-1.5 text-paper disabled:opacity-50">
+              Save bundle
+            </button>
+          </div>
+        </form>
+      </details>
+      {msg && <p className="mt-1 text-xs text-danger">{msg}</p>}
+    </div>
+  );
+}
+
 /** Codes work across the author's books unless limited to one; shared as a link that fills in the code. */
 function DiscountCodes({ projectId, launchPath }: { projectId: string; launchPath: string | null }) {
   const [codes, setCodes] = useState<DiscountCode[]>([]);
@@ -312,6 +424,7 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
         </div>
       )}
       {tier && !seller.migrationNeeded && <DiscountCodes projectId={projectId} launchPath={launchPath} />}
+      {tier && !seller.migrationNeeded && <Bundles projectId={projectId} />}
       {note && <p className={`mt-3 text-xs ${note === "Saved." ? "text-accent" : "text-danger"}`}>{note}</p>}
       {seller.summary && seller.summary.sales + seller.summary.refunds + seller.summary.freeCopies > 0 && (
         <div className="mt-5 border-t border-line pt-3">

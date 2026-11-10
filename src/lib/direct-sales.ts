@@ -16,6 +16,7 @@ import { loadBookExtras, loadCover } from "@/lib/book/load";
 import {
   PAYOUT_MIN_CENTS,
   REFUND_WINDOW_DAYS,
+  currentPrice,
   dollars,
   normalizeCode,
   normalizeDirectSale,
@@ -98,6 +99,51 @@ export async function saleReadiness(admin: SupabaseClient, project: { user_id: s
   if (!status.termsAccepted) return { ok: false as const, reason: "Accept the seller terms." };
   if (!status.payoutsEnabled) return { ok: false as const, reason: "Finish setting up payouts with Stripe." };
   return { ok: true as const, tier: status.tier, sale: s };
+}
+
+/* ---------- Bundles ---------- */
+
+export type Bundle = { id: string; title: string; projectIds: string[]; priceCents: number; active: boolean };
+
+const bundleFromRow = (r: { id: string; title: string; project_ids: string[]; price_cents: number; active: boolean }): Bundle => ({
+  id: r.id,
+  title: r.title,
+  projectIds: r.project_ids || [],
+  priceCents: r.price_cents,
+  active: r.active,
+});
+
+/**
+ * Can this bundle be bought now? The author must be set up to sell, and every book in it must be out
+ * (each book doesn't need its own single-copy sale turned on).
+ */
+export async function bundleReadiness(admin: SupabaseClient, bundleId: string) {
+  const { data: row } = await admin.from("book_bundles").select("*").eq("id", bundleId).maybeSingle();
+  if (!row?.active) return { ok: false as const, reason: "This bundle isn't for sale." };
+  const bundle = bundleFromRow(row);
+  const status = await sellerStatus(admin, row.author_user_id);
+  if ("migrationNeeded" in status || !status.tier || !status.termsAccepted || !status.payoutsEnabled) return { ok: false as const, reason: "This bundle isn't for sale right now." };
+  const { data: books } = await admin.from("projects").select("id, title, published, direct_sale").in("id", bundle.projectIds).eq("user_id", row.author_user_id);
+  if ((books || []).length !== bundle.projectIds.length || (books || []).some((b) => !b.published)) return { ok: false as const, reason: "Every book in a bundle has to be out." };
+  const regularCents = (books || []).reduce((n, b) => n + currentPrice(normalizeDirectSale(b.direct_sale)).cents, 0);
+  return { ok: true as const, bundle, authorId: row.author_user_id as string, tier: status.tier, books: books || [], regularCents };
+}
+
+/** Bundles a launch page should offer for this book, with what they save against buying each book. */
+export async function bundlesForBook(admin: SupabaseClient, projectId: string) {
+  const { data, error } = await admin.from("book_bundles").select("id").contains("project_ids", [projectId]).eq("active", true).limit(5);
+  if (error || !data?.length) return [];
+  const out: { id: string; title: string; count: number; priceCents: number; savingsCents: number }[] = [];
+  for (const r of data) {
+    const ready = await bundleReadiness(admin, r.id).catch(() => null);
+    if (ready?.ok) out.push({ id: ready.bundle.id, title: ready.bundle.title, count: ready.bundle.projectIds.length, priceCents: ready.bundle.priceCents, savingsCents: Math.max(0, ready.regularCents - ready.bundle.priceCents) });
+  }
+  return out;
+}
+
+export async function listBundles(admin: SupabaseClient, authorId: string): Promise<Bundle[] | null> {
+  const { data, error } = await admin.from("book_bundles").select("*").eq("author_user_id", authorId).order("created_at", { ascending: false });
+  return error ? null : (data || []).map(bundleFromRow);
 }
 
 /* ---------- Discount codes ---------- */
@@ -205,20 +251,29 @@ export async function deliverPendingMagnets(admin: SupabaseClient, authorId: str
   return out;
 }
 
+/** Split a total across items by weight, so the parts always add back up to the total. */
+function allocate(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((n, w) => n + w, 0) || weights.length;
+  const parts = weights.map((w) => Math.floor((total * (sum ? w : 1)) / sum));
+  let left = total - parts.reduce((n, p) => n + p, 0);
+  for (let i = 0; left > 0; i = (i + 1) % parts.length, left--) parts[i] += 1;
+  return parts;
+}
+
 /**
- * checkout.session.completed for a book: record the sale with Stripe's real fee, put the book in the buyer's
- * library, email the receipt, and tell the author. Safe to run twice for the same session.
+ * checkout.session.completed for a book or a bundle: one row per book with Stripe's real fee, the books in the
+ * buyer's library, one receipt, and a notice to the author. Safe to run twice for the same session.
  */
 export async function recordBookPurchase(admin: SupabaseClient, sessionId: string) {
-  const { data: existing } = await admin.from("book_purchases").select("id").eq("stripe_session_id", sessionId).maybeSingle();
-  if (existing) return { ok: true, skipped: "already_recorded" };
+  const { data: existing } = await admin.from("book_purchases").select("id").eq("stripe_session_id", sessionId).limit(1);
+  if (existing?.length) return { ok: true, skipped: "already_recorded" };
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent.latest_charge.balance_transaction"] });
   if (session.payment_status !== "paid") return { ok: true, skipped: "not_paid" };
   const meta = session.metadata || {};
-  const projectId = meta.project_id;
   const authorId = meta.author_user_id;
-  if (!projectId || !authorId) return { ok: false, skipped: "missing_book" };
+  const projectIds = (meta.bundle_id ? String(meta.project_ids || "") : String(meta.project_id || "")).split(",").filter(Boolean);
+  if (!projectIds.length || !authorId) return { ok: false, skipped: "missing_book" };
 
   const pi = session.payment_intent as Stripe.PaymentIntent | null;
   const charge = (pi?.latest_charge as Stripe.Charge | null) || null;
@@ -227,6 +282,7 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
   const priceCents = (session.amount_total ?? 0) - taxCents;
   const tier = (meta.tier === "studio" ? "studio" : "pro") as SellerTier;
   const stripeFee = bt?.fee ?? Math.round((session.amount_total ?? 0) * 0.029) + 30;
+  // A bundle pays the fixed part of our fee once, not once per book
   const fee = platformFeeCents(priceCents, tier);
   const email = (session.customer_details?.email || session.customer_email || "").toLowerCase();
   const name = session.customer_details?.name || "";
@@ -238,31 +294,52 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
     buyerId = (p?.id as string | null) || null;
   }
 
-  const { data: project } = await admin.from("projects").select("id, title").eq("id", projectId).maybeSingle();
-  const title = (project?.title as string) || meta.title || "Your ebook";
-  const row = {
-    project_id: projectId,
+  const { data: projects } = await admin.from("projects").select("id, title, direct_sale").in("id", projectIds);
+  const byId = new Map((projects || []).map((p) => [p.id as string, p]));
+  const books = projectIds.map((id) => ({ id, title: (byId.get(id)?.title as string) || meta.title || "Your ebook", weight: normalizeDirectSale(byId.get(id)?.direct_sale).priceCents }));
+  const weights = books.map((b) => b.weight);
+  const prices = allocate(priceCents, weights);
+  const taxes = allocate(taxCents, weights);
+  const stripeFees = allocate(stripeFee, weights);
+  const fees = allocate(fee, weights);
+  const availableAt = new Date(Date.now() + REFUND_WINDOW_DAYS * DAY_MS).toISOString();
+
+  const rows = books.map((b, i) => ({
+    project_id: b.id,
     author_user_id: authorId,
     buyer_user_id: buyerId,
     buyer_email: email,
     buyer_name: name.slice(0, 120),
-    title,
-    price_cents: priceCents,
-    tax_cents: taxCents,
-    stripe_fee_cents: stripeFee,
-    platform_fee_cents: fee,
-    author_cents: priceCents - stripeFee - fee,
+    title: b.title,
+    price_cents: prices[i],
+    tax_cents: taxes[i],
+    stripe_fee_cents: stripeFees[i],
+    platform_fee_cents: fees[i],
+    author_cents: prices[i] - stripeFees[i] - fees[i],
     currency: session.currency || "usd",
-    stripe_session_id: session.id,
+    // The first book carries the session id itself, which keeps a replayed webhook from recording twice
+    stripe_session_id: i === 0 ? session.id : `${session.id}#${i + 1}`,
+    order_ref: session.id,
+    bundle_id: meta.bundle_id || null,
     stripe_payment_intent: pi?.id || null,
     stripe_charge_id: charge?.id || null,
-    available_at: new Date(Date.now() + REFUND_WINDOW_DAYS * DAY_MS).toISOString(),
+    available_at: availableAt,
     download_token: token(),
-  };
-  const { data: inserted, error } = await admin.from("book_purchases").insert(row).select("id, download_token").single();
-  if (error) {
-    if (/duplicate|unique/i.test(error.message)) return { ok: true, skipped: "already_recorded" };
-    throw new Error(error.message);
+  }));
+  let { data: inserted, error } = await admin.from("book_purchases").insert(rows).select("id, title, project_id, download_token");
+  // Before migration_direct_sales_3.sql: single books only, without the order columns
+  if (error && /order_ref|bundle_id/.test(error.message) && rows.length === 1) {
+    const legacy = rows.map((r) => {
+      const copy: Record<string, unknown> = { ...r };
+      delete copy.order_ref;
+      delete copy.bundle_id;
+      return copy;
+    });
+    ({ data: inserted, error } = await admin.from("book_purchases").insert(legacy).select("id, title, project_id, download_token"));
+  }
+  if (error || !inserted?.length) {
+    if (error && /duplicate|unique/i.test(error.message)) return { ok: true, skipped: "already_recorded" };
+    throw new Error(error?.message || "Purchase not recorded");
   }
 
   await recordRevenue(admin, { stripeRef: `sale:${session.id}`, kind: "sales_fee", amountCents: fee, occurredAt: new Date().toISOString(), userId: authorId }).catch(() => null);
@@ -270,52 +347,58 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
   if (meta.code_id) {
     const { data: c } = await admin.from("discount_codes").select("uses").eq("id", meta.code_id).maybeSingle();
     if (c) await admin.from("discount_codes").update({ uses: (c.uses || 0) + 1 }).eq("id", meta.code_id);
-    await admin.from("book_purchases").update({ discount_code_id: meta.code_id, regular_price_cents: Number(meta.regular_cents) || null }).eq("id", inserted.id);
+    await admin.from("book_purchases").update({ discount_code_id: meta.code_id, regular_price_cents: Number(meta.regular_cents) || null }).eq("id", inserted[0].id);
   }
 
-  if (buyerId) await addToLibrary(admin, buyerId, projectId, title, "purchased").catch(() => null);
+  if (buyerId) for (const r of inserted) await addToLibrary(admin, buyerId, r.project_id, r.title, "purchased").catch(() => null);
 
-  const downloadUrl = appUrl(`/purchase/${inserted.download_token}`);
+  const what = meta.bundle_id ? meta.title || `${inserted.length} books` : inserted[0].title;
   if (email) {
     const mail = renderEmail({
-      heading: `Your copy of ${title}`,
+      heading: `Your copy of ${what}`,
       paragraphs: [
-        `Thank you for buying ${title} direct from the author. Your ebook is ready to download, and this link keeps working whenever you need it again.`,
+        meta.bundle_id
+          ? `Thank you for buying ${what} direct from the author. All ${inserted.length} ebooks are ready to download from the page below, and the link keeps working whenever you need them again.`
+          : `Thank you for buying ${what} direct from the author. Your ebook is ready to download, and this link keeps working whenever you need it again.`,
         `You paid ${dollars(session.amount_total ?? 0)}${taxCents ? ` including ${dollars(taxCents)} tax` : ""}. Changed your mind? You can ask for a refund within ${REFUND_WINDOW_DAYS} days by replying to this email.`,
         buyerId ? "It's also in your Novelist Writer library." : "Create a free reader account with this email to keep it in your library, along with any book you buy later.",
       ],
-      button: { label: "Download your ebook", url: downloadUrl },
+      button: { label: meta.bundle_id ? "Download your ebooks" : "Download your ebook", url: appUrl(`/purchase/${inserted[0].download_token}`) },
     });
-    await sendEmail({ to: email, subject: `Your copy of ${title}`, text: mail.text, html: mail.html }).catch(() => null);
+    await sendEmail({ to: email, subject: `Your copy of ${what}`, text: mail.text, html: mail.html }).catch(() => null);
   }
 
+  const authorShare = rows.reduce((n, r) => n + r.author_cents, 0);
   await notifyUser(admin, authorId, {
     type: "book_sale",
-    title: `You sold a copy of ${title}`,
-    body: `${dollars(priceCents)} sale; ${dollars(row.author_cents)} is yours after fees. Payouts go out monthly.`,
-    href: `/project/${projectId}?tab=publish`,
+    title: meta.bundle_id ? `You sold ${what}` : `You sold a copy of ${what}`,
+    body: `${dollars(priceCents)} sale; ${dollars(authorShare)} is yours after fees. Payouts go out monthly.`,
+    href: `/project/${projectIds[0]}?tab=publish`,
   }).catch(() => null);
-  return { ok: true, applied: "book_purchase" };
+  return { ok: true, applied: meta.bundle_id ? "bundle_purchase" : "book_purchase" };
 }
 
-/** Refunds: Stripe keeps its fee, so that comes off the author's share; our fee is given back. */
+/** Refunds: Stripe keeps its fee, so that comes off the author's share; our fee is given back. Covers every book in the order. */
 export async function adjustBookPurchaseForCharge(admin: SupabaseClient, charge: Stripe.Charge, reason: "refunded" | "disputed") {
-  const { data: p } = await admin.from("book_purchases").select("*").eq("stripe_charge_id", charge.id).maybeSingle();
-  if (!p || p.status !== "paid") return false;
+  const { data: rows } = await admin.from("book_purchases").select("*").eq("stripe_charge_id", charge.id);
+  const open = (rows || []).filter((p) => p.status === "paid");
+  if (!open.length) return false;
   if (reason === "refunded" && charge.amount_refunded < charge.amount) return true;
-  await admin
-    .from("book_purchases")
-    .update({ status: reason, author_cents: -p.stripe_fee_cents, platform_fee_cents: 0, refunded_at: new Date().toISOString() })
-    .eq("id", p.id);
-  await recordRevenue(admin, { stripeRef: `sale-${reason}:${p.stripe_session_id}`, kind: "sales_fee", amountCents: -p.platform_fee_cents, occurredAt: new Date().toISOString(), userId: p.author_user_id }).catch(() => null);
+  const now = new Date().toISOString();
+  for (const p of open) {
+    await admin.from("book_purchases").update({ status: reason, author_cents: -p.stripe_fee_cents, platform_fee_cents: 0, refunded_at: now }).eq("id", p.id);
+  }
+  const feeBack = open.reduce((n, p) => n + p.platform_fee_cents, 0);
+  const ref = (open[0].order_ref as string | null) || open[0].stripe_session_id;
+  await recordRevenue(admin, { stripeRef: `sale-${reason}:${ref}`, kind: "sales_fee", amountCents: -feeBack, occurredAt: now, userId: open[0].author_user_id }).catch(() => null);
   return true;
 }
 
 /** Was this payment a book sale? Used to keep book money out of the subscription revenue records. */
 export async function isBookPayment(admin: SupabaseClient, paymentIntentId: string | null | undefined) {
   if (!paymentIntentId) return false;
-  const { data } = await admin.from("book_purchases").select("id").eq("stripe_payment_intent", paymentIntentId).maybeSingle();
-  return Boolean(data);
+  const { data } = await admin.from("book_purchases").select("id").eq("stripe_payment_intent", paymentIntentId).limit(1);
+  return Boolean(data?.length);
 }
 
 /* ---------- Payouts ---------- */

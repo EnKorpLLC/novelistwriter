@@ -148,8 +148,9 @@ export async function recordRefund(admin: SupabaseClient, refund: Stripe.Refund)
   if (refund.status && refund.status !== "succeeded") return;
   const pi = typeof refund.payment_intent === "string" ? refund.payment_intent : refund.payment_intent?.id;
   if (pi) {
-    const { data: book } = await admin.from("book_purchases").select("id").eq("stripe_payment_intent", pi).maybeSingle();
-    if (book) return;
+    // A bundle has several rows for one payment
+    const { data: book } = await admin.from("book_purchases").select("id").eq("stripe_payment_intent", pi).limit(1);
+    if (book?.length) return;
   }
   await recordRevenue(admin, {
     stripeRef: `refund:${refund.id}`,

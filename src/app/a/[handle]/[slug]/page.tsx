@@ -14,7 +14,8 @@ import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ReportConcern } from "@/components/ReportConcern";
 import { LibraryButton } from "@/components/LibraryButton";
 import { BuyDirectButton } from "@/components/BuyDirectButton";
-import { buyerCountryAllowed, saleReadiness } from "@/lib/direct-sales";
+import { buyerCountryAllowed, bundlesForBook, saleReadiness } from "@/lib/direct-sales";
+import { BuyBundleButton } from "@/components/BuyBundleButton";
 import { currentPrice, normalizeDirectSale } from "@/lib/direct-sale-rules";
 import { MagnetForm } from "@/components/MagnetForm";
 import { GuestListSignup } from "@/components/GuestListSignup";
@@ -109,6 +110,8 @@ export default async function LaunchPage({
   const direct = saleReady?.ok ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed() } : null;
   // Reader magnet (Studio): free for joining the list; also before release, for prequels and novellas
   const magnet = studio && recordFlag && normalizeDirectSale(recordFlag.direct_sale).magnet;
+  const bundles = book.stage === "published" ? await bundlesForBook(admin, book.id).catch(() => []) : [];
+  const canBuyHere = direct?.canBuy ?? (bundles.length ? await buyerCountryAllowed() : false);
 
   const stageLine =
     book.stage === "published"
@@ -241,6 +244,7 @@ export default async function LaunchPage({
                 </Link>
               )}
               {direct && !isOwner && <BuyDirectButton projectId={book.id} price={direct.price} canBuy={direct.canBuy} />}
+              {!isOwner && canBuyHere && bundles.map((b) => <BuyBundleButton key={b.id} bundle={b} fromProjectId={book.id} />)}
               {book.stage === "published" &&
                 book.buyLinks.map((l) => (
                   <a

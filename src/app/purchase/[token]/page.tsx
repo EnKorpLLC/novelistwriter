@@ -16,7 +16,16 @@ async function load(token: string) {
     const { data: p } = await admin.from("book_purchases").select("title, status, buyer_email, buyer_user_id, project_id, created_at, price_cents").eq("download_token", token).maybeSingle();
     if (!p) return null;
     const { data: project } = p.project_id ? await admin.from("projects").select("cover_path, metadata, updated_at").eq("id", p.project_id).maybeSingle() : { data: null };
-    return { ...p, coverUrl: project ? coverPublicUrl(projectCoverPath(project), project.updated_at ? Date.parse(project.updated_at) : undefined) : null };
+    // The rest of a bundle bought in the same checkout (before migration_direct_sales_3.sql there's no order_ref)
+    const { data: ref } = await admin.from("book_purchases").select("order_ref").eq("download_token", token).maybeSingle();
+    const { data: others } = ref?.order_ref
+      ? await admin.from("book_purchases").select("title, download_token").eq("order_ref", ref.order_ref).neq("download_token", token).order("stripe_session_id")
+      : { data: [] as { title: string; download_token: string }[] };
+    return {
+      ...p,
+      coverUrl: project ? coverPublicUrl(projectCoverPath(project), project.updated_at ? Date.parse(project.updated_at) : undefined) : null,
+      others: (others || []) as { title: string; download_token: string }[],
+    };
   } catch {
     return null;
   }
@@ -52,6 +61,21 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
             )}
           </div>
         </div>
+        {!refunded && p.others.length > 0 && (
+          <section className="font-ui mt-8 border-t border-line pt-4 text-sm">
+            <h2 className="font-display text-xl">Also in this order</h2>
+            <ul className="mt-2 space-y-2">
+              {p.others.map((o) => (
+                <li key={o.download_token} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-display text-base">{o.title}</span>
+                  <a href={`/purchase/${o.download_token}/epub`} className="border border-accent px-3 py-1 text-xs text-accent">
+                    Download the EPUB
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {!refunded && (
           <section className="font-ui mt-10 space-y-3 text-sm">
             <h2 className="font-display text-xl">Reading it</h2>
