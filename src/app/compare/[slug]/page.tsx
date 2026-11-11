@@ -70,6 +70,13 @@ export default async function CompareOne({ params }: { params: Promise<{ slug: s
                 <Cell v={c.marks[f]} />
               </tr>
             ))}
+            {(c.extraRows || []).map(([f, us, them]) => (
+              <tr key={f} className="border-b border-line/60">
+                <td className="py-2 pr-3 align-top text-ink">{f}</td>
+                <Cell v={us} />
+                <Cell v={them} />
+              </tr>
+            ))}
             <tr>
               <td className="py-2 pr-3 align-top text-ink">Price</td>
               <td className="py-2 pr-3 align-top">{NOVELIST_WRITER.price}</td>

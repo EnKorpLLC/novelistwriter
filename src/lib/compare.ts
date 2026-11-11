@@ -25,6 +25,8 @@ export type Comparison = {
   chooseThem: string[];
   chooseUs: string[];
   switchSlug?: string;
+  /** Rows only this comparison needs: [feature, Novelist Writer, them] */
+  extraRows?: [string, [Mark, string?], [Mark, string?]][];
 };
 
 const US: Comparison["marks"] = {
@@ -150,6 +152,38 @@ export const COMPARISONS: Comparison[] = [
       "You want ARCs as part of a monthly plan instead of paying per title",
       "You want read-by deadlines, reminders, one-tap review links, and launch-day review pushes",
       "You're building your own reader list, not renting someone else's",
+    ],
+  },
+  {
+    slug: "writersforge",
+    name: "WritersForge",
+    what: "An AI story-development service: four AI tools (StoryBeats, StoryPlotter, StoryWriter, StoryEdit) share a Story Bible, and StoryWriter drafts scenes in your own voice. It also sells AI copy and line edits.",
+    price: "Starter, Pro, and Max plans, monthly or yearly; copy and line edits $9 per 25,000 words",
+    marks: {
+      "Write and organize your draft": ["yes", "Story Bible, beat and scene plotting, manuscript import"],
+      "Ebook formatting": ["no", "Not listed on their site"],
+      "Print-ready paperback PDF": ["no", "Not listed on their site"],
+      "Cover tools": ["no", "Not listed on their site"],
+      "Beta reader management": ["no", "Not listed on their site"],
+      "Advance reader copies (ARCs)": ["no", "Not listed on their site"],
+      "Author website and launch pages": ["no", "Not listed on their site"],
+      "Proof a human wrote the book": ["no", "Its StoryWriter drafts scenes for you"],
+      "Works on Windows, Mac, and Chromebook": ["yes", "In the browser"],
+    },
+    extraRows: [
+      ["AI drafts your prose", ["no", "By design: you write every word"], ["yes", "StoryWriter drafts scenes in your voice"]],
+      ["AI feedback on your draft", ["yes", "Chapter critiques, on request"], ["yes", "StoryEdit, plus paid copy and line edits"]],
+      ["Sell your ebook direct to readers", ["yes", "Pro and Studio"], ["no", "Not listed on their site"]],
+      ["Record and export your audiobook", ["yes", "Studio, mastered to ACX's specs"], ["no", "Not listed on their site"]],
+    ],
+    chooseThem: [
+      "You want AI to map your structure and draft scenes for you to revise",
+      "You want an AI copy and line edit returned as tracked changes in your Word file",
+    ],
+    chooseUs: [
+      "You write every word yourself and want readers to see the proof: a writing record and a verification badge on your book",
+      "You'd rather no reader ever wonders whether an AI drafted your book",
+      "You want formatting, covers, beta readers, ARCs, launch pages, direct sales, and an audiobook studio in one place, not just story development",
     ],
   },
 ];

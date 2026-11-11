@@ -32,7 +32,7 @@ export const STATIC_PAGES = [
   { path: "/tools/writing-pace", priority: 0.7, changeFrequency: "monthly" as const },
   { path: "/tools/where-readers-are", priority: 0.7, changeFrequency: "monthly" as const },
   { path: "/compare", priority: 0.7, changeFrequency: "monthly" as const },
-  ...["scrivener", "vellum", "atticus", "betabooks", "netgalley"].map((s) => ({ path: `/compare/${s}`, priority: 0.6, changeFrequency: "monthly" as const })),
+  ...["scrivener", "vellum", "atticus", "betabooks", "netgalley", "writersforge"].map((s) => ({ path: `/compare/${s}`, priority: 0.6, changeFrequency: "monthly" as const })),
   ...["scrivener", "word", "vellum", "atticus"].map((s) => ({ path: `/switch/${s}`, priority: 0.6, changeFrequency: "monthly" as const })),
   { path: "/your-data", priority: 0.4, changeFrequency: "yearly" as const },
   { path: "/works-with", priority: 0.6, changeFrequency: "monthly" as const },

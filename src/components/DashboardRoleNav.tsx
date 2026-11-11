@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { rememberSide, type ProfileRoles } from "@/lib/beta-platform";
+import { SiteFeedbackButton } from "@/components/SiteFeedbackButton";
 
 type Props = {
   roles: ProfileRoles;
@@ -98,6 +99,7 @@ export function DashboardRoleNav({ roles, side }: Props) {
         </button>
       )}
       {note && <span className="text-xs text-danger">{note}</span>}
+      <SiteFeedbackButton />
     </div>
   );
 }

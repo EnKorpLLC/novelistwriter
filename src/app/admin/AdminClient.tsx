@@ -24,6 +24,9 @@ type Message = {
   userId: string | null;
   status: "new" | "read" | "archived";
   createdAt: string;
+  kind?: string | null;
+  page?: string | null;
+  screenshots?: string[];
 };
 
 type AdminUser = {
@@ -259,7 +262,9 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                         aria-expanded={open}
                       >
                         <span className={m.status === "new" ? "font-medium text-ink" : "text-ink"}>
+                          {m.kind && <span className="mr-2 border border-accent px-1.5 py-0.5 text-[11px] text-accent">Feedback</span>}
                           {m.subject || "(no subject)"}
+                          {m.screenshots?.length ? <span className="ml-2 text-xs text-muted">· {m.screenshots.length} screenshot{m.screenshots.length === 1 ? "" : "s"}</span> : null}
                           <span className="ml-2 text-xs text-muted">
                             {m.name || m.email}
                             {m.userId ? " · has account" : ""}
@@ -273,7 +278,18 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                       {open && (
                         <div className="border-t border-line px-4 py-3">
                           <p className="text-xs text-muted">{m.email}</p>
+                          {m.page && <p className="text-xs text-muted">Sent from {m.page}</p>}
                           <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{m.body}</p>
+                          {m.screenshots?.length ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {m.screenshots.map((url, i) => (
+                                <a key={url} href={url} target="_blank" rel="noreferrer" title="Open full size">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={url} alt={`Screenshot ${i + 1}`} className="h-24 w-32 border border-line object-cover" />
+                                </a>
+                              ))}
+                            </div>
+                          ) : null}
                           <div className="mt-3 flex flex-wrap gap-3 text-sm">
                             <a
                               href={`mailto:${m.email}?subject=${encodeURIComponent(`Re: ${m.subject || "Your message"}`)}`}

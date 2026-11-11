@@ -434,6 +434,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- See migration_audiobook_review.sql for: audio_takes splice columns, audio_notes, audio_chapters
 -- See migration_audiobook_export.sql for: audio_takes.segment (credits), projects.audio_settings
 -- See migration_admin_studio.sql for: the platform admin on Studio
+-- See migration_site_feedback.sql for: platform_messages.kind / page / attachments, the private site-feedback bucket
 -- See migration_launch_engine.sql for: projects.launch_plan, author_subscribers.release_project_ids, email_queue, buy_clicks, launch_team, author_thanks
 
 -- Storage: public bucket `covers` (downloads public; uploads via RLS — see migration_cover.sql)
