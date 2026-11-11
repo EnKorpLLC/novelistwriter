@@ -40,7 +40,10 @@ type Money = {
   usage: Usage[];
   sales?: { sales: number; grossCents: number; taxCents: number; feeCents: number; owedCents: number } | null;
   stripeTax?: "active" | "pending" | "unknown";
+  storage?: { state: "not_set_up" } | { state: "connected"; bytes: number; files: number; partial: boolean } | { state: "error"; error: string };
 };
+
+const R2_FREE_BYTES = 10 * 1024 ** 3;
 
 const usd = (cents: number) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: cents % 100 ? 2 : 0 });
@@ -72,6 +75,21 @@ export function AdminMoney({ onNote }: { onNote: (msg: string | null) => void })
   const [cost, setCost] = useState({ service: "", amount: "", cadence: "monthly", startedOn: "" });
   const [aiCost, setAiCost] = useState("");
   const [egress, setEgress] = useState("");
+  const [browserTest, setBrowserTest] = useState<"idle" | "busy" | "ok" | "failed">("idle");
+
+  async function testBrowserUpload() {
+    setBrowserTest("busy");
+    try {
+      const start = await fetch("/api/admin/money", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "storageBrowserTest" }) }).then((r) => r.json());
+      if (!start.url) throw new Error(start.error || "No upload link");
+      const put = await fetch(start.url, { method: "PUT", body: "ok", headers: { "Content-Type": "text/plain" } });
+      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+      const done = await fetch("/api/admin/money", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "storageBrowserTestDone", key: start.key }) }).then((r) => r.json());
+      setBrowserTest(done.ok ? "ok" : "failed");
+    } catch {
+      setBrowserTest("failed");
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -140,6 +158,36 @@ export function AdminMoney({ onNote }: { onNote: (msg: string | null) => void })
           >
             I&apos;ve upgraded Vercel
           </button>
+        </div>
+      )}
+
+      {data.storage && (
+        <div>
+          <h2 className="font-display text-xl">Audio storage (Cloudflare R2)</h2>
+          {data.storage.state === "connected" ? (
+            <>
+              <p className="mt-1 text-sm text-accent">✓ Audio storage: connected</p>
+              <p className="mt-1 text-xs text-muted">
+                {size(data.storage.bytes)} in {data.storage.files} file{data.storage.files === 1 ? "" : "s"}
+                {data.storage.partial ? " (first 10,000 files counted)" : ""} of the 10 GB free each month ({Math.round((data.storage.bytes / R2_FREE_BYTES) * 100)}%). Downloads are free.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <button type="button" disabled={browserTest === "busy"} className="border border-line px-3 py-1.5 disabled:opacity-50" onClick={() => void testBrowserUpload()}>
+                  {browserTest === "busy" ? "Testing…" : "Test an upload from this browser"}
+                </button>
+                {browserTest === "ok" && <span className="text-accent">✓ Browsers can upload. The CORS policy is right.</span>}
+                {browserTest === "failed" && (
+                  <span className="text-danger">
+                    The upload was blocked. In Cloudflare, open the bucket, then Settings, then CORS Policy, and check it lists this site&apos;s address ({typeof window !== "undefined" ? window.location.origin : "your site"}).
+                  </span>
+                )}
+              </div>
+            </>
+          ) : data.storage.state === "error" ? (
+            <p className="mt-1 text-sm text-danger">Audio storage isn&apos;t working: {data.storage.error}</p>
+          ) : (
+            <p className="mt-1 text-sm text-muted">Not set up yet. Add R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET in Vercel, then redeploy.</p>
+          )}
         </div>
       )}
 

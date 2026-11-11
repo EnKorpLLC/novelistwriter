@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { getSetting, moneySummary, setSetting, snapshotMrr, syncFromStripe, usageNow } from "@/lib/money";
+import { deleteObject, objectSize, signedUploadUrl, storageStatus } from "@/lib/r2";
 
 export const maxDuration = 300;
 
@@ -16,8 +17,8 @@ export async function GET() {
   if (!mrr.at || Date.now() - Date.parse(mrr.at) > DAY_MS) {
     await snapshotMrr(auth.admin).catch(() => null);
   }
-  const [summary, usage] = await Promise.all([moneySummary(auth.admin), usageNow(auth.admin)]);
-  return NextResponse.json({ ...summary, usage });
+  const [summary, usage, storage] = await Promise.all([moneySummary(auth.admin), usageNow(auth.admin), storageStatus()]);
+  return NextResponse.json({ ...summary, usage, storage });
 }
 
 type Body =
@@ -27,7 +28,9 @@ type Body =
   | { action: "deleteCost"; id: string }
   | { action: "setAiCost"; usdPerCredit: number }
   | { action: "setEgress"; gb: number }
-  | { action: "vercelUpgraded" };
+  | { action: "vercelUpgraded" }
+  | { action: "storageBrowserTest" }
+  | { action: "storageBrowserTestDone"; key: string };
 
 export async function POST(req: Request) {
   const auth = await requirePlatformAdmin();
@@ -82,6 +85,18 @@ export async function POST(req: Request) {
       if (!Number.isFinite(gb) || gb < 0) return NextResponse.json({ error: "Enter GB used this month." }, { status: 400 });
       await setSetting(admin, "supabase_egress", { gb, at: new Date().toISOString() });
       return NextResponse.json({ ok: true });
+    }
+    // Browsers upload audio straight to R2, so the bucket's CORS rules have to allow this site
+    if (body.action === "storageBrowserTest") {
+      const key = `_health/browser-${Date.now()}.txt`;
+      return NextResponse.json({ ok: true, key, url: await signedUploadUrl(key, 300) });
+    }
+    if (body.action === "storageBrowserTestDone") {
+      const key = String(body.key || "");
+      if (!key.startsWith("_health/")) return NextResponse.json({ error: "Not a test file" }, { status: 400 });
+      const size = await objectSize(key);
+      await deleteObject(key).catch(() => null);
+      return NextResponse.json({ ok: size != null });
     }
     if (body.action === "vercelUpgraded") {
       const flags = await getSetting<Record<string, string>>(admin, "first_sale", {});

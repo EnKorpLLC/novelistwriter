@@ -24,6 +24,7 @@
     "@tiptap/pm": "^2.11.5",
     "@tiptap/react": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",
+    "aws4fetch": "^1.0.20",
     "docx": "^9.2.0",
     "epub-gen-memory": "^1.1.2",
     "file-saver": "^2.0.5",
