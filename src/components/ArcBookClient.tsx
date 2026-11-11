@@ -18,6 +18,7 @@ type ArcData = {
   title: string;
   genre: string;
   blurb: string;
+  contentWarnings?: string[];
   coverUrl: string | null;
   authorUserId: string;
   authorName: string;
@@ -489,6 +490,12 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
         <form onSubmit={(e) => void requestCopy(e)} className="font-ui mt-8 space-y-3 border border-line p-5">
           <h2 className="font-display text-xl">Request an advance copy</h2>
           {data.blurb && <p className="whitespace-pre-wrap text-sm text-ink">{data.blurb}</p>}
+          {data.contentWarnings && data.contentWarnings.length > 0 && (
+            <details className="font-ui text-xs">
+              <summary className="cursor-pointer text-muted">Content warnings</summary>
+              <p className="mt-1 text-ink">{data.contentWarnings.join(" · ")}</p>
+            </details>
+          )}
           <p className="text-sm text-muted">
             The author reviews requests. If approved, you can read until {due || "the deadline"}.
           </p>

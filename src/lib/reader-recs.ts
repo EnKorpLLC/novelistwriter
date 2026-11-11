@@ -5,7 +5,7 @@ import { hiddenAuthorsFor } from "@/lib/reader-safety";
 import { publicReaderName } from "@/lib/beta-access";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { fetchAll } from "@/lib/supabase/fetch-all";
-import { NO_PREFS, hasPrefs, normalizePrefs, prefsHide, type ReadingPrefs } from "@/lib/reading-prefs";
+import { NO_PREFS, hasPrefs, normalizePrefs, normalizeWarningIds, prefsHide, warningLabels, type ReadingPrefs } from "@/lib/reading-prefs";
 
 /** Up to 30 words or phrases a reader would rather not see in genres, tropes, or content warnings. */
 export function normalizeFilters(raw: unknown): string[] {
@@ -29,10 +29,11 @@ export async function contentFiltersFor(admin: SupabaseClient, userId: string | 
 }
 
 /** Why a book is left out by the reader's filters, or null to show it. */
-export function readerFilterHit(f: ReaderFilters, book: { genre: string; tropes: string[]; warnings: string }): string | null {
-  const word = filterHit([book.genre, ...book.tropes, book.warnings].join(" \n "), f.words);
+export function readerFilterHit(f: ReaderFilters, book: { genre: string; tropes: string[]; warnings: string; warningIds?: string[] }): string | null {
+  const ticked = warningLabels(book.warningIds || []).join(", ");
+  const word = filterHit([book.genre, ...book.tropes, book.warnings, ticked].join(" \n "), f.words);
   if (word) return word;
-  return prefsHide({ genre: book.genre, about: [...book.tropes, book.warnings].join(" \n ") }, f.prefs);
+  return prefsHide({ genre: book.genre, about: [...book.tropes, book.warnings].join(" \n "), warningIds: book.warningIds }, f.prefs);
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -43,11 +44,12 @@ export function filterHit(text: string, filters: string[]): string | null {
   return filters.find((f) => new RegExp(`(^|[^a-z0-9])${escape(f)}([^a-z0-9]|$)`).test(hay)) || null;
 }
 
-async function warningsFor(admin: SupabaseClient, ids: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+/** Each book's written warnings (from the beta brief) and ticked warnings (from the launch page). */
+async function warningsFor(admin: SupabaseClient, ids: string[]): Promise<Map<string, { text: string; ids: string[] }>> {
+  const out = new Map<string, { text: string; ids: string[] }>();
   for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await admin.from("projects").select("id, beta_application_form").in("id", ids.slice(i, i + 200));
-    for (const r of data || []) out.set(r.id, normalizeBetaApplicationForm(r.beta_application_form).contentWarnings);
+    const { data } = await admin.from("projects").select("*").in("id", ids.slice(i, i + 200));
+    for (const r of data || []) out.set(r.id, { text: normalizeBetaApplicationForm(r.beta_application_form).contentWarnings, ids: normalizeWarningIds(r.content_warnings) });
   }
   return out;
 }
@@ -56,7 +58,10 @@ async function warningsFor(admin: SupabaseClient, ids: string[]): Promise<Map<st
 export async function applyContentFilters<T extends Pick<PublishedBook, "id" | "genre" | "tropes">>(admin: SupabaseClient, filters: ReaderFilters, books: T[]) {
   if ((!filters.words.length && !hasPrefs(filters.prefs)) || !books.length) return { shown: books, hidden: 0 };
   const warnings = await warningsFor(admin, books.map((b) => b.id));
-  const shown = books.filter((b) => !readerFilterHit(filters, { genre: b.genre, tropes: b.tropes, warnings: warnings.get(b.id) || "" }));
+  const shown = books.filter((b) => {
+    const w = warnings.get(b.id);
+    return !readerFilterHit(filters, { genre: b.genre, tropes: b.tropes, warnings: w?.text || "", warningIds: w?.ids });
+  });
   return { shown, hidden: books.length - shown.length };
 }
 

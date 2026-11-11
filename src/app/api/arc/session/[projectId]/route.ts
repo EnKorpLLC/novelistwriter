@@ -15,6 +15,7 @@ import { recordBookDay } from "@/lib/reader-insights";
 import { createNotification } from "@/lib/beta-social";
 import { thanksReaders } from "@/lib/author-thanks";
 import { traceCode } from "@/lib/copy-guard";
+import { normalizeWarningIds, warningLabels } from "@/lib/reading-prefs";
 import {
   isArcDeadlinePassed,
   isArcWindowOpen,
@@ -42,9 +43,7 @@ const INVITE_FIELDS =
 async function loadProject(admin: SupabaseClient, projectId: string) {
   const { data } = await admin
     .from("projects")
-    .select(
-      "id, title, genre, blurb, cover_path, metadata, updated_at, user_id, arc_open, arc_deadline, arc_collect_address, arc_review_links"
-    )
+    .select("*")
     .eq("id", projectId)
     .maybeSingle();
   return data;
@@ -111,6 +110,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     title: project.title,
     genre: genreLabel(project.genre),
     blurb: String(project.blurb || "").trim(),
+    contentWarnings: warningLabels(normalizeWarningIds(project.content_warnings)),
     coverUrl: coverPublicUrl(
       projectCoverPath(project),
       project.updated_at ? Date.parse(project.updated_at) : undefined

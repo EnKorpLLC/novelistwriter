@@ -8,6 +8,7 @@ import {
   publicReaderName,
 } from "@/lib/beta-access";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
+import { withTickedWarnings } from "@/lib/reading-prefs";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel, linkInvitesForEmail } from "@/lib/beta-platform";
 import { enforceBetaAccessGates, findReaderInvite, inviteAllowsReading } from "@/lib/beta-server";
@@ -30,9 +31,7 @@ export async function GET(
   const admin = createServiceClient();
   const { data: project } = await admin
     .from("projects")
-    .select(
-      "id, title, genre, cover_path, updated_at, user_id, beta_ready, beta_application_form, beta_expires_at"
-    )
+    .select("*")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -88,7 +87,7 @@ export async function GET(
   // This page is public, so reviewers never show by email or email prefix
   const inviteLabel = new Map((reviewInvites || []).map((i) => [i.id, publicReaderName(i.display_name, i.email)]));
 
-  const form = normalizeBetaApplicationForm(project.beta_application_form);
+  const form = withTickedWarnings(normalizeBetaApplicationForm(project.beta_application_form), project.content_warnings);
   const base: Record<string, unknown> & { subscribed?: boolean } = {
     projectId: project.id,
     title: project.title,

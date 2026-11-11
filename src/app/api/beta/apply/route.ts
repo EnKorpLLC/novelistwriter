@@ -16,6 +16,7 @@ import {
   normalizeBetaApplicationForm,
   sanitizeApplicationAnswers,
 } from "@/lib/beta-form";
+import { withTickedWarnings } from "@/lib/reading-prefs";
 import { userHasStudio } from "@/lib/credits";
 
 export async function GET(req: Request) {
@@ -25,7 +26,7 @@ export async function GET(req: Request) {
   const admin = createServiceClient();
   const { data: project } = await admin
     .from("projects")
-    .select("id, title, user_id, beta_ready, beta_application_form, beta_auto_approve")
+    .select("*")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -34,7 +35,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const form = normalizeBetaApplicationForm(project.beta_application_form);
+  const form = withTickedWarnings(normalizeBetaApplicationForm(project.beta_application_form), project.content_warnings);
   return NextResponse.json({
     title: project.title,
     form,

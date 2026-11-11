@@ -19,7 +19,7 @@ import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { hiddenAuthorsFor } from "@/lib/reader-safety";
 import { normalizeTropes } from "@/lib/arc";
 import { normalizeFilters, readerFilterHit } from "@/lib/reader-recs";
-import { normalizePrefs } from "@/lib/reading-prefs";
+import { normalizePrefs, normalizeWarningIds } from "@/lib/reading-prefs";
 
 export async function GET() {
   const supabase = await createClient();
@@ -54,7 +54,8 @@ export async function GET() {
         : Promise.resolve({ data: [] as never[] }),
       admin
         .from("projects")
-        .select("id, title, genre, blurb, cover_path, updated_at, user_id, beta_ready, metadata, beta_expires_at, beta_application_form, tropes")
+        // Every column, so ticked content warnings come along once migration_book_warnings.sql has run
+        .select("*")
         .eq("beta_ready", true)
         .order("genre", { ascending: true })
         .order("title", { ascending: true }),
@@ -140,12 +141,13 @@ export async function GET() {
   const hidden = await hiddenAuthorsFor(admin, user.id);
   // The reader's genre and content warning choices, plus the words they skip in their library
   const filters = { words: normalizeFilters(profile?.content_filters), prefs: normalizePrefs(profile?.reading_prefs) };
-  const filteredOut = (p: { genre?: string | null; metadata?: Record<string, unknown> | null; tropes?: unknown; beta_application_form?: unknown }) =>
+  const filteredOut = (p: { genre?: string | null; metadata?: Record<string, unknown> | null; tropes?: unknown; beta_application_form?: unknown; content_warnings?: unknown }) =>
     Boolean(
       readerFilterHit(filters, {
         genre: [p.genre, ...catalogLabelsForProject(p)].filter(Boolean).join(", "),
         tropes: normalizeTropes(p.tropes),
         warnings: normalizeBetaApplicationForm(p.beta_application_form).contentWarnings,
+        warningIds: normalizeWarningIds(p.content_warnings),
       })
     );
   const betaOpen = (readyProjects || []).filter(
@@ -211,7 +213,7 @@ export async function GET() {
       : Promise.resolve({ data: [] as never[] }),
     admin
       .from("projects")
-      .select("id, title, genre, blurb, cover_path, metadata, updated_at, user_id, arc_open, arc_deadline, tropes, beta_application_form")
+      .select("*")
       .eq("arc_open", true)
       .order("arc_deadline", { ascending: true })
       .limit(200),

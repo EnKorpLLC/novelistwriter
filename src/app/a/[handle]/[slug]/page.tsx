@@ -7,6 +7,7 @@ import { getLaunchBook, resolveAuthor } from "@/lib/public-site";
 import { readerTrustForBooks, trustBadgesForBook } from "@/lib/trust-badges";
 import { userHasStudio } from "@/lib/credits";
 import { authorPath, bookPath } from "@/lib/handles";
+import { normalizeWarningIds, warningLabels } from "@/lib/reading-prefs";
 import { themeStyle } from "@/lib/site-themes";
 import { PublicHeader } from "@/components/PublicHeader";
 import { AuthorLinks } from "@/components/AuthorConnect";
@@ -281,6 +282,13 @@ export default async function LaunchPage({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {warningLabels(normalizeWarningIds(recordFlag?.content_warnings)).length > 0 && (
+              <details className="font-ui mt-3 text-xs">
+                <summary className="cursor-pointer text-muted">Content warnings</summary>
+                <p className="mt-1 text-ink">{warningLabels(normalizeWarningIds(recordFlag?.content_warnings)).join(" · ")}</p>
+              </details>
             )}
 
             {/* One main action for the book's stage; everything else is quieter, so readers know where to start */}

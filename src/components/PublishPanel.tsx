@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MAX_TROPES, SERIAL_SITES, type BuyLink } from "@/lib/arc";
+import { WARNING_CHOICES } from "@/lib/reading-prefs";
 import { ShareKit } from "@/components/ShareKit";
 import { LaunchPlan } from "@/components/LaunchPlan";
 import { LaunchRoom } from "@/components/LaunchRoom";
@@ -20,6 +21,7 @@ type LaunchState = {
   published: boolean;
   publishedAt: string | null;
   tropes: string[];
+  contentWarnings?: string[];
   buyLinks: BuyLink[];
   arcLive: boolean;
   betaOpen: boolean;
@@ -136,6 +138,7 @@ export function PublishPanel({ projectId }: { projectId: string }) {
   const [releaseDate, setReleaseDate] = useState("");
   const [slug, setSlug] = useState("");
   const [tropesText, setTropesText] = useState("");
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [buyLinks, setBuyLinks] = useState<BuyLink[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -146,6 +149,7 @@ export function PublishPanel({ projectId }: { projectId: string }) {
     setReleaseDate(data.releaseDate || "");
     setSlug(data.slug || "");
     setTropesText(data.tropes.join(", "));
+    setWarnings(data.contentWarnings || []);
     setBuyLinks(data.buyLinks);
   }
 
@@ -173,6 +177,7 @@ export function PublishPanel({ projectId }: { projectId: string }) {
         body: JSON.stringify({
           action,
           tropes: tropesText,
+          contentWarnings: warnings,
           buyLinks,
           tagline,
           releaseDate: releaseDate || null,
@@ -344,6 +349,31 @@ export function PublishPanel({ projectId }: { projectId: string }) {
               />
               <span className="mt-1 block text-xs text-muted">Comma separated, up to {MAX_TROPES}.</span>
             </label>
+
+            <div>
+              <p className="text-sm text-ink">Content warnings</p>
+              <p className="text-xs text-muted">
+                Tick what the book contains. Readers see these on your launch page and beta and ARC listings, and readers who chose to skip
+                them won&apos;t see the book. Saved with the button below.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {WARNING_CHOICES.map((c) => {
+                  const on = warnings.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setWarnings((w) => (on ? w.filter((x) => x !== c.id) : [...w, c.id]))}
+                      className={`border px-2.5 py-1 text-xs ${on ? "border-ink bg-ink text-paper" : "border-line text-muted hover:text-ink"}`}
+                    >
+                      {on ? "✓ " : ""}
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <div>
               <p className="text-sm text-ink">Where to buy</p>

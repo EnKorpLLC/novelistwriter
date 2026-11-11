@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { isArcWindowOpen, normalizeBuyLinks, normalizeTropes } from "@/lib/arc";
+import { normalizeWarningIds } from "@/lib/reading-prefs";
 import { authorPath, bookPath, slugProblem, slugify } from "@/lib/handles";
 import { pingIndexNow } from "@/lib/seo";
 import { ensureHandle, ensureSlug } from "@/lib/public-site";
@@ -48,11 +49,12 @@ async function load(projectId: string) {
 
 async function shape(project: ProjectRow) {
   const admin = createServiceClient();
-  const [handle, slug, studio, sitePublic] = await Promise.all([
+  const [handle, slug, studio, sitePublic, { data: full }] = await Promise.all([
     ensureHandle(admin, project.user_id),
     ensureSlug(admin, project),
     userHasStudio(project.user_id),
     authorSitePublic(project.user_id),
+    admin.from("projects").select("*").eq("id", project.id).maybeSingle(),
   ]);
   const arcLive = isArcWindowOpen(project as { arc_open?: boolean; arc_deadline?: string | null });
   const betaOpen = studio && Boolean(project.beta_ready);
@@ -68,6 +70,7 @@ async function shape(project: ProjectRow) {
     published,
     publishedAt: project.published_at || null,
     tropes: normalizeTropes(project.tropes),
+    contentWarnings: normalizeWarningIds(full?.content_warnings),
     buyLinks: normalizeBuyLinks(project.buy_links),
     arcLive,
     betaOpen,
@@ -99,6 +102,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = (await req.json()) as {
     action?: string;
     tropes?: unknown;
+    contentWarnings?: unknown;
     buyLinks?: unknown;
     tagline?: string;
     releaseDate?: string | null;
@@ -131,6 +135,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .maybeSingle();
     if (taken) return NextResponse.json({ error: "You already use that link for another book." }, { status: 400 });
     listing.slug = next;
+  }
+
+  // Saved on its own so the rest of the page still saves before migration_book_warnings.sql has run
+  if ("contentWarnings" in body) {
+    const { error } = await supabase.from("projects").update({ content_warnings: normalizeWarningIds(body.contentWarnings) }).eq("id", id).eq("user_id", user.id);
+    if (error && normalizeWarningIds(body.contentWarnings).length) {
+      return NextResponse.json({ error: "Database needs an update. Run supabase/migration_book_warnings.sql in the Supabase SQL editor." }, { status: 500 });
+    }
   }
 
   let patch: Record<string, unknown>;

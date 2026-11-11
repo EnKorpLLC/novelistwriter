@@ -390,7 +390,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     plan: "Pro and Studio",
     steps: [
       "Open the book and choose Launch → Launch page.",
-      "Add a tagline, release date, tropes, and the page's address.",
+      "Add a tagline, release date, tropes, and the page's address, and tick any content warnings. Readers see the warnings on your launch page and beta and ARC listings, and readers who chose to skip one won't see the book.",
       "Add store links (Amazon, Kobo, and others). To sell direct as well, set that up in the Sell tab.",
       "Make the page public when you're ready. It starts as a cover reveal and changes to buy buttons on release day.",
       "Under Share and embed, copy ready-to-post text, a newsletter block, and buttons for your own website.",

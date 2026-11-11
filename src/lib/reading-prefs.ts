@@ -78,6 +78,21 @@ export function normalizePrefs(raw: unknown): ReadingPrefs {
   };
 }
 
+/** A book's ticked content warnings, as known ids in list order. */
+export function normalizeWarningIds(raw: unknown): string[] {
+  const picked = new Set((Array.isArray(raw) ? raw : []).map(String));
+  return WARNING_CHOICES.filter((c) => picked.has(c.id)).map((c) => c.id);
+}
+
+export const warningLabels = (ids: string[]) => WARNING_CHOICES.filter((c) => ids.includes(c.id)).map((c) => c.label);
+
+/** The beta brief's written warnings with the ticked ones listed first, for the warnings box readers see. */
+export function withTickedWarnings<T extends { contentWarnings: string }>(form: T, ticked: unknown): T {
+  const labels = warningLabels(normalizeWarningIds(ticked));
+  if (!labels.length) return form;
+  return { ...form, contentWarnings: [labels.join(" · "), form.contentWarnings].filter(Boolean).join("\n\n") };
+}
+
 export const hasPrefs = (p: ReadingPrefs) => p.likeGenres.length + p.avoidGenres.length + p.avoidWarnings.length > 0;
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -89,14 +104,15 @@ const choose = (list: Choice[], picked: string[]) => list.filter((c) => picked.i
 
 /**
  * Why a book is left out for this reader, or null to show it. `genre` is the book's genre and keywords; `about`
- * is its tropes and content warnings. A book with no genre isn't held back by "genres I want".
+ * is its tropes and written content warnings; `warningIds` are the warnings the author ticked. A book with no
+ * genre isn't held back by "genres I want".
  */
-export function prefsHide(book: { genre: string; about: string }, prefs: ReadingPrefs): string | null {
+export function prefsHide(book: { genre: string; about: string; warningIds?: string[] }, prefs: ReadingPrefs): string | null {
   const genre = book.genre.trim();
   const avoided = choose(GENRE_CHOICES, prefs.avoidGenres).find((c) => mentions(genre, c.terms));
   if (avoided) return `Genre: ${avoided.label}`;
   const wanted = choose(GENRE_CHOICES, prefs.likeGenres);
   if (wanted.length && genre && !/^uncategorized$/i.test(genre) && !wanted.some((c) => mentions(genre, c.terms))) return "Not a genre you picked";
-  const warning = choose(WARNING_CHOICES, prefs.avoidWarnings).find((c) => mentions(book.about, c.terms));
+  const warning = choose(WARNING_CHOICES, prefs.avoidWarnings).find((c) => book.warningIds?.includes(c.id) || mentions(book.about, c.terms));
   return warning ? `Content warning: ${warning.label}` : null;
 }
