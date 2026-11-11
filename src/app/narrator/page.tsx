@@ -33,6 +33,9 @@ export default async function NarratorPage() {
               Reader dashboard
             </Link>
           )}
+          <Link href="/pro" className="text-accent hover:underline">
+            {roles.is_pro ? "Pro profile" : "Get listed for authors to hire"}
+          </Link>
           <SiteFeedbackButton />
           <SignOutButton />
         </div>

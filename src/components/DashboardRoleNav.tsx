@@ -103,6 +103,11 @@ export function DashboardRoleNav({ roles, side }: Props) {
           Narrator dashboard
         </Link>
       )}
+      {roles.is_pro && (
+        <Link href="/pro" className="text-accent hover:underline">
+          Pro dashboard
+        </Link>
+      )}
       {note && <span className="text-xs text-danger">{note}</span>}
       <SiteFeedbackButton />
     </div>

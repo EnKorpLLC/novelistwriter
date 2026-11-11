@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     email?: string;
     password?: string;
     displayName?: string;
-    role?: "author" | "beta_reader" | "narrator";
+    role?: "author" | "beta_reader" | "narrator" | "pro";
     emailNotifications?: boolean;
     readerDigest?: boolean;
     source?: Record<string, unknown>;
@@ -55,6 +55,11 @@ export async function POST(req: Request) {
   // Narrators get a free narrator-only account, not an author one (the trigger makes everyone else an author)
   if (body.role === "narrator" && data.user?.id) {
     const { error: roleErr } = await admin.from("profiles").update({ is_narrator: true, is_author: false }).eq("id", data.user.id);
+    if (roleErr) await admin.from("profiles").update({ is_author: true }).eq("id", data.user.id);
+  }
+  // Editors and artists joining the marketplace get a free pro-only account
+  if (body.role === "pro" && data.user?.id) {
+    const { error: roleErr } = await admin.from("profiles").update({ is_pro: true, is_author: false }).eq("id", data.user.id);
     if (roleErr) await admin.from("profiles").update({ is_author: true }).eq("id", data.user.id);
   }
 

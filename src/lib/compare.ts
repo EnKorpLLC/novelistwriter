@@ -340,7 +340,7 @@ export const COMPARISONS: Comparison[] = [
       "Works on Windows, Mac, and Chromebook": ["yes", "In the browser"],
     },
     extraRows: [
-      ["Hire editors and designers", ["no", "Not yet"], ["yes", "The Reedsy Marketplace, its biggest strength"]],
+      ["Hire editors and designers", ["partial", "Opening as founding pros join: 10% paid by the author only, human-made work"], ["yes", "The Reedsy Marketplace, its biggest strength (10% from each side)"]],
       ["Sell your ebook direct to readers", ["yes", "Pro and Studio"], ["no", "Not in Studio"]],
     ],
     chooseThem: ["You want a free, simple app to write and format your book", "You plan to hire an editor or cover designer and want them all in one marketplace"],

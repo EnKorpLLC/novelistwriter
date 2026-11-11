@@ -38,6 +38,8 @@ export const STATIC_PAGES = [
   { path: "/your-data", priority: 0.4, changeFrequency: "yearly" as const },
   { path: "/works-with", priority: 0.6, changeFrequency: "monthly" as const },
   { path: "/narrators", priority: 0.7, changeFrequency: "monthly" as const },
+  { path: "/hire", priority: 0.7, changeFrequency: "weekly" as const },
+  { path: "/pros", priority: 0.7, changeFrequency: "weekly" as const },
   { path: "/leaving-amazon", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/refunds", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/seller-terms", priority: 0.3, changeFrequency: "yearly" as const },

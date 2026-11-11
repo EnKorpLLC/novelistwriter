@@ -39,6 +39,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/beta/dashboard") ||
     path.startsWith("/beta/read") ||
     path.startsWith("/narrator") ||
+    path === "/pro" ||
+    path.startsWith("/pro/") ||
     path.startsWith("/admin") ||
     path === "/auth/reset-password";
 

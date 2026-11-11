@@ -11,6 +11,7 @@ import { AdminMoney } from "./AdminMoney";
 import { AdminChallenges } from "./AdminChallenges";
 import { AdminPromos } from "./AdminPromos";
 import { AdminAffiliates } from "./AdminAffiliates";
+import { AdminMarketplace } from "./AdminMarketplace";
 import { AdminSocial } from "./AdminSocial";
 import { AdminContent } from "./AdminContent";
 import { AdminSiteText } from "./AdminSiteText";
@@ -53,6 +54,7 @@ const TABS = [
   { id: "challenges", label: "Challenges" },
   { id: "promos", label: "Promos" },
   { id: "affiliates", label: "Affiliates" },
+  { id: "marketplace", label: "Marketplace" },
   { id: "social", label: "Social" },
   { id: "content", label: "Content" },
   { id: "sitetext", label: "Site text" },
@@ -537,6 +539,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
         {tab === "promos" && <AdminPromos onNote={setNote} />}
 
         {tab === "affiliates" && <AdminAffiliates onNote={setNote} />}
+
+        {tab === "marketplace" && <AdminMarketplace onNote={setNote} />}
 
         {tab === "social" && <AdminSocial onNote={setNote} />}
 

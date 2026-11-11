@@ -4,6 +4,8 @@ export type ProfileRoles = {
   is_author: boolean;
   is_beta_reader: boolean;
   is_narrator?: boolean;
+  /** Editors and artists in the marketplace */
+  is_pro?: boolean;
 };
 
 export const LAST_SIDE_KEY = "nw_last_side";
@@ -35,6 +37,7 @@ export function normalizeRoles(profile: Partial<ProfileRoles> | null | undefined
     is_author: profile?.is_author !== false,
     is_beta_reader: Boolean(profile?.is_beta_reader),
     is_narrator: Boolean(profile?.is_narrator),
+    is_pro: Boolean(profile?.is_pro),
   };
 }
 
@@ -49,6 +52,7 @@ export function homePathForRoles(
   }
   // Narrator-only accounts (free, invited by an author) land on their own dashboard
   if (roles.is_narrator && !roles.is_author && !roles.is_beta_reader) return "/narrator";
+  if (roles.is_pro && !roles.is_author && !roles.is_beta_reader) return "/pro";
   if (roles.is_author && !roles.is_beta_reader) return "/dashboard";
   if (roles.is_beta_reader && !roles.is_author) return "/beta/dashboard";
   if (roles.is_author && roles.is_beta_reader) {
@@ -64,6 +68,9 @@ export async function fetchProfileRoles(
   supabase: SupabaseClient,
   userId: string
 ): Promise<ProfileRoles> {
+  const withPro = await supabase.from("profiles").select("is_author, is_beta_reader, is_narrator, is_pro").eq("id", userId).maybeSingle();
+  if (!withPro.error) return normalizeRoles(withPro.data);
+  // Before migration_marketplace.sql there's no is_pro column
   const withNarrator = await supabase.from("profiles").select("is_author, is_beta_reader, is_narrator").eq("id", userId).maybeSingle();
   if (!withNarrator.error) return normalizeRoles(withNarrator.data);
   // Before migration_narrators.sql there's no is_narrator column

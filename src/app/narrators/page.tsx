@@ -94,7 +94,13 @@ export default function NarratorsPage() {
               What authors get
             </Link>
           </div>
-          <p className="mt-3 text-xs text-muted">A directory where authors can find narrators is planned. Questions? <Link href="/contact" className="underline">Contact us</Link>.</p>
+          <p className="mt-3 text-xs text-muted">
+            Want authors to find you? The narrator directory opens once five founding narrators have joined:{" "}
+            <Link href="/pros/join" className="underline">
+              apply to be listed
+            </Link>
+            . Questions? <Link href="/contact" className="underline">Contact us</Link>.
+          </p>
         </section>
       </main>
       <PublicFooter />
