@@ -84,6 +84,8 @@ export type Verification = {
   checkedAt: string;
   /** When the audiobook is on sale here: "Recorded in Novelist Writer" is earned; "human narrated" is the author's statement */
   audiobook: { hours: number; humanNarrated: boolean; recordedHere: boolean } | null;
+  /** Changes from editors hired here that the author accepted (counted apart from typing and pasting) */
+  editorEdits: { words: number; editors: number } | null;
 };
 
 export function badgeLabel(status: VerifyStatus, typedPercent: number) {
@@ -153,7 +155,15 @@ export async function loadVerification(admin: SupabaseClient, code: string): Pro
     lastSession: record.lastAt,
     checkedAt: new Date().toISOString(),
     audiobook: await audiobookFor(admin, p.id),
+    editorEdits: await editorEditsFor(admin, p.id),
   };
+}
+
+async function editorEditsFor(admin: SupabaseClient, projectId: string) {
+  const { data, error } = await admin.from("market_edit_log").select("job_id, words_changed").eq("project_id", projectId);
+  if (error || !data?.length) return null;
+  const { data: jobs } = await admin.from("market_jobs").select("pro_id").in("id", [...new Set(data.map((d) => d.job_id))]);
+  return { words: data.reduce((n, d) => n + (d.words_changed || 0), 0), editors: new Set((jobs || []).map((j) => j.pro_id)).size || 1 };
 }
 
 async function audiobookFor(admin: SupabaseClient, projectId: string) {

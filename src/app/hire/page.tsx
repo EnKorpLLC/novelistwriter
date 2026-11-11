@@ -72,11 +72,14 @@ export default async function HirePage() {
                           <span className="block text-xs text-muted">
                             {p.headline}
                             {p.rateNote ? ` · ${p.rateNote}` : ""}
+                            {p.rating ? ` · ★ ${p.rating.avg} (${p.rating.count})` : ""}
                             {p.completed ? ` · ${p.completed} done here` : ""}
                           </span>
                         </span>
                         {t.id === "narration" ? (
-                          <span className="text-xs text-muted">Invite from your book&apos;s Audio tab</span>
+                          <Link href={`/dashboard/hire?narrator=${p.userId}`} className="text-xs text-accent underline">
+                            Invite to narrate
+                          </Link>
                         ) : (
                           <Link href={`/dashboard/hire?type=${t.id}&pro=${p.userId}`} className="text-xs text-accent underline">
                             Request a quote

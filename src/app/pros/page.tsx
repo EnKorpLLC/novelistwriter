@@ -21,6 +21,11 @@ const POINTS: { t: string; d: string }[] = [
   { t: "Keep your full price", d: `One ${NARRATION_FEE_PCT}% fee, paid by the author and shown on every quote. Nothing comes out of what you charge, and listing costs nothing.` },
   { t: "Paid for every milestone", d: "Authors pay each milestone when it starts, and we hold it until they approve your delivery. An author who goes quiet for 14 days counts as approval." },
   { t: "Clear scopes", d: "Every job has a written scope, deliverables, and the revision rounds included. Extra work needs a new quote." },
+  {
+    t: "Work the way you already do",
+    d: "Editors download the manuscript in Word, edit with Track Changes, and deliver the file; the author goes through your changes one by one in the app. Artists deliver files with their process, and the author can make your cover their book's cover in one click.",
+  },
+  { t: "Reviews that mean something", d: "Only authors who completed a paid job with you can review you, and you can reply once." },
   { t: "Human-made, on purpose", d: "Authors here prove they wrote their books. Every pro promises their work is human-made too, which is the reason authors will come to you." },
 ];
 

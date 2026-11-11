@@ -22,6 +22,8 @@ export default async function ProProfilePage({ params, searchParams }: { params:
   const pro = lookup ? (await directoryPros(admin, lookup, { withPortfolio: true, userId: id }))[0] : null;
   if (!pro || !pro.specialties.some((s) => openTypes.includes(s as (typeof openTypes)[number]))) notFound();
   const hireable = pro.specialties.filter((s) => openTypes.includes(s as (typeof openTypes)[number]) && s !== "narration");
+  const { data: reviewRows } = await admin.from("market_reviews").select("stars, body, reply, created_at").eq("pro_id", pro.userId).order("created_at", { ascending: false }).limit(30);
+  const reviews = (reviewRows || []) as { stars: number; body: string; reply: string | null; created_at: string }[];
 
   return (
     <div className="min-h-screen">
@@ -32,6 +34,7 @@ export default async function ProProfilePage({ params, searchParams }: { params:
         <p className="mt-2 text-lg text-muted">{pro.headline}</p>
         <p className="font-ui mt-2 text-xs text-muted">
           {pro.founding ? "Founding pro · " : ""}
+          {pro.rating ? `★ ${pro.rating.avg} from ${pro.rating.count} ${pro.rating.count === 1 ? "review" : "reviews"} · ` : ""}
           {pro.completed ? `${pro.completed} ${pro.completed === 1 ? "job" : "jobs"} completed here · ` : ""}
           Promises human-made work
           {pro.genres.length ? ` · ${pro.genres.join(", ")}` : ""}
@@ -52,8 +55,30 @@ export default async function ProProfilePage({ params, searchParams }: { params:
               Request a quote{hireable.length > 1 ? `: ${marketType(s)?.label.toLowerCase()}` : ""}
             </Link>
           ))}
-          {pro.specialties.includes("narration") && <span className="text-sm text-muted">To hire them as a narrator, invite them from your book&apos;s Audio tab.</span>}
+          {pro.specialties.includes("narration") && openTypes.includes("narration") && (
+            <Link href={`/dashboard/hire?narrator=${pro.userId}`} className="border border-accent px-4 py-2 text-sm text-accent">
+              Invite to narrate a book
+            </Link>
+          )}
         </div>
+        {reviews.length > 0 && (
+          <section className="mt-10">
+            <h2 className="font-display text-2xl">Reviews</h2>
+            <p className="font-ui text-xs text-muted">From authors who completed a paid job with {pro.name} here.</p>
+            <ul className="font-ui mt-3 space-y-4 text-sm">
+              {reviews.map((r, i) => (
+                <li key={i} className="border-t border-line pt-3">
+                  <p className="text-accent">
+                    {"★".repeat(r.stars)}
+                    {"☆".repeat(5 - r.stars)} <span className="text-xs text-muted">{new Date(r.created_at).toLocaleDateString()}</span>
+                  </p>
+                  {r.body && <p className="mt-1 whitespace-pre-wrap">{r.body}</p>}
+                  {r.reply && <p className="mt-2 border-l-2 border-line pl-3 text-muted">{pro.name}: {r.reply}</p>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {pro.portfolio.length > 0 && (
           <section className="mt-10">
             <h2 className="font-display text-2xl">Portfolio</h2>

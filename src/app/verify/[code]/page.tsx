@@ -95,6 +95,15 @@ export default async function VerifyCodePage({ params }: { params: Promise<Param
               </div>
             ))}
           </dl>
+          {v.editorEdits && (
+            <div className="font-ui mt-4 border border-line px-3 py-2 text-sm">
+              <p className="text-[10px] uppercase tracking-wide text-muted">Edited</p>
+              <p className="mt-1 text-ink">
+                Edited by {v.editorEdits.editors === 1 ? "a human editor" : `${v.editorEdits.editors} human editors`} hired through Novelist Writer. The author accepted
+                their changes (about {v.editorEdits.words.toLocaleString()} words) one by one; they&apos;re counted apart from what the author typed or pasted.
+              </p>
+            </div>
+          )}
           {v.audiobook && (
             <div className="font-ui mt-4 border border-line px-3 py-2 text-sm">
               <p className="text-[10px] uppercase tracking-wide text-muted">Audiobook</p>

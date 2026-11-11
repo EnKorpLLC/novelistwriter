@@ -40,7 +40,8 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [studio, setStudio] = useState(true);
-  const [form, setForm] = useState<{ editing: string | null; email: string; name: string; message: string; terms: NarrationTerms } | null>(null);
+  const [form, setForm] = useState<{ editing: string | null; email: string; name: string; message: string; terms: NarrationTerms; proUserId?: string } | null>(null);
+  const [directory, setDirectory] = useState<{ userId: string; name: string; headline: string; rateNote: string; founding: boolean }[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [checkNote, setCheckNote] = useState("");
@@ -118,6 +119,20 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Narrators from the directory (once they're open); ?narrator=<id> arrives from a narrator's profile
+  useEffect(() => {
+    void fetch("/api/market/narrators")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = (d?.narrators || []) as typeof directory;
+        setDirectory(list);
+        const wanted = new URLSearchParams(window.location.search).get("narrator");
+        const pick = list.find((n) => n.userId === wanted);
+        if (pick) setForm((f) => f || { editing: null, email: "", name: pick.name, message: "", terms: { ...DEFAULT_TERMS, estimatedHours: estimateHours(words) }, proUserId: pick.userId });
+      })
+      .catch(() => null);
+  }, [words]);
 
   async function act(body: Record<string, unknown>, done?: string) {
     setBusy(true);
@@ -292,7 +307,34 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
 
       {form && cost && (
         <div className="mt-3 space-y-3">
-          {!form.editing && (
+          {!form.editing && directory.length > 0 && (
+            <label className="block">
+              <span className="text-xs text-muted">Pick from the narrator directory, or invite someone by email</span>
+              <select
+                value={form.proUserId || ""}
+                onChange={(e) => {
+                  const n = directory.find((d) => d.userId === e.target.value);
+                  setForm({ ...form, proUserId: n?.userId, name: n?.name || "", email: n ? "" : form.email });
+                }}
+                className="mt-1 w-full border border-line bg-paper px-2 py-1.5"
+              >
+                <option value="">Someone I know (by email)</option>
+                {directory.map((d) => (
+                  <option key={d.userId} value={d.userId}>
+                    {d.name}
+                    {d.founding ? " (founding)" : ""}
+                    {d.rateNote ? ` · ${d.rateNote}` : ""}
+                  </option>
+                ))}
+              </select>
+              {form.proUserId && (
+                <a href={`/hire/pro/${form.proUserId}?type=narration`} target="_blank" className="mt-1 inline-block text-xs text-accent underline">
+                  See their profile and samples
+                </a>
+              )}
+            </label>
+          )}
+          {!form.editing && !form.proUserId && (
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-xs text-muted">Narrator&apos;s email</span>
@@ -394,11 +436,11 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={busy || Boolean(problem) || (!form.editing && !form.email.trim())}
+              disabled={busy || Boolean(problem) || (!form.editing && !form.email.trim() && !form.proUserId)}
               className="bg-accent px-4 py-2 text-xs text-paper disabled:opacity-50"
               onClick={() =>
                 void act(
-                  form.editing ? { action: "update_terms", id: form.editing, terms: form.terms } : { action: "invite", email: form.email, name: form.name, message: form.message, terms: form.terms },
+                  form.editing ? { action: "update_terms", id: form.editing, terms: form.terms } : { action: "invite", email: form.email, proUserId: form.proUserId, name: form.name, message: form.message, terms: form.terms },
                   form.editing ? "Terms updated. The narrator sees the new version." : "Invite sent."
                 )
               }

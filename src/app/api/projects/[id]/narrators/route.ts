@@ -75,7 +75,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (b.action === "invite") {
     if (!(await userHasStudio(own.user.id))) return NextResponse.json({ error: "Hiring a narrator is part of Studio." }, { status: 402 });
-    const email = String(b.email || "").trim().toLowerCase();
+    let email = String(b.email || "").trim().toLowerCase();
+    // A narrator picked from the directory: the invite goes to their account email
+    if (b.proUserId) {
+      const { data: pro } = await admin.from("pro_profiles").select("user_id, name, specialties, status").eq("user_id", String(b.proUserId)).maybeSingle();
+      if (!pro || pro.status !== "approved" || !(pro.specialties || []).includes("narration")) return NextResponse.json({ error: "That narrator isn't available right now." }, { status: 400 });
+      const { data: acct } = await admin.from("profiles").select("email").eq("id", pro.user_id).maybeSingle();
+      email = String(acct?.email || "").toLowerCase();
+      if (!b.name) b.name = pro.name;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: "Enter the narrator's email." }, { status: 400 });
     if (email === (own.user.email || "").toLowerCase()) return NextResponse.json({ error: "Narrating it yourself? Just use the studio below; no invite needed." }, { status: 400 });
     const terms = normalizeTerms(b.terms);

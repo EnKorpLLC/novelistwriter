@@ -559,9 +559,12 @@ export async function jobView(admin: SupabaseClient, job: JobRow, role: "author"
   ]);
   const t = marketType(job.market_type);
   const quote: Quote | null = job.quote_version ? normalizeQuote(job.quote, job.market_type) : null;
+  const { data: review } = job.status === "completed" ? await admin.from("market_reviews").select("stars, body, reply, created_at").eq("job_id", job.id).maybeSingle() : { data: null };
   return {
     id: job.id,
     role,
+    hasBook: Boolean(job.project_id),
+    review: review ? { stars: review.stars as number, body: (review.body as string) || "", reply: (review.reply as string | null) || null } : null,
     title: job.title,
     brief: job.brief,
     deadline: job.deadline,

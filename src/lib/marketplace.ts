@@ -259,6 +259,8 @@ export type DirectoryPro = {
   founding: boolean;
   specialties: string[];
   completed: number;
+  /** From completed jobs only */
+  rating: { avg: number; count: number } | null;
   portfolio: (PortfolioItem & { imageUrl: string | null })[];
 };
 
@@ -269,8 +271,15 @@ export async function directoryPros(admin: SupabaseClient, type: MarketTypeId, o
   const { data, error } = await q.limit(200);
   if (error || !data?.length) return [];
   const ids = data.map((r) => r.user_id as string);
-  const { data: done } = await admin.from("market_jobs").select("pro_id").in("pro_id", ids).eq("status", "completed");
+  const [{ data: done }, { data: reviews }] = await Promise.all([
+    admin.from("market_jobs").select("pro_id").in("pro_id", ids).eq("status", "completed"),
+    admin.from("market_reviews").select("pro_id, stars").in("pro_id", ids),
+  ]);
   const count = (id: string) => (done || []).filter((d) => d.pro_id === id).length;
+  const rating = (id: string) => {
+    const mine = (reviews || []).filter((r) => r.pro_id === id);
+    return mine.length ? { avg: Math.round((mine.reduce((n, r) => n + r.stars, 0) / mine.length) * 10) / 10, count: mine.length } : null;
+  };
   const rows = (data as ProRow[]).map((r) => ({ r, completed: count(r.user_id) })).sort((a, b) => Number(b.r.founding) - Number(a.r.founding) || b.completed - a.completed);
   return Promise.all(
     rows.map(async ({ r, completed }) => ({
@@ -285,6 +294,7 @@ export async function directoryPros(admin: SupabaseClient, type: MarketTypeId, o
       founding: r.founding,
       specialties: r.specialties,
       completed,
+      rating: rating(r.user_id),
       portfolio: opts.withPortfolio ? await signPortfolio(r.portfolio, r.user_id) : [],
     }))
   );

@@ -31,6 +31,8 @@ export default function HirePage() {
   const [form, setForm] = useState({ type: "line_copy", projectId: "", title: "", brief: "", deadline: "", budgetNote: "", who: "invite" as "invite" | "directory", inviteEmail: "", proIds: [] as string[] });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // Arriving from a narrator's profile: pick the book, then invite them from its Audio tab
+  const [narrator, setNarrator] = useState<{ userId: string; name: string } | null>(null);
 
   const loadOptions = useCallback(async (type: string) => {
     const r = await fetch(`/api/market/options?type=${type}`).catch(() => null);
@@ -46,6 +48,13 @@ export default function HirePage() {
     const type = q.get("type");
     const pro = q.get("pro");
     if (type && HIREABLE.some((t) => t.id === type)) setForm((f) => ({ ...f, type, ...(pro ? { who: "directory", proIds: [pro] } : {}) }));
+    const wantNarrator = q.get("narrator");
+    if (wantNarrator) {
+      void fetch("/api/market/narrators")
+        .then((r) => r.json())
+        .then((d) => setNarrator(((d.narrators || []) as { userId: string; name: string }[]).find((n) => n.userId === wantNarrator) || null))
+        .catch(() => null);
+    }
     void fetch("/api/market/jobs")
       .then((r) => r.json())
       .then(setJobs)
@@ -95,6 +104,22 @@ export default function HirePage() {
         </Link>
       </p>
       {jobs?.migrationNeeded && <p className="mt-3 text-sm text-danger">{jobs.error}</p>}
+
+      {narrator && (
+        <section className="mt-6 border border-accent p-4 text-sm">
+          <h2 className="font-display text-xl">Invite {narrator.name} to narrate</h2>
+          <p className="mt-1 text-muted">Pick the book. Its Audio tab opens with {narrator.name} chosen; set the pay and terms there and send the invite (Studio).</p>
+          <ul className="mt-2 space-y-1">
+            {books.map((b) => (
+              <li key={b.id}>
+                <a href={`/project/${b.id}?tab=audio&narrator=${narrator.userId}`} className="text-accent underline">
+                  {b.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {jobs && jobs.hiring.length > 0 && (
         <section className="mt-8">

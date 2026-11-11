@@ -284,6 +284,27 @@ export async function exportDocx(opts: {
   });
 }
 
+/** The text of a chapter heading in the editing manuscript, which is also how a returned file is matched back. */
+export const editingHeading = (ch: { title: string | null; sort_order: number }, i: number) => (ch.title || "").trim() || `Chapter ${i + 1}`;
+
+/**
+ * The manuscript for a hired editor: a note, then each chapter as a Heading 1 with its text. No front or back
+ * pages, so the edited file comes back chapter for chapter.
+ */
+export async function exportEditingDocx(opts: { title: string; note: string; chapters: Chapter[] }): Promise<Buffer> {
+  const ordered = [...opts.chapters].sort((a, b) => a.sort_order - b.sort_order);
+  const children: Paragraph[] = [
+    new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: opts.title, bold: true, font: "Garamond", size: 40 })] }),
+    new Paragraph({ spacing: { after: 400 }, children: [new TextRun({ text: opts.note, italics: true, font: "Garamond", size: 22 })] }),
+  ];
+  ordered.forEach((ch, i) => {
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 200 }, children: [new TextRun({ text: editingHeading(ch, i), font: "Garamond", bold: true })] }));
+    children.push(...chapterBodyParas(ch));
+  });
+  const doc = new Document({ sections: [{ properties: {}, children }] });
+  return Buffer.from(await Packer.toBuffer(doc));
+}
+
 function epubCoverMeta(type: CoverImage["type"]): { ext: string; media: string } {
   if (type === "png") return { ext: "png", media: "image/png" };
   if (type === "webp") return { ext: "webp", media: "image/webp" };

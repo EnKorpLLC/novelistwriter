@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   AGREEMENT_NOTE,
   MIN_JOB_CENTS,
@@ -33,6 +33,8 @@ type FileRow = { id: string; milestoneId: string | null; kind: string; name: str
 type Job = {
   id: string;
   role: "author" | "pro";
+  hasBook: boolean;
+  review: { stars: number; body: string; reply: string | null } | null;
   title: string;
   brief: string;
   deadline: string | null;
@@ -205,15 +207,33 @@ export function MarketJob({ jobId }: { jobId: string }) {
                 onDeliver={(note) => run("deliver", async () => (await post({ action: "deliver", milestoneId: m.id, note }), "Delivered. The author has been told."))}
                 onApprove={() => run("approve", async () => (await post({ action: "approve", milestoneId: m.id }), "Approved. The pro is being paid."))}
                 onChanges={(note) => run("changes", async () => (await post({ action: "changes", milestoneId: m.id, note }), "Sent to the pro."))}
+                onUseArt={(fileId, action) =>
+                  void run("art", async () => {
+                    await post({ action, fileId });
+                    return action === "use_cover" ? "It's now your book's cover." : "Added to your book's Extras in the Sell tab, turned off. Set how to offer it there.";
+                  })
+                }
               />
             ))}
           </ol>
+          {job.role === "pro" && job.type.group === "editing" && job.hasBook && job.milestones.some((m) => m.status !== "unpaid" && m.status !== "cancelled") && (
+            <p className="mt-3 text-xs">
+              <a href={`/api/market/jobs/${job.id}/manuscript`} className="border border-accent px-3 py-1.5 text-accent">
+                Download the manuscript (Word)
+              </a>{" "}
+              <span className="text-muted">Edit with Track Changes on, keep each chapter&apos;s heading, and deliver the file here. The author reviews each change.</span>
+            </p>
+          )}
           <details className="mt-4">
             <summary className="cursor-pointer text-accent">The agreement{job.agreedAt ? ` (agreed ${new Date(job.agreedAt).toLocaleDateString()})` : ""}</summary>
             <p className="mt-2 whitespace-pre-wrap text-muted">{job.agreement}</p>
             <p className="mt-2 text-xs text-muted">{AGREEMENT_NOTE}</p>
           </details>
         </section>
+      )}
+
+      {job.status === "completed" && !job.adminView && (
+        <ReviewBox job={job} busy={Boolean(busy)} onSend={(body) => run("review", async () => (await post(body), "Thank you. It's on their profile."))} />
       )}
 
       <section>
@@ -280,7 +300,53 @@ export function MarketJob({ jobId }: { jobId: string }) {
   );
 }
 
-function FileList({ files, canRemove, onRemove }: { files: FileRow[]; canRemove: boolean; onRemove: (id: string) => void }) {
+const stars = (n: number) => `${"★".repeat(n)}${"☆".repeat(5 - n)}`;
+
+/** After a job is complete: the author's review (completed jobs only), and the pro's one reply. */
+function ReviewBox({ job, busy, onSend }: { job: Job; busy: boolean; onSend: (body: Record<string, unknown>) => void }) {
+  const [n, setN] = useState(5);
+  const [text, setText] = useState("");
+  const r = job.review;
+  return (
+    <section className="border border-line p-4">
+      <h2 className="font-display text-xl">Review</h2>
+      {r ? (
+        <div className="mt-2">
+          <p className="text-accent">{stars(r.stars)}</p>
+          {r.body && <p className="mt-1 whitespace-pre-wrap">{r.body}</p>}
+          {r.reply && <p className="mt-2 border-l-2 border-line pl-3 text-muted">Reply from {job.proName}: {r.reply}</p>}
+          {job.role === "pro" && !r.reply && (
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder="A short reply (optional, once)" className="min-w-0 flex-1 border border-line bg-paper px-2 py-1.5" />
+              <button type="button" disabled={busy || !text.trim()} className="border border-line px-3 py-1.5 text-xs disabled:opacity-50" onClick={() => onSend({ action: "reply", body: text })}>
+                Reply
+              </button>
+            </div>
+          )}
+        </div>
+      ) : job.role === "author" ? (
+        <div className="mt-2 space-y-2">
+          <p className="text-muted">How was working with {job.proName}? Reviews only come from completed jobs, and show on their profile.</p>
+          <div className="flex gap-1 text-2xl" role="radiogroup" aria-label="Stars">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <button key={i} type="button" role="radio" aria-checked={n === i} aria-label={`${i} stars`} className={i <= n ? "text-accent" : "text-line"} onClick={() => setN(i)}>
+                ★
+              </button>
+            ))}
+          </div>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="What went well, and what authors should know" className="block w-full border border-line bg-paper px-2 py-1.5" />
+          <button type="button" disabled={busy} className="bg-accent px-4 py-2 text-paper disabled:opacity-50" onClick={() => onSend({ action: "review", stars: n, body: text })}>
+            Post the review
+          </button>
+        </div>
+      ) : (
+        <p className="mt-2 text-muted">The author hasn&apos;t left a review yet.</p>
+      )}
+    </section>
+  );
+}
+
+function FileList({ files, canRemove, onRemove, actions }: { files: FileRow[]; canRemove: boolean; onRemove: (id: string) => void; actions?: (f: FileRow) => ReactNode }) {
   if (!files.length) return null;
   return (
     <ul className="mt-2 space-y-1 text-xs">
@@ -302,6 +368,7 @@ function FileList({ files, canRemove, onRemove }: { files: FileRow[]; canRemove:
               Remove
             </button>
           )}
+          {actions?.(f)}
         </li>
       ))}
     </ul>
@@ -477,6 +544,7 @@ function MilestoneCard({
   onDeliver,
   onApprove,
   onChanges,
+  onUseArt,
 }: {
   n: number;
   m: Milestone;
@@ -490,11 +558,42 @@ function MilestoneCard({
   onDeliver: (note: string) => void;
   onApprove: () => void;
   onChanges: (note: string) => void;
+  onUseArt: (fileId: string, action: "use_cover" | "add_extra") => void;
 }) {
   const [note, setNote] = useState("");
   const author = job.role === "author";
   const working = !author && ["paid", "changes"].includes(m.status) && job.status === "agreed";
   const revisionsLeft = Math.max(0, (job.quote?.revisions ?? 0) - m.revisionsUsed);
+  const delivered = ["delivered", "approved"].includes(m.status);
+  // Author-side shortcuts on delivered files: review an editor's Word file, or put art into the book
+  const actions = (f: FileRow) => {
+    if (!author || f.kind !== "delivery" || !delivered || !job.hasBook || job.adminView) return null;
+    if (job.type.group === "editing" && /\.docx$/i.test(f.name)) {
+      return (
+        <a href={`/hire/job/${job.id}/review/${f.id}`} className="border border-accent px-2 py-0.5 text-accent">
+          Review these edits in the app
+        </a>
+      );
+    }
+    if (job.type.group === "art" && /\.(jpe?g|png|webp)$/i.test(f.name)) {
+      const sellable = job.quote?.rights === "license_merch" || job.quote?.rights === "buyout";
+      return (
+        <>
+          {job.type.id === "cover" && (
+            <button type="button" disabled={Boolean(busy)} className="border border-accent px-2 py-0.5 text-accent" onClick={() => onUseArt(f.id, "use_cover")}>
+              Use as my book&apos;s cover
+            </button>
+          )}
+          {sellable && (
+            <button type="button" disabled={Boolean(busy)} className="border border-line px-2 py-0.5" onClick={() => onUseArt(f.id, "add_extra")}>
+              Sell as an extra
+            </button>
+          )}
+        </>
+      );
+    }
+    return null;
+  };
   return (
     <li className={`border p-3 ${m.status === "delivered" || job.payableId === m.id ? "border-accent" : "border-line"}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -507,7 +606,7 @@ function MilestoneCard({
         </span>
       </div>
       {m.deliveryNote && <p className="mt-2 whitespace-pre-wrap text-muted">{m.deliveryNote}</p>}
-      <FileList files={files} canRemove={working} onRemove={onRemove} />
+      <FileList files={files} canRemove={working} onRemove={onRemove} actions={actions} />
       {author && job.payableId === m.id && (
         <button type="button" disabled={Boolean(busy)} className="mt-2 bg-accent px-4 py-2 text-paper disabled:opacity-50" onClick={onPay}>
           Pay {dollars(m.totalCents)} to start this milestone
