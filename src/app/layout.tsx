@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Source_Serif_4, DM_Sans } from "next/font/google";
 import { LocalTimezoneCookie } from "@/components/LocalTimezoneCookie";
 import { SiteAnalytics } from "@/components/SiteAnalytics";
+import { HelpButton } from "@/components/HelpButton";
 import "./globals.css";
 
 const display = Fraunces({
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LocalTimezoneCookie />
         <SiteAnalytics />
         {children}
+        <HelpButton />
       </body>
     </html>
   );

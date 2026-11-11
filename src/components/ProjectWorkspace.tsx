@@ -17,6 +17,7 @@ import { AudioStudio } from "@/components/AudioStudio";
 import { FormatPanel } from "@/components/FormatPanel";
 import { CoverPanel } from "@/components/CoverPanel";
 import { WORKSPACE_GROUPS, groupOf, isWorkspaceTab, tabLabel, type WorkspaceTab } from "@/lib/workspace-tabs";
+import { TAB_HELP, helpPath } from "@/lib/help-routes";
 import { ReferenceLookupPanel } from "@/components/ReferenceLookupPanel";
 import type { BibleEntry, Chapter, Project } from "@/lib/types";
 import { clientLocalDay } from "@/lib/local-day";
@@ -522,6 +523,15 @@ export function ProjectWorkspace({
                 );
               })}
             </nav>
+            <a
+              href={helpPath(TAB_HELP[tab])}
+              target="_blank"
+              rel="noopener"
+              className="border border-line px-3 py-1 text-muted hover:text-ink"
+              title={`How the ${tabLabel(tab)} tab works`}
+            >
+              Help
+            </a>
             <button
               type="button"
               onClick={() => setLookupOpen(true)}

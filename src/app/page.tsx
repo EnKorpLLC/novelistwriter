@@ -314,6 +314,9 @@ export default async function HomePage() {
             <Link href="/pricing" className="hover:text-ink">
               Pricing
             </Link>
+            <Link href="/help" className="hover:text-ink">
+              Help
+            </Link>
             <Link href="/contact" className="hover:text-ink">
               Contact
             </Link>

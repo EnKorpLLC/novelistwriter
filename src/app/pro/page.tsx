@@ -46,7 +46,7 @@ export default async function ProPage() {
         <h1 className="font-display text-3xl">Pro dashboard</h1>
         <p className="mt-1 text-sm text-muted">
           Your profile for authors who want to hire an editor, artist, or narrator. A pro account is free; authors pay our fee on top of your price.{" "}
-          <Link href="/pros" className="underline">
+          <Link href="/help/getting-started-pros" className="underline">
             How it works
           </Link>
         </p>

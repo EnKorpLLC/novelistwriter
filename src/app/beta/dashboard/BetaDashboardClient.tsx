@@ -8,6 +8,7 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { DashboardRoleNav } from "@/components/DashboardRoleNav";
 import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 import { ClaimReferral } from "@/components/ClaimReferral";
+import { GettingStarted } from "@/components/GettingStarted";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
 import { betaEndLabel, betaEndState, formatBetaEndDate } from "@/lib/beta-access";
 import { CompactTrust, ReaderBadgeList, RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
@@ -630,6 +631,17 @@ export default function BetaDashboardClient() {
                 <EmailOptInPrompt audience="reader" />
               </div>
             )}
+            <div className="mt-8">
+              <GettingStarted
+                id="reader"
+                title="Getting started"
+                steps={[
+                  { label: "Get your first beta read or advance copy", done: shelf.length + arcShelf.length > 0, href: "/beta/dashboard?tab=catalog", help: "find-books" },
+                  { label: "Follow an author you like", done: follows.length > 0, href: "/books", help: "follow-authors" },
+                  { label: "Finish a book and leave your feedback", done: stats.finished > 0, help: "reading-and-feedback" },
+                ]}
+              />
+            </div>
             <div className="mt-8 flex flex-wrap gap-6 border border-line px-5 py-4 font-ui text-sm">
               <span>
                 <span className="text-muted">Finished</span>{" "}

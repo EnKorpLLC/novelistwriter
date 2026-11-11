@@ -18,6 +18,7 @@ import { PassNotice } from "@/components/PassNotice";
 import { reconcileAuthorAccess } from "@/lib/studio-access";
 import { passNoticeFor } from "@/lib/pass-notice";
 import { shelfCountsFor, type ShelfCounts } from "@/lib/reader-library";
+import { GettingStarted, type ChecklistStep } from "@/components/GettingStarted";
 
 /** Readers' shelves and lists this book is on, as counts only. */
 function ShelfLine({ counts }: { counts?: ShelfCounts }) {
@@ -129,6 +130,17 @@ export default async function DashboardPage() {
   const goal = profile?.word_goal_daily ?? 500;
   const written = day?.words_written ?? 0;
 
+  const list = projects ?? [];
+  const first = list[0] ? `/project/${list[0].id}` : null;
+  const totalWords = (chapterRows ?? []).reduce((n, r) => n + (r.word_count || 0), 0);
+  const startSteps: ChecklistStep[] = [
+    { label: "Start your first book", done: list.length > 0, help: "start-a-book" },
+    { label: "Write your first 1,000 words", done: totalWords >= 1000, href: first || undefined, help: "writing-studio" },
+    { label: "Set up your public profile", done: Boolean(profile?.handle && profile?.bio), href: "/dashboard/profile", help: "author-site" },
+    { label: "Make a launch page public (Pro)", done: list.some((p) => p.launch_public || p.published), href: first ? `${first}?tab=publish` : undefined, help: "launch-page" },
+    { label: "Invite beta or advance readers (Studio)", done: list.some((p) => p.beta_ready || p.arc_open), href: first ? `${first}?tab=beta` : undefined, help: "beta-readers" },
+  ];
+
   return (
     <div className="min-h-screen">
       <ClaimReferral />
@@ -170,6 +182,9 @@ export default async function DashboardPage() {
             <EmailOptInPrompt audience="author" />
           </div>
         )}
+        <div className="mb-8">
+          <GettingStarted id="author" title="Getting started" steps={startSteps} />
+        </div>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-display text-3xl">Your projects</h1>

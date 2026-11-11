@@ -8,6 +8,7 @@ import { PLANS, PRICING_FAQ } from "@/lib/plans";
 import { contentPath } from "@/lib/content";
 import { GENRE_MIN_ITEMS, loadGenreHubs } from "@/lib/genre-pages";
 import { COMPARISONS, SWITCH_GUIDES } from "@/lib/compare";
+import { HELP_ARTICLES } from "@/lib/help-articles";
 
 /** Public marketing pages, always in the sitemap. */
 export const STATIC_PAGES = [
@@ -40,6 +41,8 @@ export const STATIC_PAGES = [
   { path: "/narrators", priority: 0.7, changeFrequency: "monthly" as const },
   { path: "/hire", priority: 0.7, changeFrequency: "weekly" as const },
   { path: "/isbn", priority: 0.6, changeFrequency: "monthly" as const },
+  { path: "/help", priority: 0.7, changeFrequency: "weekly" as const },
+  ...HELP_ARTICLES.map((a) => ({ path: `/help/${a.slug}`, priority: 0.5, changeFrequency: "monthly" as const })),
   { path: "/pros", priority: 0.7, changeFrequency: "weekly" as const },
   { path: "/leaving-amazon", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/refunds", priority: 0.3, changeFrequency: "yearly" as const },

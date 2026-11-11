@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { PLANS, type PlanCopy } from "@/lib/plans";
 import { SITE_TEXT_BY_KEY, mergeBlock, type TextBlock } from "@/lib/site-text-registry";
+import type { HelpArticle } from "@/lib/help-articles";
 
 /** Every saved edit, read once per page render. Empty (built-in wording) when the database isn't reachable. */
 const overrides = cache(async (): Promise<Map<string, TextBlock>> => {
@@ -30,4 +31,10 @@ export async function sitePlans(): Promise<PlanCopy[]> {
 
 export async function siteFaq(): Promise<{ q: string; a: string }[]> {
   return (await siteText("pricing.faq")).faq || [];
+}
+
+/** A help article with your edited wording. */
+export async function siteHelp(a: HelpArticle): Promise<HelpArticle> {
+  const b = await siteText(`help.${a.slug}`);
+  return { ...a, title: b.heading || a.title, summary: b.intro || a.summary, steps: b.list || a.steps, tips: b.items, faq: b.faq };
 }

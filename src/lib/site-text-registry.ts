@@ -1,4 +1,5 @@
 import { PLANS, PRICING_FAQ } from "@/lib/plans";
+import { HELP_ARTICLES, HELP_AUDIENCES } from "@/lib/help-articles";
 
 /**
  * Site wording you can edit in admin. Each block keeps its built-in default here; edits are stored in the
@@ -437,6 +438,17 @@ export const SITE_TEXT: TextEntry[] = [
   { key: "plans.pro", page: "Plans", label: "Pro plan", fields: ["intro", "list"], paths: PLAN_PATHS, default: { intro: plan("pro").lead, list: plan("pro").items } },
   { key: "plans.studio", page: "Plans", label: "Studio plan", fields: ["intro", "list"], paths: PLAN_PATHS, default: { intro: plan("studio").lead, list: plan("studio").items } },
   { key: "pricing.faq", page: "Pricing", label: "Pricing questions", fields: ["faq"], paths: ["/pricing", "/llms.txt"], default: { faq: PRICING_FAQ } },
+  // Help articles: heading = title, intro = summary, list = steps, items = tips, faq = questions
+  ...HELP_ARTICLES.map(
+    (a): TextEntry => ({
+      key: `help.${a.slug}`,
+      page: `Help: ${HELP_AUDIENCES.find((x) => x.id === a.audience)!.label}`,
+      label: a.title,
+      fields: ["heading", "intro", "list", "items", "faq"],
+      paths: ["/help", `/help/${a.slug}`],
+      default: { heading: a.title, intro: a.summary, list: a.steps, items: a.tips || [], faq: a.faq || [] },
+    })
+  ),
 ];
 
 export const SITE_TEXT_BY_KEY = new Map(SITE_TEXT.map((e) => [e.key, e]));

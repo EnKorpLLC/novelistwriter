@@ -22,6 +22,7 @@ export async function GET() {
 - [For readers](${appUrl("/readers")}): free beta reads and advance copies, reader badges, and profiles
 - [Reader library](${appUrl("/library")}): free shelves (to be read / TBR, reading, finished, did not finish, custom) with one-tap “Add to TBR” on book pages and the catalog (saving a book doesn't buy it; authors see only counts of TBRs, shelves, and lists, never who), series in order with new-release notices, Goodreads and StoryGraph import, CSV export, recommendations from readers with similar taste (no paid placement), reader lists, following readers, and content filters
 - [Pricing](${appUrl("/pricing")}): Free, Pro, and Studio plans with answers to common questions
+- [Help center](${appUrl("/help")}): step-by-step how-to articles for every feature, for authors, readers, narrators, and editors and artists
 - [Published books](${appUrl("/books")}): books by Novelist Writer authors
 - [Free author tools](${appUrl("/tools")}): KDP spine width and cover size calculator, novel word counts by genre, trim size guide, writing pace calculator
 - [Lifetime plans](${appUrl("/lifetime")}): capped one-time Lifetime Pro ($449) and Lifetime Studio ($1,099); the first 500 subscribers also keep founding member pricing (20% off) for life

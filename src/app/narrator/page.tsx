@@ -42,7 +42,11 @@ export default async function NarratorPage() {
       </header>
       <main className="font-ui mx-auto max-w-5xl px-6 py-10">
         <h1 className="font-display text-3xl">Narrator dashboard</h1>
-        <p className="mt-1 text-sm text-muted">Your narration account is free. Authors invite you to their books; you record with the script on screen, and your recordings stay on your computer.</p>
+        <p className="mt-1 text-sm text-muted">Your narration account is free. Authors invite you to their books; you record with the script on screen, and your recordings stay on your computer.{" "}
+          <Link href="/help/getting-started-narrators" className="text-accent underline">
+            New here? Start here
+          </Link>
+        </p>
         <NarratorDashboard />
       </main>
     </div>

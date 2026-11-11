@@ -40,6 +40,7 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
   {
     title: "Company",
     links: [
+      { href: "/help", label: "Help center" },
       { href: "/contact", label: "Contact" },
       { href: "/your-data", label: "Your data" },
       { href: "/refunds", label: "Refunds" },

@@ -218,12 +218,18 @@ export function AdminSiteText({ onNote }: { onNote: (msg: string | null) => void
             {blocks.some((b) => b.page === p && b.edited) ? " •" : ""}
           </button>
         ))}
-        {PAGE_LINK[page] && (
-          <a href={PAGE_LINK[page]} target="_blank" rel="noopener noreferrer" className="self-center text-xs text-accent underline">
+        {(PAGE_LINK[page] || page.startsWith("Help")) && (
+          <a href={PAGE_LINK[page] || "/help"} target="_blank" rel="noopener noreferrer" className="self-center text-xs text-accent underline">
             Open the page
           </a>
         )}
       </div>
+      {page.startsWith("Help") && (
+        <p className="mt-3 max-w-3xl text-xs text-muted">
+          In help articles, the heading is the title, the intro is the summary, the list is the numbered steps, the points are tips, and the questions show at
+          the end.
+        </p>
+      )}
       <ul className="mt-4 space-y-2">
         {blocks
           .filter((b) => b.page === page)

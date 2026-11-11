@@ -31,6 +31,7 @@ const MENUS: { label: string; items: { href: string; label: string; hint: string
       { href: "/dashboard/profile", label: "Public profile", hint: "Author site, bio, and links" },
       { href: "/billing", label: "Billing", hint: "Plan, credits, and invoices" },
       { href: "/settings", label: "Settings", hint: "Email, AI, and preferences" },
+      { href: "/help", label: "Help", hint: "How every feature works, step by step" },
     ],
   },
 ];
