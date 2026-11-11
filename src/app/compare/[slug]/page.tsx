@@ -4,7 +4,8 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { WriteHereCta } from "@/components/WriteHereCta";
 import { COMPARED_ON, COMPARISONS, FEATURES, NOVELIST_WRITER, type Mark } from "@/lib/compare";
-import { contentMetadata } from "@/lib/seo";
+import { breadcrumbJsonLd, contentMetadata, faqJsonLd } from "@/lib/seo";
+import { JsonLd } from "@/components/JsonLd";
 
 export function generateStaticParams() {
   return COMPARISONS.map((c) => ({ slug: c.slug }));
@@ -15,8 +16,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const c = COMPARISONS.find((x) => x.slug === slug);
   if (!c) return {};
   return contentMetadata({
-    title: `Novelist Writer vs ${c.name}`,
-    description: `A fair comparison of Novelist Writer and ${c.name}: features, price, and who each one suits best. Checked ${COMPARED_ON}.`,
+    title: `Novelist Writer vs ${c.name}: a ${c.name} alternative`,
+    description: `Looking for a ${c.name} alternative? A fair comparison of Novelist Writer and ${c.name}: features, price, and who each one suits best. Checked ${COMPARED_ON}.`,
     path: `/compare/${c.slug}`,
     kicker: "Compare",
   });
@@ -44,9 +45,24 @@ export default async function CompareOne({ params }: { params: Promise<{ slug: s
   const { slug } = await params;
   const c = COMPARISONS.find((x) => x.slug === slug);
   if (!c) notFound();
+  const faq = [
+    { q: `What is ${c.name}?`, a: c.what },
+    { q: `How much does ${c.name} cost?`, a: `${c.price} (checked ${COMPARED_ON}). Novelist Writer: ${NOVELIST_WRITER.price}.` },
+    { q: `When is ${c.name} the better choice?`, a: c.chooseThem.join(". ") + "." },
+    { q: `Is Novelist Writer a good ${c.name} alternative?`, a: `Choose Novelist Writer if: ${c.chooseUs.join("; ")}.` },
+  ];
 
   return (
     <div className="min-h-screen">
+      <JsonLd
+        data={[
+          faqJsonLd(faq),
+          breadcrumbJsonLd([
+            { name: "Compare", path: "/compare" },
+            { name: `Novelist Writer vs ${c.name}`, path: `/compare/${c.slug}` },
+          ]),
+        ]}
+      />
       <PublicHeader />
       <main className="mx-auto max-w-5xl px-6 py-12 md:px-10">
         <Link href="/compare" className="font-ui text-sm text-accent hover:underline">
