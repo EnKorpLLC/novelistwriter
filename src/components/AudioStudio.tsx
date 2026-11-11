@@ -10,6 +10,7 @@ import { AudioReview, isPickup, placeTake, rangeLabel, type AudioNote, type Chap
 import { AudioExport, creditsScripts, type AudioSettings, type AudioSlot } from "@/components/AudioExport";
 import { coverPublicUrl } from "@/lib/cover";
 import { NarratorPanel } from "@/components/NarratorPanel";
+import { AudioSellPanel } from "@/components/AudioSellPanel";
 
 type Take = StudioTake & { chapterId: string; peakDb: number | null; rmsDb: number | null; imported: boolean; recordedBy?: string };
 type RecordSummary = { sessions: number; recordedMs: number; takes: number; retakes: number; firstAt: string | null; lastAt: string | null };
@@ -336,12 +337,19 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
           </div>
 
           {!studio ? (
-            <div className="border border-accent p-4 text-sm">
-              <p>The audiobook studio is part of Studio: record it yourself or invite a narrator, then export files ready for ACX, Spotify, Google Play, and Kobo.</p>
-              <a href="/billing" className="mt-3 inline-block bg-accent px-4 py-2 text-xs text-paper">
-                See Studio
-              </a>
-            </div>
+            <>
+              <div className="border border-accent p-4 text-sm">
+                <p>The audiobook studio is part of Studio: record it yourself or invite a narrator, then export files ready for ACX, Spotify, Google Play, and Kobo.</p>
+                <a href="/billing" className="mt-3 inline-block bg-accent px-4 py-2 text-xs text-paper">
+                  See Studio
+                </a>
+              </div>
+              {/* Selling a finished audiobook is open to Pro too, wherever it was recorded */}
+              <section className="border border-line p-4 text-sm">
+                <h3 className="font-display text-lg">Sell an audiobook you already have</h3>
+                <AudioSellPanel projectId={projectId} store={null} />
+              </section>
+            </>
           ) : hint ? (
             <p className="text-sm text-danger">{hint}</p>
           ) : (
@@ -765,6 +773,14 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                   }}
                 />
               </section>
+
+              {/* 5. Sell the audiobook (the author's) */}
+              {role === "owner" && (
+                <section className="border border-line p-4 text-sm">
+                  <h3 className="font-display text-lg">5. Sell the audiobook</h3>
+                  <AudioSellPanel projectId={projectId} store={store} />
+                </section>
+              )}
             </>
           )}
           {note && <p className="text-sm text-ink">{note}</p>}

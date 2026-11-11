@@ -65,6 +65,23 @@ export function estimateShare(priceCents: number, tier: SellerTier) {
 
 export const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
 
+/** Per book: the audiobook for sale, and "ebook + audiobook" at one price. */
+export type AudiobookSale = { on: boolean; priceCents: number; bundlePriceCents: number | null; humanNarrated: boolean };
+
+export function normalizeAudiobookSale(raw: unknown): AudiobookSale {
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const price = cents(o.priceCents) ?? 1499;
+  return {
+    on: o.on === true,
+    priceCents: price,
+    bundlePriceCents: o.bundlePriceCents == null || o.bundlePriceCents === "" ? null : cents(o.bundlePriceCents),
+    humanNarrated: o.humanNarrated !== false,
+  };
+}
+
+/** A CBR MP3's length from its size (our exports are 192 kbps), in milliseconds. */
+export const mp3Ms = (bytes: number, kbps = 192) => Math.round((bytes * 8) / kbps);
+
 export type DiscountCode = {
   id: string;
   code: string;

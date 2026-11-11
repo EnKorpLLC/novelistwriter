@@ -16,6 +16,7 @@ import { LibraryButton } from "@/components/LibraryButton";
 import { BuyDirectButton } from "@/components/BuyDirectButton";
 import { buyerCountryAllowed, bundlesForBook, saleReadiness } from "@/lib/direct-sales";
 import { BuyBundleButton } from "@/components/BuyBundleButton";
+import { audiobookReadiness, signedFiles } from "@/lib/audiobook-sales";
 import { currentPrice, normalizeDirectSale } from "@/lib/direct-sale-rules";
 import { MagnetForm } from "@/components/MagnetForm";
 import { GuestListSignup } from "@/components/GuestListSignup";
@@ -108,6 +109,18 @@ export default async function LaunchPage({
   // Selling direct: only once it's out, set up, and for US visitors (others see the store links)
   const saleReady = recordFlag && book.stage === "published" ? await saleReadiness(admin, recordFlag).catch(() => null) : null;
   const direct = saleReady?.ok ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed() } : null;
+  // The audiobook, and the ebook + audiobook set, sold the same way
+  const audioReady = recordFlag && book.stage === "published" ? await audiobookReadiness(admin, recordFlag).catch(() => null) : null;
+  const audio = audioReady?.ok
+    ? {
+        priceCents: audioReady.sale.priceCents,
+        bundleCents: direct ? audioReady.bundleCents : null,
+        hours: (audioReady.durationMs / 3_600_000).toFixed(1),
+        humanNarrated: audioReady.sale.humanNarrated,
+        canBuy: direct?.canBuy ?? (await buyerCountryAllowed()),
+        sampleUrl: audioReady.sample ? (await signedFiles([audioReady.sample], book.id))[0].url : null,
+      }
+    : null;
   // Reader magnet (Studio): free for joining the list; also before release, for prequels and novellas
   const magnet = studio && recordFlag && normalizeDirectSale(recordFlag.direct_sale).magnet;
   const bundles = book.stage === "published" ? await bundlesForBook(admin, book.id).catch(() => []) : [];
@@ -245,6 +258,34 @@ export default async function LaunchPage({
             {/* One main action for the book's stage; everything else is quieter, so readers know where to start */}
             <div className="font-ui mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap [&>*]:text-center">
               {direct && !isOwner && <BuyDirectButton projectId={book.id} price={direct.price} canBuy={direct.canBuy} />}
+              {audio && !isOwner && (
+                <BuyDirectButton
+                  projectId={book.id}
+                  format="audiobook"
+                  quiet={Boolean(direct)}
+                  label="Buy the audiobook"
+                  note={`${audio.hours} hours${audio.humanNarrated ? " · human narrated" : ""} · MP3, yours to keep`}
+                  price={{ cents: audio.priceCents, regularCents: null }}
+                  canBuy={audio.canBuy}
+                />
+              )}
+              {audio?.bundleCents != null && direct && !isOwner && (
+                <BuyDirectButton
+                  projectId={book.id}
+                  format="both"
+                  quiet
+                  label="Ebook + audiobook"
+                  note="Read and listen, two real copies"
+                  price={{ cents: audio.bundleCents, regularCents: direct.price.cents + audio.priceCents }}
+                  canBuy={audio.canBuy}
+                />
+              )}
+              {audio?.sampleUrl && (
+                <span className="w-full text-left text-xs text-muted">
+                  Listen to a sample{audio.humanNarrated ? " (human narrated)" : ""}:
+                  <audio controls preload="none" src={audio.sampleUrl} className="mt-1 w-full max-w-md" />
+                </span>
+              )}
               {book.stage === "published" && !(direct && !isOwner && direct.canBuy) && mainStore && (
                 <a href={`/go/${book.id}?s=${encodeURIComponent(mainStore.label)}`} target="_blank" rel="noopener noreferrer" className="bg-accent px-5 py-2.5 text-sm text-paper hover:bg-accent-soft">
                   Buy on {mainStore.label}

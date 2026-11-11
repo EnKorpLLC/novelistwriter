@@ -56,6 +56,14 @@ export async function objectSize(key: string): Promise<number | null> {
   return Number(r.headers.get("content-length") || 0);
 }
 
+/** Copies a file inside the bucket, without it passing through us. */
+export async function copyObject(fromKey: string, toKey: string) {
+  const { aws, base } = client();
+  const bucket = config()!.bucket;
+  const r = await aws.fetch(objectUrl(base, toKey), { method: "PUT", headers: { "x-amz-copy-source": `/${bucket}/${fromKey.split("/").map(encodeURIComponent).join("/")}` } });
+  if (!r.ok) throw new Error(`Storage copy failed (${r.status})`);
+}
+
 export async function deleteObject(key: string) {
   const { aws, base } = client();
   const r = await aws.fetch(objectUrl(base, key), { method: "DELETE" });

@@ -164,7 +164,10 @@ async function transferPayout(admin: SupabaseClient, payout: { id: string; narra
 /** Daily: retry payouts waiting on a narrator's payout setup (or a failed transfer). */
 export async function payPendingNarratorPayouts(admin: SupabaseClient, opts: { timeBudgetMs: number }) {
   const stopAt = Date.now() + opts.timeBudgetMs;
-  const { data, error } = await admin.from("narration_payouts").select("id, narrator_id, amount_cents, payment_id, job_id").in("status", ["pending", "failed"]).limit(100);
+  // Royalties wait out the sale's refund window (available_at arrives with migration_audiobook_sales.sql)
+  let res = await admin.from("narration_payouts").select("id, narrator_id, amount_cents, payment_id, job_id").in("status", ["pending", "failed"]).lte("available_at", new Date().toISOString()).limit(100);
+  if (res.error) res = await admin.from("narration_payouts").select("id, narrator_id, amount_cents, payment_id, job_id").in("status", ["pending", "failed"]).limit(100);
+  const { data, error } = res;
   if (error) return 0;
   let n = 0;
   for (const p of data || []) {

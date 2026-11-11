@@ -13,6 +13,7 @@ import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { getStyle } from "@/lib/book/styles";
 import { buildStyledEpub } from "@/lib/book/epub";
 import { loadBookExtras, loadCover } from "@/lib/book/load";
+import { royaltyFor } from "@/lib/audiobook-sales";
 import {
   PAYOUT_MIN_CENTS,
   REFUND_WINDOW_DAYS,
@@ -296,13 +297,23 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
 
   const { data: projects } = await admin.from("projects").select("id, title, direct_sale").in("id", projectIds);
   const byId = new Map((projects || []).map((p) => [p.id as string, p]));
-  const books = projectIds.map((id) => ({ id, title: (byId.get(id)?.title as string) || meta.title || "Your ebook", weight: normalizeDirectSale(byId.get(id)?.direct_sale).priceCents }));
+  // An audiobook, or the ebook + audiobook set, is one row per format of the same book
+  const formats = meta.formats ? String(meta.formats).split(",") : null;
+  const books: { id: string; title: string; weight: number; format?: string }[] = formats
+    ? formats.map((f) => {
+        const base = (byId.get(projectIds[0])?.title as string) || meta.title || "Your book";
+        const ebookCents = Number(meta.ebook_cents) || 0;
+        return { id: projectIds[0], title: f === "audiobook" ? `${base} (audiobook)` : base, weight: f === "ebook" ? ebookCents : Math.max(1, priceCents - ebookCents), format: f };
+      })
+    : projectIds.map((id) => ({ id, title: (byId.get(id)?.title as string) || meta.title || "Your ebook", weight: normalizeDirectSale(byId.get(id)?.direct_sale).priceCents }));
   const weights = books.map((b) => b.weight);
   const prices = allocate(priceCents, weights);
   const taxes = allocate(taxCents, weights);
   const stripeFees = allocate(stripeFee, weights);
   const fees = allocate(fee, weights);
   const availableAt = new Date(Date.now() + REFUND_WINDOW_DAYS * DAY_MS).toISOString();
+  // A narrator on a royalty share gets their percent of the author's share of each audiobook sale
+  const royalty = formats?.includes("audiobook") ? await royaltyFor(admin, projectIds[0]).catch(() => null) : null;
 
   const rows = books.map((b, i) => ({
     project_id: b.id,
@@ -325,7 +336,14 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
     stripe_charge_id: charge?.id || null,
     available_at: availableAt,
     download_token: token(),
+    ...(b.format ? { format: b.format } : {}),
   }));
+  const royalties = rows.map((r, i) => (royalty && books[i].format === "audiobook" ? Math.max(0, Math.round((r.author_cents * royalty.pct) / 100)) : 0));
+  rows.forEach((r, i) => {
+    if (!royalties[i]) return;
+    r.author_cents -= royalties[i];
+    (r as Record<string, unknown>).royalty_cents = royalties[i];
+  });
   let { data: inserted, error } = await admin.from("book_purchases").insert(rows).select("id, title, project_id, download_token");
   // Before migration_direct_sales_3.sql: single books only, without the order columns
   if (error && /order_ref|bundle_id/.test(error.message) && rows.length === 1) {
@@ -344,6 +362,16 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
 
   await recordRevenue(admin, { stripeRef: `sale:${session.id}`, kind: "sales_fee", amountCents: fee, occurredAt: new Date().toISOString(), userId: authorId }).catch(() => null);
 
+  if (royalty) {
+    for (const [i, r] of inserted.entries()) {
+      if (!royalties[i]) continue;
+      await admin
+        .from("narration_payouts")
+        .insert({ job_id: royalty.jobId, narrator_id: royalty.narratorId, amount_cents: royalties[i], reason: "royalty", available_at: availableAt, purchase_id: r.id })
+        .then(() => null, () => null);
+    }
+  }
+
   if (meta.code_id) {
     const { data: c } = await admin.from("discount_codes").select("uses").eq("id", meta.code_id).maybeSingle();
     if (c) await admin.from("discount_codes").update({ uses: (c.uses || 0) + 1 }).eq("id", meta.code_id);
@@ -352,18 +380,21 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
 
   if (buyerId) for (const r of inserted) await addToLibrary(admin, buyerId, r.project_id, r.title, "purchased").catch(() => null);
 
-  const what = meta.bundle_id ? meta.title || `${inserted.length} books` : inserted[0].title;
+  const isAudio = Boolean(formats?.includes("audiobook"));
+  const what = meta.bundle_id ? meta.title || `${inserted.length} books` : formats && formats.length > 1 ? `${meta.title}: ebook + audiobook` : inserted[0].title;
   if (email) {
     const mail = renderEmail({
       heading: `Your copy of ${what}`,
       paragraphs: [
         meta.bundle_id
           ? `Thank you for buying ${what} direct from the author. All ${inserted.length} ebooks are ready to download from the page below, and the link keeps working whenever you need them again.`
-          : `Thank you for buying ${what} direct from the author. Your ebook is ready to download, and this link keeps working whenever you need it again.`,
+          : isAudio
+            ? `Thank you for buying ${what} direct from the author. Listen in your browser or download the MP3 files from the page below; the link keeps working whenever you need it again.`
+            : `Thank you for buying ${what} direct from the author. Your ebook is ready to download, and this link keeps working whenever you need it again.`,
         `You paid ${dollars(session.amount_total ?? 0)}${taxCents ? ` including ${dollars(taxCents)} tax` : ""}. Changed your mind? You can ask for a refund within ${REFUND_WINDOW_DAYS} days by replying to this email.`,
         buyerId ? "It's also in your Novelist Writer library." : "Create a free reader account with this email to keep it in your library, along with any book you buy later.",
       ],
-      button: { label: meta.bundle_id ? "Download your ebooks" : "Download your ebook", url: appUrl(`/purchase/${inserted[0].download_token}`) },
+      button: { label: meta.bundle_id ? "Download your ebooks" : isAudio ? "Listen and download" : "Download your ebook", url: appUrl(`/purchase/${inserted[0].download_token}`) },
     });
     await sendEmail({ to: email, subject: `Your copy of ${what}`, text: mail.text, html: mail.html }).catch(() => null);
   }
@@ -388,6 +419,13 @@ export async function adjustBookPurchaseForCharge(admin: SupabaseClient, charge:
   for (const p of open) {
     await admin.from("book_purchases").update({ status: reason, author_cents: -p.stripe_fee_cents, platform_fee_cents: 0, refunded_at: now }).eq("id", p.id);
   }
+  // A narrator's royalty on a refunded audiobook isn't owed (it hasn't been sent: royalties wait out the refund window)
+  await admin
+    .from("narration_payouts")
+    .update({ status: "cancelled", error: reason === "refunded" ? "Sale refunded" : "Sale disputed" })
+    .in("purchase_id", open.map((p) => p.id))
+    .in("status", ["pending", "failed"])
+    .then(() => null, () => null);
   const feeBack = open.reduce((n, p) => n + p.platform_fee_cents, 0);
   const ref = (open[0].order_ref as string | null) || open[0].stripe_session_id;
   await recordRevenue(admin, { stripeRef: `sale-${reason}:${ref}`, kind: "sales_fee", amountCents: -feeBack, occurredAt: now, userId: open[0].author_user_id }).catch(() => null);

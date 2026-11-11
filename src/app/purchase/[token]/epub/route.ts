@@ -9,8 +9,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   const { token } = await params;
   if (!/^[\w-]{20,64}$/.test(token)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const admin = createServiceClient();
-  const { data: purchase } = await admin.from("book_purchases").select("id, project_id, buyer_name, buyer_email, status, downloads").eq("download_token", token).maybeSingle();
-  if (!purchase) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { data: purchase } = await admin.from("book_purchases").select("*").eq("download_token", token).maybeSingle();
+  // An audiobook purchase is a different product; its link doesn't open the ebook
+  if (!purchase || purchase.format === "audiobook") return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (purchase.status !== "paid") return NextResponse.json({ error: "This purchase was refunded." }, { status: 410 });
   try {
     const { buf, fileName } = await buildPurchaseEpub(admin, purchase);

@@ -53,6 +53,7 @@ export const PLANS: PlanCopy[] = [
       "Serial release schedule: a log of where every chapter is posted, how many chapters you have written ahead on each site, and a reminder on release days",
       "Buttons for your own website and newsletter (Get the book, Notify me on release, Join my beta, Request an ARC, Read a sample) and “Read on Royal Road / Wattpad / Substack” links for serials, with every click counted",
       "Sell your ebook direct from your launch page: readers pay once and it goes straight to their library. You keep about 78% (10% + 15¢ per sale), and we handle sales tax. Sale prices with dates, discount codes you can share as a link, and bundles like a whole series at one price",
+      "Sell your audiobook direct too, alone or as ebook + audiobook at one price, at the same fees. Readers stream it or download the MP3s to keep",
       "Readers add your book to their TBR from your launch page and the catalog, and you see how many TBRs, shelves, and reader lists each book is on (counts only, never who)",
       "Your public writing record and badges, like “Written in Novelist Writer”, “No AI used on this book”, and writing challenge wins",
       "Share kit: ready-to-post copy for every network, a newsletter block, a square image, and link previews",
@@ -155,7 +156,7 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Can I make my own audiobook?",
-    a: "Yes, on Studio. Record it yourself in the browser, chapter by chapter, with the script on screen. Review it with the text alongside, fix lines with pickups, then export MP3 files mastered to ACX's specs (loudness, peaks, noise floor, room tone) with opening and closing credits, a retail sample, and a square cover. The files work at ACX, Spotify for Authors, Google Play, Kobo, and anywhere else, so you're never locked into one store. Your recordings stay on your computer; we never upload them. Selling the audiobook here is coming next.",
+    a: "Yes, on Studio. Record it yourself in the browser, chapter by chapter, with the script on screen. Review it with the text alongside, fix lines with pickups, then export MP3 files mastered to ACX's specs (loudness, peaks, noise floor, room tone) with opening and closing credits, a retail sample, and a square cover. The files work at ACX, Spotify for Authors, Google Play, Kobo, and anywhere else, so you're never locked into one store. Your recordings stay on your computer; we never upload them. Then sell it direct from your launch page, alone or with the ebook (selling is open on Pro too, for audiobooks recorded anywhere).",
   },
   {
     q: "How does hiring a narrator work, and what does it cost?",

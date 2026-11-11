@@ -436,6 +436,7 @@ create policy "beta_contacts_own" on public.beta_contacts for all using (
 -- See migration_admin_studio.sql for: the platform admin on Studio
 -- See migration_narrators.sql for: profiles.is_narrator, narrator_jobs
 -- See migration_review_copies.sql for: audio_review_copies, narrator_jobs checkpoint columns
+-- See migration_audiobook_sales.sql for: projects.audiobook_sale, audiobook_files, book_purchases.format / royalty_cents
 -- See migration_narration_payments.sql for: narration_payments, narration_payouts, narration_deliveries, narrator_jobs payment columns
 -- See migration_site_feedback.sql for: platform_messages.kind / page / attachments, the private site-feedback bucket
 -- See migration_launch_engine.sql for: projects.launch_plan, author_subscribers.release_project_ids, email_queue, buy_clicks, launch_team, author_thanks
