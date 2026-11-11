@@ -9,6 +9,7 @@ import { recordInvoice, recordRefund } from "@/lib/money";
 import { adjustForCharge, recordCommissionForInvoice } from "@/lib/affiliates";
 import { revokeLifetimeForCharge } from "@/lib/offers";
 import { adjustBookPurchaseForCharge, recordBookPurchase } from "@/lib/direct-sales";
+import { isPlatformAdminId } from "@/lib/platform-admin";
 import Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     ) {
       const sub = event.data.object as Stripe.Subscription;
       const userId = sub.metadata?.supabase_user_id;
-      if (userId) {
+      if (userId && !(await isPlatformAdminId(admin, userId))) {
         const active = sub.status === "active" || sub.status === "trialing";
         const tier = active ? ((sub.metadata?.tier as "pro" | "studio") || "pro") : "free";
         const { data: before } = await admin

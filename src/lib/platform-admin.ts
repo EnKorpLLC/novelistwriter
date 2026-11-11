@@ -28,6 +28,12 @@ export async function isPlatformAdmin(
   return Boolean(data?.is_platform_admin);
 }
 
+/** The admin account stays on Studio whatever Stripe says, so test purchases and cancels can't drop it. */
+export async function isPlatformAdminId(admin: SupabaseClient, userId: string): Promise<boolean> {
+  const { data } = await admin.from("profiles").select("email, is_platform_admin").eq("id", userId).maybeSingle();
+  return Boolean(data?.is_platform_admin) || isPlatformAdminEmail(data?.email as string | null);
+}
+
 /** For /api/admin/* routes. Returns the service client when the caller is the platform admin. */
 export async function requirePlatformAdmin(): Promise<
   | { ok: true; user: User; admin: SupabaseClient }

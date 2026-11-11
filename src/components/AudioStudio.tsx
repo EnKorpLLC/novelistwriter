@@ -44,7 +44,12 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
   const [elapsed, setElapsed] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const [playing, setPlaying] = useState<{ id: string; url: string } | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [playPos, setPlayPos] = useState(0);
+  const [playLen, setPlayLen] = useState(0);
+  const [micOn, setMicOn] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const player = useRef<HTMLAudioElement | null>(null);
   const recorder = useRef<Recorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const sessionId = useRef<string | null>(null);
@@ -106,15 +111,23 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
     const r = await Recorder.create(s);
     r.onLevel = (db) => setLevel(db);
     recorder.current = r;
+    setMicOn(true);
     setMics(await listMicrophones().catch(() => []));
     return r;
   }
 
-  async function switchMic(id: string) {
-    setMicId(id);
+  async function closeMic() {
     await recorder.current?.close();
     stream.current?.getTracks().forEach((t) => t.stop());
     recorder.current = null;
+    stream.current = null;
+    setMicOn(false);
+    setLevel(-120);
+  }
+
+  async function switchMic(id: string) {
+    setMicId(id);
+    await closeMic();
     await ensureMic(id).catch((e) => setNote(e instanceof Error ? e.message : "Couldn't open that microphone"));
   }
 
@@ -143,6 +156,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
   async function startRecording() {
     if (!store || !chapter) return;
     setNote(null);
+    stopPlayback();
     try {
       const r = await ensureMic();
       if (!sessionId.current) {
@@ -192,15 +206,28 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
   }
 
   async function play(t: Take) {
-    if (playing) URL.revokeObjectURL(playing.url);
+    if (playing?.id === t.id) return void player.current?.play();
+    stopPlayback();
     if (!store) return;
     const file = await readFile(store, chapterFolder(chapterIndex), t.fileName);
     if (!file) return setNote(`Couldn't find ${t.fileName} in ${store.label}. Was it moved or deleted?`);
+    setPlayPos(0);
+    setPlayLen(t.durationMs / 1000);
+    setPaused(false);
     setPlaying({ id: t.id, url: URL.createObjectURL(file) });
+  }
+
+  function stopPlayback() {
+    player.current?.pause();
+    if (playing) URL.revokeObjectURL(playing.url);
+    setPlaying(null);
+    setPaused(false);
+    setPlayPos(0);
   }
 
   async function removeTake(t: Take) {
     if (!window.confirm(`Delete take ${t.takeNo}? This removes the file from ${store?.label || "your computer"}.`)) return;
+    if (playing?.id === t.id) stopPlayback();
     if (store) await deleteFile(store, chapterFolder(chapterIndex), t.fileName);
     await post({ action: "delete_take", id: t.id }).catch(() => null);
     await load();
@@ -380,10 +407,18 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                   <button type="button" disabled={Boolean(checking) || recording} className="border border-line px-3 py-1.5 text-xs" onClick={() => void runCheck("voice")}>
                     {checking === "voice" ? "Read a few lines… 5 seconds" : "Check your level (read for 5 seconds)"}
                   </button>
+                  {micOn && (
+                    <button type="button" disabled={Boolean(checking) || recording} className="border border-line px-3 py-1.5 text-xs disabled:opacity-50" onClick={() => void closeMic()}>
+                      Turn the microphone off
+                    </button>
+                  )}
                 </div>
                 <div className="mt-3 h-2 w-full max-w-md overflow-hidden rounded-sm bg-line" aria-label="Input level">
-                  <div className={`h-full transition-[width] duration-75 ${meterColor}`} style={{ width: `${recorder.current ? meterPct : 0}%` }} />
+                  <div className={`h-full transition-[width] duration-75 ${meterColor}`} style={{ width: `${micOn ? meterPct : 0}%` }} />
                 </div>
+                <p className="mt-1 text-xs text-muted">
+                  {micOn ? "The microphone is on. Turn it off when you're done; it comes back on when you record." : "The microphone is off. It turns on when you run a check or record."}
+                </p>
                 {roomCheck &&
                   roomAdvice(roomCheck.levels, roomCheck.kind).map((a) => (
                     <p key={a.message} className={`mt-2 text-xs ${a.ok ? "text-accent" : "text-danger"}`}>
@@ -402,6 +437,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                     value={chapterId}
                     disabled={recording}
                     onChange={(e) => {
+                      stopPlayback();
                       setChapterId(e.target.value);
                       setFromSentence(0);
                     }}
@@ -476,9 +512,20 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                                   <span className="text-muted"> · {mmss(t.durationMs)}</span>
                                 </span>
                                 <span className="flex gap-2">
-                                  <button type="button" className="text-accent underline" onClick={() => void play(t)}>
-                                    Play
-                                  </button>
+                                  {playing?.id === t.id && !paused ? (
+                                    <button type="button" className="text-accent underline" onClick={() => player.current?.pause()}>
+                                      Pause
+                                    </button>
+                                  ) : (
+                                    <button type="button" className="text-accent underline" onClick={() => void play(t)}>
+                                      {playing?.id === t.id ? "Resume" : "Play"}
+                                    </button>
+                                  )}
+                                  {playing?.id === t.id && (
+                                    <button type="button" className="underline" onClick={stopPlayback}>
+                                      Stop
+                                    </button>
+                                  )}
                                   {!t.chosen && (
                                     <button type="button" className="underline" onClick={() => void post({ action: "choose_take", id: t.id }).then(load)}>
                                       Use
@@ -493,7 +540,36 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                                 {t.fromSentence > 0 ? `Pickup from “${(sentences[t.fromSentence]?.text || "").slice(0, 40)}…”` : "Whole chapter"}
                                 {t.peakDb != null && t.peakDb > -3 ? " · too loud in places" : ""}
                               </p>
-                              {playing?.id === t.id && <audio src={playing.url} controls autoPlay className="mt-1 w-full" />}
+                              {playing?.id === t.id && (
+                                <div className="mt-1 flex items-center gap-2">
+                                  <audio
+                                    ref={player}
+                                    src={playing.url}
+                                    autoPlay
+                                    onPlay={() => setPaused(false)}
+                                    onPause={() => setPaused(true)}
+                                    onEnded={stopPlayback}
+                                    onTimeUpdate={(e) => setPlayPos(e.currentTarget.currentTime)}
+                                    onLoadedMetadata={(e) => Number.isFinite(e.currentTarget.duration) && setPlayLen(e.currentTarget.duration)}
+                                  />
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={playLen || 0}
+                                    step={0.1}
+                                    value={Math.min(playPos, playLen)}
+                                    onChange={(e) => {
+                                      if (player.current) player.current.currentTime = Number(e.target.value);
+                                      setPlayPos(Number(e.target.value));
+                                    }}
+                                    aria-label={`Position in take ${t.takeNo}`}
+                                    className="min-w-0 flex-1 accent-[var(--accent)]"
+                                  />
+                                  <span className="shrink-0 tabular-nums text-muted">
+                                    {mmss(playPos * 1000)} / {mmss(playLen * 1000)}
+                                  </span>
+                                </div>
+                              )}
                             </li>
                           ))}
                         </ul>

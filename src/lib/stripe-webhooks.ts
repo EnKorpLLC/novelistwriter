@@ -7,6 +7,7 @@ import { grantReferralRewardForPurchase } from "@/lib/referral";
 import { onSubscriptionTierChange } from "@/lib/studio-pass";
 import { recordCheckout } from "@/lib/money";
 import { applyLifetimePurchase, markFoundingMember } from "@/lib/offers";
+import { isPlatformAdminId } from "@/lib/platform-admin";
 
 async function resolveUserId(session: Stripe.Checkout.Session): Promise<string | null> {
   if (session.metadata?.supabase_user_id) return session.metadata.supabase_user_id;
@@ -129,7 +130,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session):
   }
 
   if (kind === "subscribe") {
-    const tier = (session.metadata?.tier || "pro") as "pro" | "studio";
+    const tier = (await isPlatformAdminId(admin, userId)) ? "studio" : ((session.metadata?.tier || "pro") as "pro" | "studio");
     const { data: before } = await admin
       .from("credit_balances")
       .select("subscription_tier")

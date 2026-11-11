@@ -191,7 +191,9 @@ export async function GET(req: Request) {
     traffic(admin, sinceDay, newProfiles),
     count(admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_author", true)),
     count(admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_beta_reader", true)),
-    fetchAll<{ subscription_tier: string }>((f, t) => admin.from("credit_balances").select("subscription_tier").range(f, t)),
+    fetchAll<{ subscription_tier: string }>((f, t) =>
+      admin.from("credit_balances").select("subscription_tier").neq("user_id", auth.user.id).range(f, t)
+    ),
     count(admin.from("credit_balances").select("user_id", { count: "exact", head: true }).gt("pass_active_until", nowIso)),
     count(admin.from("profiles").select("id", { count: "exact", head: true }).eq("ai_disabled", true)),
     count(admin.from("projects").select("id", { count: "exact", head: true })),
