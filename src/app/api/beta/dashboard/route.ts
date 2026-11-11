@@ -34,7 +34,7 @@ export async function GET() {
 
   const [{ data: profile }, { data: byUser }, { data: byEmail }, { data: readyProjects }] =
     await Promise.all([
-      supabase.from("profiles").select("is_author, is_beta_reader, display_name").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
       admin
         .from("beta_invites")
         .select(

@@ -127,6 +127,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const { count } = await admin.from("chapters").select("id", { count: "exact", head: true }).eq("project_id", id);
         const { count: approved } = await admin.from("audio_chapters").select("chapter_id", { count: "exact", head: true }).eq("project_id", id).eq("status", "approved");
         if ((approved || 0) < (count || 0)) return NextResponse.json({ error: "Approve every chapter first." }, { status: 409 });
+        // The fee is based on the review copies' lengths, so every chapter needs one (or it would count as zero minutes)
+        const [{ data: chs }, { data: copies }] = await Promise.all([
+          admin.from("chapters").select("id, title, sort_order").eq("project_id", id).order("sort_order"),
+          admin.from("audio_review_copies").select("chapter_id").eq("project_id", id),
+        ]);
+        const heard = new Set((copies || []).map((c) => c.chapter_id as string));
+        const missing = (chs || []).filter((c) => !heard.has(c.id as string));
+        if (missing.length) {
+          const names = missing.slice(0, 3).map((c) => (c.title as string)?.trim() || `Chapter ${(Number(c.sort_order) || 0) + 1}`).join(", ");
+          return NextResponse.json({ error: `Your narrator hasn't sent a review copy of ${names}${missing.length > 3 ? ` and ${missing.length - 3} more` : ""}. Ask them to send it so the finished length (and the fee) is right.` }, { status: 409 });
+        }
         // Lock in the finished length the fee is based on
         await admin.from("narrator_jobs").update({ finished_ms: await finishedMs(admin, id) }).eq("id", job.id);
         const { data: fresh } = await admin.from("narrator_jobs").select("*").eq("id", job.id).single();

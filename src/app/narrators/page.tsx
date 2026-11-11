@@ -27,7 +27,7 @@ const SECTIONS: { t: string; d: string[] }[] = [
   {
     t: "The agreement, in plain words",
     d: [
-      "Pay per finished hour (the length of the final, approved audio) or a royalty share. A royalty share only covers audiobook sales made here on Novelist Writer, paid to you monthly; sales on Audible and other stores pay the author directly, so the agreement says plainly that they aren't shared.",
+      "Pay per finished hour (the length of the final, approved audio) or a royalty share. A royalty share only covers audiobook sales made here on Novelist Writer, paid to you as each sale clears its 14-day refund window; sales on Audible and other stores pay the author directly, so the agreement says plainly that they aren't shared.",
       "It also sets the revision rounds included (two by default), the deadline, and a cancellation fee. Fixing your own slips is always included; changes to the text after you've recorded it aren't.",
     ],
   },

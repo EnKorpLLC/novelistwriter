@@ -87,7 +87,7 @@ export function agreementText(t: NarrationTerms, names: { book: string; author: 
   const pay =
     t.pay === "per_finished_hour"
       ? `${names.author} pays ${names.narrator} ${dollars(t.rateCents)} per finished hour of audio (the length of the final, approved files). At about ${t.estimatedHours} finished hours, that's about ${dollars(cost.fee)}. The final fee is based on the actual finished length. Novelist Writer's ${NARRATION_FEE_PCT}% fee (about ${dollars(cost.platform)}) is paid by ${names.author} on top, so ${names.narrator} receives the full rate.`
-      : `Instead of an up-front fee, ${names.narrator} receives ${t.sharePct}% of what ${names.author} earns from sales of this audiobook on Novelist Writer, for ${t.shareYears} years from release, paid monthly through Novelist Writer. Sales on other stores (Audible, Spotify, and so on) pay ${names.author} directly, so they can't be shared here and aren't part of this agreement.`;
+      : `Instead of an up-front fee, ${names.narrator} receives ${t.sharePct}% of what ${names.author} earns from sales of this audiobook on Novelist Writer, for ${t.shareYears} years from release, paid through Novelist Writer after each sale's 14-day refund window. Sales on other stores (Audible, Spotify, and so on) pay ${names.author} directly, so they can't be shared here and aren't part of this agreement.`;
   const out = [
     { heading: "The work", body: `${names.narrator} narrates the complete text of "${names.book}" as supplied by ${names.author}, chapter by chapter in the Novelist Writer studio, to the audio standards the studio checks (ACX's specifications).` },
     { heading: "Pay", body: pay },
