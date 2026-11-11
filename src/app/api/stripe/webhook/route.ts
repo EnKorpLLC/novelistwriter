@@ -10,6 +10,7 @@ import { adjustForCharge, recordCommissionForInvoice } from "@/lib/affiliates";
 import { revokeLifetimeForCharge } from "@/lib/offers";
 import { adjustBookPurchaseForCharge, recordBookPurchase } from "@/lib/direct-sales";
 import { disputeNarrationCharge, recordNarrationPayment } from "@/lib/narration-money";
+import { disputeMarketCharge, recordMarketPayment } from "@/lib/market-jobs";
 import { isPlatformAdminId } from "@/lib/platform-admin";
 import Stripe from "stripe";
 
@@ -35,7 +36,11 @@ export async function POST(req: Request) {
 
   try {
     const completed = event.type === "checkout.session.completed" ? (event.data.object as Stripe.Checkout.Session) : null;
-    if (completed?.metadata?.kind === "narration") {
+    if (completed?.metadata?.kind === "market") {
+      // Marketplace milestones: the pro's money, held until the author approves the delivery
+      const result = await recordMarketPayment(admin, completed.id);
+      if (!result.ok) console.error("stripe webhook: market payment not recorded", event.id, result.skipped);
+    } else if (completed?.metadata?.kind === "narration") {
       // Narrator deposits and balances: mostly the narrator's money, held and paid out through Connect
       const result = await recordNarrationPayment(admin, completed.id);
       if (!result.ok) console.error("stripe webhook: narration payment not recorded", event.id, result.skipped);
@@ -172,6 +177,11 @@ export async function POST(req: Request) {
         await disputeNarrationCharge(admin, chargeId);
       } catch (err) {
         console.error("narration dispute handling failed", chargeId, err);
+      }
+      try {
+        await disputeMarketCharge(admin, chargeId);
+      } catch (err) {
+        console.error("market dispute handling failed", chargeId, err);
       }
     }
   } catch (err) {

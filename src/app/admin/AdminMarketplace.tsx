@@ -23,9 +23,11 @@ type Pro = {
   portfolio: { id: string; title: string; note: string; url?: string; imageUrl?: string | null; before?: string; after?: string }[];
   portfolioCount: number;
 };
+type Dispute = { jobId: string; title: string; note: string; openMilestone: { title: string; proCents: number; status: string } | null; updatedAt: string };
 type Data = {
   hiringLive: boolean;
   types: MarketTypeStatus[];
+  disputes?: Dispute[];
   pros: Pro[];
   invites: { email: string; type: string; skipQueue: boolean; accepted: boolean; createdAt: string }[];
   migrationNeeded?: boolean;
@@ -33,6 +35,57 @@ type Data = {
 };
 
 const label = (id: string) => MARKET_TYPES.find((t) => t.id === id)?.label || id;
+
+/** One dispute: refund some or all of the open milestone (the rest goes to the pro), then resume or close the job. */
+function DisputeRow({ d, onResolve }: { d: Dispute; onResolve: (body: Record<string, unknown>, done: string) => void }) {
+  const total = d.openMilestone ? d.openMilestone.proCents + Math.round(d.openMilestone.proCents * 0.1) : 0;
+  const [refund, setRefund] = useState("0");
+  const [note, setNote] = useState("");
+  const [close, setClose] = useState(false);
+  return (
+    <li className="space-y-2">
+      <p>
+        <a href={`/hire/job/${d.jobId}`} className="text-ink underline">
+          {d.title}
+        </a>{" "}
+        <span className="text-xs text-muted">· {new Date(d.updatedAt).toLocaleDateString()}</span>
+      </p>
+      <p className="whitespace-pre-wrap text-muted">{d.note}</p>
+      {d.openMilestone ? (
+        <p className="text-xs">
+          Open milestone: {d.openMilestone.title} ({d.openMilestone.status}), ${(total / 100).toFixed(2)} paid by the author, ${(d.openMilestone.proCents / 100).toFixed(2)} of it the pro&apos;s.
+        </p>
+      ) : (
+        <p className="text-xs text-muted">No paid milestone is open.</p>
+      )}
+      <div className="flex flex-wrap items-end gap-2 text-xs">
+        {d.openMilestone && (
+          <label>
+            Refund to the author ($)
+            <input value={refund} onChange={(e) => setRefund(e.target.value)} inputMode="decimal" className="mt-1 block w-24 border border-line bg-paper px-2 py-1" />
+          </label>
+        )}
+        <label className="flex items-center gap-1 pb-1">
+          <input type="checkbox" checked={close} onChange={(e) => setClose(e.target.checked)} /> Close the job
+        </label>
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What we decided (both sides see this)" className="w-full max-w-md border border-line bg-paper px-2 py-1" />
+        <button
+          type="button"
+          className="bg-accent px-3 py-1.5 text-paper"
+          onClick={() => {
+            const cents = Math.round(Number(refund.replace(/[^0-9.]/g, "")) * 100) || 0;
+            if (window.confirm(cents ? `Refund $${(cents / 100).toFixed(2)} and pay the pro the rest?` : "Pay the pro in full?")) onResolve({ refundCents: cents, close, note }, "Settled.");
+          }}
+        >
+          Settle
+        </button>
+      </div>
+      {d.openMilestone && (
+        <p className="text-[11px] text-muted">A refund under the full amount pays the pro the rest of their share. The full amount (${(total / 100).toFixed(2)}) refunds it all.</p>
+      )}
+    </li>
+  );
+}
 
 /** Recruiting for the marketplace: how each type is filling up, applications to review, and invites. */
 export function AdminMarketplace({ onNote }: { onNote: (msg: string | null) => void }) {
@@ -65,6 +118,16 @@ export function AdminMarketplace({ onNote }: { onNote: (msg: string | null) => v
 
   return (
     <div className="mt-6 space-y-10 text-sm">
+      {(data.disputes || []).length > 0 && (
+        <section className="border border-danger/40 p-4">
+          <h2 className="font-display text-xl">Disputes ({data.disputes!.length})</h2>
+          <ul className="mt-3 space-y-4">
+            {data.disputes!.map((d) => (
+              <DisputeRow key={d.jobId} d={d} onResolve={(body, done) => void post({ action: "resolve", jobId: d.jobId, ...body }, done)} />
+            ))}
+          </ul>
+        </section>
+      )}
       <section>
         <h2 className="font-display text-xl">Types</h2>
         <p className="mt-1 text-xs text-muted">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { HIRING_LIVE, MARKET_HINT, invitePro, reviewPro, signPortfolio, typeStatuses, type ProRow } from "@/lib/marketplace";
 import { isMarketType } from "@/lib/market-types";
+import { resolveDispute } from "@/lib/market-jobs";
 
 /** Every type's counts and settings, applications to review, approved pros, and invites sent. */
 export async function GET() {
@@ -42,9 +43,24 @@ export async function GET() {
       portfolioCount: Array.isArray(r.portfolio) ? r.portfolio.length : 0,
     }))
   );
+  // Disputes, with the open milestone's amount (null before migration_market_jobs.sql)
+  const { data: disputed } = await admin.from("market_jobs").select("id, title, market_type, author_id, pro_id, dispute_note, updated_at").eq("status", "disputed").limit(50);
+  const disputes = await Promise.all(
+    (disputed || []).map(async (j) => {
+      const { data: ms } = await admin.from("market_milestones").select("title, pro_cents, status").eq("job_id", j.id).in("status", ["paid", "delivered", "changes"]).limit(1);
+      return {
+        jobId: j.id as string,
+        title: j.title as string,
+        note: (j.dispute_note as string) || "",
+        openMilestone: ms?.[0] ? { title: ms[0].title as string, proCents: ms[0].pro_cents as number, status: ms[0].status as string } : null,
+        updatedAt: j.updated_at as string,
+      };
+    })
+  );
   return NextResponse.json({
     hiringLive: HIRING_LIVE,
     types,
+    disputes,
     pros,
     invites: (invites || []).map((i) => ({ email: i.email, type: i.market_type, skipQueue: i.skip_queue, accepted: Boolean(i.accepted_at), createdAt: i.created_at })),
   });
@@ -52,6 +68,7 @@ export async function GET() {
 
 /**
  *   { action: "review", userId, decision: "approve" | "decline" | "changes", note }
+ *   { action: "resolve", jobId, refundCents, close, note }   (a dispute: refund some or all of the open milestone, pay the rest)
  *   { action: "remove", userId, note }
  *   { action: "setting", type, threshold?, override? }
  *   { action: "invite", email, type, skipQueue, note }
@@ -64,6 +81,10 @@ export async function POST(req: Request) {
   try {
     if (b.action === "review" && (b.decision === "approve" || b.decision === "decline" || b.decision === "changes")) {
       await reviewPro(admin, String(b.userId || ""), b.decision, String(b.note || ""));
+      return NextResponse.json({ ok: true });
+    }
+    if (b.action === "resolve") {
+      await resolveDispute(admin, String(b.jobId || ""), { refundCents: Number(b.refundCents) || 0, close: b.close === true, note: String(b.note || "").trim().slice(0, 1000) });
       return NextResponse.json({ ok: true });
     }
     if (b.action === "remove") {

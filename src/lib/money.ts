@@ -133,7 +133,7 @@ export async function recordCheckout(admin: SupabaseClient, session: Stripe.Chec
   if (session.mode !== "payment" || session.payment_status !== "paid") return;
   const kind = session.metadata?.kind;
   // Book sales and narration payments are mostly someone else's money; only our fee is recorded, as sales_fee
-  if (kind === "book_purchase" || kind === "narration") return;
+  if (kind === "book_purchase" || kind === "narration" || kind === "market") return;
   await recordRevenue(admin, {
     stripeRef: `checkout:${session.id}`,
     kind: kind === "project_unlock" ? "project_unlock" : kind === "credits" || !kind ? "credits" : "other",
@@ -154,6 +154,9 @@ export async function recordRefund(admin: SupabaseClient, refund: Stripe.Refund)
     // Narration refunds record our share themselves (lib/narration-money.ts)
     const { data: narration } = await admin.from("narration_payments").select("id").eq("stripe_payment_intent", pi).limit(1);
     if (narration?.length) return;
+    // So do marketplace refunds (lib/market-jobs.ts)
+    const { data: market } = await admin.from("market_payments").select("id").eq("stripe_payment_intent", pi).limit(1);
+    if (market?.length) return;
   }
   await recordRevenue(admin, {
     stripeRef: `refund:${refund.id}`,

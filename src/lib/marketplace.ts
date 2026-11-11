@@ -2,8 +2,8 @@ import "server-only";
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { appUrl } from "@/lib/stripe";
-import { renderEmail } from "@/lib/email";
-import { enqueueEmails, type QueuedEmail } from "@/lib/email-queue";
+import { renderEmail, sendEmail } from "@/lib/email";
+import { enqueueEmails, processEmailQueue, type QueuedEmail } from "@/lib/email-queue";
 import { notifyUser } from "@/lib/notifications";
 import { signedDownloadUrl } from "@/lib/r2";
 import {
@@ -18,11 +18,8 @@ import {
 
 export const MARKET_HINT = "The marketplace needs a database update. Run supabase/migration_marketplace.sql in the Supabase SQL editor.";
 
-/**
- * Hiring (quotes, agreements, milestone payments, delivery) isn't built yet. Until it is, a type with enough
- * pros shows as "opening soon" and its waitlist waits; turn this on when hiring ships.
- */
-export const HIRING_LIVE = false;
+/** Hiring from the directory is built; a type still opens only when it has enough approved pros (or the admin forces it). */
+export const HIRING_LIVE = true;
 
 export const newCode = () => randomBytes(9).toString("base64url");
 
@@ -201,7 +198,7 @@ export async function emailNewApplication(admin: SupabaseClient, name: string, t
     paragraphs: [`${name || "Someone"} applied as: ${labels}.`],
     button: { label: "Review it", url: appUrl("/admin?tab=marketplace") },
   });
-  await enqueueEmails(admin, [{ to: adminEmail(), subject: `Marketplace application: ${name || "new pro"}`, html: mail.html, text: mail.text }]);
+  await sendEmail({ to: adminEmail(), subject: `Marketplace application: ${name || "new pro"}`, html: mail.html, text: mail.text }).catch(() => null);
 }
 
 /** Approve, decline, or ask for changes; the pro hears why. Founding pros are the ones approved before their type opens. */
@@ -245,8 +242,52 @@ export async function invitePro(admin: SupabaseClient, opts: { email: string; ty
     ],
     button: { label: "Join as a founding pro", url: appUrl(`/pros/join?invite=${code}`) },
   });
-  await enqueueEmails(admin, [{ to: opts.email, subject: `Join Novelist Writer as a founding ${t.label.toLowerCase()}`, html: mail.html, text: mail.text }]);
+  const sent = await sendEmail({ to: opts.email, subject: `Join Novelist Writer as a founding ${t.label.toLowerCase()}`, html: mail.html, text: mail.text }).catch(() => null);
+  if (!sent?.ok) throw new Error("The invite was saved, but the email didn't send. Check email settings, then try again.");
   return code;
+}
+
+export type DirectoryPro = {
+  userId: string;
+  name: string;
+  headline: string;
+  bio: string;
+  genres: string[];
+  rateNote: string;
+  turnaroundNote: string;
+  website: string;
+  founding: boolean;
+  specialties: string[];
+  completed: number;
+  portfolio: (PortfolioItem & { imageUrl: string | null })[];
+};
+
+/** Approved pros for a type, founding pros first, then by completed jobs. Images are short-lived links. */
+export async function directoryPros(admin: SupabaseClient, type: MarketTypeId, opts: { withPortfolio?: boolean; userId?: string } = {}): Promise<DirectoryPro[]> {
+  let q = admin.from("pro_profiles").select("*").eq("status", "approved").contains("specialties", [type]);
+  if (opts.userId) q = q.eq("user_id", opts.userId);
+  const { data, error } = await q.limit(200);
+  if (error || !data?.length) return [];
+  const ids = data.map((r) => r.user_id as string);
+  const { data: done } = await admin.from("market_jobs").select("pro_id").in("pro_id", ids).eq("status", "completed");
+  const count = (id: string) => (done || []).filter((d) => d.pro_id === id).length;
+  const rows = (data as ProRow[]).map((r) => ({ r, completed: count(r.user_id) })).sort((a, b) => Number(b.r.founding) - Number(a.r.founding) || b.completed - a.completed);
+  return Promise.all(
+    rows.map(async ({ r, completed }) => ({
+      userId: r.user_id,
+      name: r.name,
+      headline: r.headline,
+      bio: r.bio,
+      genres: r.genres,
+      rateNote: r.rate_note,
+      turnaroundNote: r.turnaround_note,
+      website: r.website,
+      founding: r.founding,
+      specialties: r.specialties,
+      completed,
+      portfolio: opts.withPortfolio ? await signPortfolio(r.portfolio, r.user_id) : [],
+    }))
+  );
 }
 
 /** Daily: a type that just opened emails its waitlist and tells its pros. */
@@ -271,5 +312,6 @@ export async function announceOpenedTypes(admin: SupabaseClient) {
     await admin.from("market_waitlist").update({ notified_at: new Date().toISOString() }).in("id", (list || []).map((w) => w.id));
     sent += queue.length;
   }
+  if (sent) await processEmailQueue(admin, { timeBudgetMs: 15_000 }).catch(() => null);
   return sent;
 }

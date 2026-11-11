@@ -2,7 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStripe, appUrl } from "@/lib/stripe";
-import { renderEmail } from "@/lib/email";
+import { renderEmail, sendEmail } from "@/lib/email";
 import { notifyUser } from "@/lib/notifications";
 import { enqueueEmails, processEmailQueue, type QueuedEmail } from "@/lib/email-queue";
 import { adjustBookPurchaseForCharge } from "@/lib/direct-sales";
@@ -108,7 +108,7 @@ export async function refundPreorder(admin: SupabaseClient, row: Row, reason: "c
         "When it does come out, it'll be on the author's page.",
       ],
     });
-    await enqueueEmails(admin, [{ to: row.buyer_email, subject: `Refunded: your pre-order of ${row.title}`, html: mail.html, text: mail.text }]);
+    await sendEmail({ to: row.buyer_email, subject: `Refunded: your pre-order of ${row.title}`, html: mail.html, text: mail.text }).catch(() => null);
   }
   if (reason === "cancelled") {
     await notifyUser(admin, row.author_user_id, {
@@ -154,7 +154,10 @@ export async function notifyPreorderDateMoved(admin: SupabaseClient, projectId: 
       });
       return { to: r.buyer_email, subject: `New release date for ${r.title}`, html: mail.html, text: mail.text };
     });
-  if (queue.length) await enqueueEmails(admin, queue);
+  if (queue.length) {
+    await enqueueEmails(admin, queue);
+    await processEmailQueue(admin, { timeBudgetMs: 15_000 }).catch(() => null);
+  }
   return queue.length;
 }
 

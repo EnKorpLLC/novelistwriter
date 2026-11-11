@@ -10,6 +10,7 @@ import { autoApproveQuietChapters, payPendingNarratorPayouts, sweepDeliveries } 
 import { runSellerPayouts } from "@/lib/direct-sales";
 import { sweepPreorders } from "@/lib/preorders";
 import { announceOpenedTypes } from "@/lib/marketplace";
+import { autoApproveMarket, payPendingMarketPayouts, sweepMarketFiles } from "@/lib/market-jobs";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { emailRedAlarms } from "@/lib/money";
@@ -103,6 +104,9 @@ export async function GET(req: Request) {
   await sweepDeliveries(admin, { timeBudgetMs: 4_000 }).catch(() => 0);
   await sweepPreorders(admin, { timeBudgetMs: 6_000 }).catch(() => null);
   await announceOpenedTypes(admin).catch(() => 0);
+  await autoApproveMarket(admin).catch(() => 0);
+  await payPendingMarketPayouts(admin, { timeBudgetMs: 5_000 }).catch(() => 0);
+  await sweepMarketFiles(admin, { timeBudgetMs: 3_000 }).catch(() => 0);
   await remindSerialReleases(admin, (userId, title, body, href) => notifyUser(admin, userId, { type: "marketing_reminder", title, body, href })).catch(() => 0);
   // Affiliate commissions go out once a month
   if (new Date().getUTCDate() === 1) {

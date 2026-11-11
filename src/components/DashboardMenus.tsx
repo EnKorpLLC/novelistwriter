@@ -11,6 +11,7 @@ const MENUS: { label: string; items: { href: string; label: string; hint: string
       { href: "/dashboard/marketing", label: "Marketing", hint: "Posts, calendar, your marketing year, results" },
       { href: "/dashboard/cross-promo", label: "Swaps and promos", hint: "Newsletter swaps and group promos" },
       { href: "/dashboard/challenges", label: "Challenges", hint: "Verified writing challenges" },
+      { href: "/dashboard/hire", label: "Hire help", hint: "Editors, proofreaders, cover designers, artists" },
     ],
   },
   {

@@ -32,6 +32,95 @@ const STATUS: Record<string, string> = {
 };
 
 const newId = () => Math.random().toString(36).slice(2, 10);
+const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
+const JOB_STATUS: Record<string, string> = {
+  requested: "New request: send a quote",
+  quoted: "Quote sent",
+  agreed: "In progress",
+  completed: "Complete",
+  cancelled: "Cancelled",
+  declined: "You passed",
+  not_chosen: "Went to another pro",
+  disputed: "Paused (we're looking at it)",
+};
+
+/** Requests and jobs, newest activity first. */
+function ProJobs() {
+  const [jobs, setJobs] = useState<{ id: string; title: string; type: string; status: string; other: string }[] | null>(null);
+  useEffect(() => {
+    void fetch("/api/market/jobs")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((d) => setJobs(d?.working || []))
+      .catch(() => setJobs([]));
+  }, []);
+  if (!jobs?.length) return null;
+  return (
+    <section>
+      <h2 className="font-display text-xl">Requests and jobs</h2>
+      <ul className="mt-2 divide-y divide-line border-y border-line">
+        {jobs.map((j) => (
+          <li key={j.id}>
+            <a href={`/hire/job/${j.id}`} className="flex flex-wrap items-center justify-between gap-2 py-2 hover:text-accent">
+              <span>
+                <span className="text-ink">{j.title}</span>
+                <span className="text-xs text-muted">
+                  {" "}
+                  · {j.type} · {j.other}
+                </span>
+              </span>
+              <span className={`text-xs ${j.status === "requested" ? "text-accent" : "text-muted"}`}>{JOB_STATUS[j.status] || j.status}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Where marketplace pay goes: the same Stripe payout account narrators and sellers use. */
+function ProPayouts() {
+  const [d, setD] = useState<{ hasAccount: boolean; payoutsEnabled: boolean; paidCents: number; waitingCents: number; migrationNeeded?: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    void fetch("/api/pro/payouts")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then(setD)
+      .catch(() => null);
+  }, []);
+  async function go(action: "onboard" | "stripe_dashboard") {
+    setBusy(true);
+    setErr(null);
+    const r = await fetch("/api/pro/payouts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (r.ok && j.url) window.location.href = j.url;
+    else setErr(j.error || "Stripe isn't available right now.");
+  }
+  if (!d || d.migrationNeeded) return null;
+  return (
+    <section className="border border-line p-4">
+      <h2 className="font-display text-xl">Getting paid</h2>
+      {d.payoutsEnabled ? (
+        <p className="mt-1">
+          <span className="text-accent">✓ Payouts are set up.</span> {usd(d.paidCents)} paid to you so far{d.waitingCents ? `; ${usd(d.waitingCents)} on its way` : ""}.{" "}
+          <button type="button" className="text-accent underline" disabled={busy} onClick={() => void go("stripe_dashboard")}>
+            Open Stripe
+          </button>
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 text-muted">Set up payouts with Stripe (bank details and the tax info it needs) so approved milestones reach you right away.</p>
+          {d.waitingCents > 0 && <p className="mt-1 text-ink">{usd(d.waitingCents)} is waiting for you.</p>}
+          <button type="button" disabled={busy} className="mt-2 bg-accent px-4 py-2 text-paper disabled:opacity-60" onClick={() => void go("onboard")}>
+            {d.hasAccount ? "Finish payout setup" : "Set up payouts"}
+          </button>
+        </>
+      )}
+      {err && <p className="mt-1 text-danger">{err}</p>}
+    </section>
+  );
+}
 
 /** The pro's own page: profile and portfolio, application status, how their types are filling up, and their invite link. */
 export function ProDashboard() {
@@ -116,6 +205,8 @@ export function ProDashboard() {
 
   return (
     <div className="mt-6 space-y-8 text-sm">
+      <ProJobs />
+      <ProPayouts />
       <section className={`border p-4 ${p.status === "approved" ? "border-accent" : "border-line"}`}>
         <p className="text-ink">
           <strong>Status:</strong> {STATUS[p.status] || p.status}

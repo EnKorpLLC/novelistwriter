@@ -6,7 +6,7 @@ import { contentMetadata } from "@/lib/seo";
 import { NARRATION_FEE_PCT } from "@/lib/narration";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { typeStatuses } from "@/lib/marketplace";
+import { directoryPros, typeStatuses, type DirectoryPro } from "@/lib/marketplace";
 import { MARKET_TYPES } from "@/lib/market-types";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,10 @@ export default async function HirePage() {
     .then(() => typeStatuses(createServiceClient()))
     .catch(() => null);
   const byId = new Map((statuses || []).map((s) => [s.id, s]));
+  const openIds = (statuses || []).filter((s) => s.state === "open").map((s) => s.id);
+  const listed = new Map(
+    await Promise.all(openIds.map(async (id) => [id, await directoryPros(createServiceClient(), id).catch(() => [] as DirectoryPro[])] as const))
+  );
   return (
     <div className="min-h-screen">
       <PublicHeader />
@@ -47,7 +51,7 @@ export default async function HirePage() {
           {MARKET_TYPES.map((t) => {
             const s = byId.get(t.id);
             return (
-              <li key={t.id} id={t.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <li key={t.id} id={t.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="font-display text-xl text-ink">{t.plural}</p>
                   <p className="text-xs text-muted">{t.blurb}</p>
@@ -56,15 +60,46 @@ export default async function HirePage() {
                     {s && s.approved > 0 && s.state !== "open" ? ` · ${s.approved} founding ${s.approved === 1 ? "pro" : "pros"} so far` : ""}
                   </p>
                 </div>
-                <div className="shrink-0">
-                  <MarketWaitlist type={t.id} label={t.plural} signedIn={Boolean(user?.email)} />
-                </div>
+                {s?.state === "open" ? (
+                  <ul className="w-full space-y-2 sm:order-last">
+                    {(listed.get(t.id) || []).map((p) => (
+                      <li key={p.userId} className="flex flex-wrap items-baseline justify-between gap-2 border border-line px-3 py-2">
+                        <span className="min-w-0">
+                          <Link href={`/hire/pro/${p.userId}?type=${t.id}`} className="text-ink hover:text-accent">
+                            {p.name}
+                          </Link>
+                          {p.founding && <span className="ml-2 text-[11px] text-accent">Founding pro</span>}
+                          <span className="block text-xs text-muted">
+                            {p.headline}
+                            {p.rateNote ? ` · ${p.rateNote}` : ""}
+                            {p.completed ? ` · ${p.completed} done here` : ""}
+                          </span>
+                        </span>
+                        {t.id === "narration" ? (
+                          <span className="text-xs text-muted">Invite from your book&apos;s Audio tab</span>
+                        ) : (
+                          <Link href={`/dashboard/hire?type=${t.id}&pro=${p.userId}`} className="text-xs text-accent underline">
+                            Request a quote
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="shrink-0">
+                    <MarketWaitlist type={t.id} label={t.plural} signedIn={Boolean(user?.email)} />
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
         <p className="font-ui mt-6 text-sm text-muted">
-          Already working with someone? Narrators can be invited from your book&apos;s Audio tab today. Are you an editor or artist?{" "}
+          Already working with someone?{" "}
+          <Link href="/dashboard/hire" className="text-accent underline">
+            Hire your own editor or artist here
+          </Link>{" "}
+          today, with the same agreement and held payments; narrators are invited from your book&apos;s Audio tab. Are you an editor or artist?{" "}
           <Link href="/pros" className="text-accent underline">
             Join as a founding pro
           </Link>

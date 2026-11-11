@@ -200,6 +200,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
     a: "Yes, on Pro and Studio. Turn on pre-orders in a book's Sell tab once it has a release date; they open 90 days before. Readers pay at order and get the ebook in their library the moment you mark the book out now. They can cancel anytime before release, and if you move the date they're told and can keep or cancel. Anyone still waiting 30 days after their promised date is refunded automatically. Your share is paid after release, once the 14-day refund window passes.",
   },
   {
+    q: "How does hiring an editor or artist work?",
+    a: "On every plan, open Hire help from your dashboard. Invite an editor, proofreader, cover designer, illustrator, or map maker you already work with by email, or (once each kind opens) ask up to five pros from the directory. They quote in milestones with a written scope, deliverables, and included rounds of changes. You pay each milestone when it starts, plus our 10% fee shown on the quote, and we hold it until you approve the delivery; the pro gets their full price. If you don't answer a delivery in 14 days it counts as approved, and if something goes wrong we can step in. Every pro promises their work is human-made. [Hire help](/hire)",
+  },
+  {
     q: "Can I sell character art, maps, or bonus stories?",
     a: "Yes, as extras on Pro and Studio. Upload images, PDFs, EPUBs, MP3s, or a zip in a book's Sell tab, then sell each extra on its own, include it free with the ebook bought from you, or both. They show on your launch page, and readers download them to keep. Only sell art you made or have permission to sell: art made for your book often only covers using it in and around the book.",
   },

@@ -335,8 +335,8 @@ export async function autoApproveQuietChapters(admin: SupabaseClient) {
   return n;
 }
 
-/** Narrators get paid through the same kind of Stripe Express account sellers and affiliates use; one per person. */
-export async function narratorPayoutUrl(admin: SupabaseClient, userId: string, email: string | null) {
+/** Narrators and marketplace pros get paid through the same kind of Stripe Express account sellers and affiliates use; one per person. */
+export async function narratorPayoutUrl(admin: SupabaseClient, userId: string, email: string | null, returnPath = "/narrator") {
   const stripe = getStripe();
   const { data: existing } = await admin.from("seller_accounts").select("stripe_account_id").eq("user_id", userId).maybeSingle();
   let accountId = (existing?.stripe_account_id as string | null) || null;
@@ -350,13 +350,18 @@ export async function narratorPayoutUrl(admin: SupabaseClient, userId: string, e
       country: "US",
       email: email || undefined,
       capabilities: { transfers: { requested: true } },
-      business_profile: { product_description: "Audiobook narration through Novelist Writer", url: appUrl("/") },
+      business_profile: { product_description: "Narration, editing, and art for authors through Novelist Writer", url: appUrl("/") },
       metadata: { supabase_user_id: userId },
     });
     accountId = account.id;
   }
   await admin.from("seller_accounts").upsert({ user_id: userId, stripe_account_id: accountId });
-  const link = await stripe.accountLinks.create({ account: accountId, refresh_url: appUrl("/narrator?payouts=refresh"), return_url: appUrl("/narrator?payouts=done"), type: "account_onboarding" });
+  const link = await stripe.accountLinks.create({
+    account: accountId,
+    refresh_url: appUrl(`${returnPath}?payouts=refresh`),
+    return_url: appUrl(`${returnPath}?payouts=done`),
+    type: "account_onboarding",
+  });
   return link.url;
 }
 
