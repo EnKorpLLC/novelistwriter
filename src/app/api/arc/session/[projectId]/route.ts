@@ -14,6 +14,7 @@ import { recordReadingDay, rewardReaderJoin } from "@/lib/pass-rewards";
 import { recordBookDay } from "@/lib/reader-insights";
 import { createNotification } from "@/lib/beta-social";
 import { thanksReaders } from "@/lib/author-thanks";
+import { traceCode } from "@/lib/copy-guard";
 import {
   isArcDeadlinePassed,
   isArcWindowOpen,
@@ -179,16 +180,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     return NextResponse.json({ ...withUser, ...reader, access: "ended" });
   }
 
-  const { data: chapters } = await admin
-    .from("chapters")
-    .select("id, title, content_html, sort_order")
-    .eq("project_id", projectId)
-    .order("sort_order");
+  const [{ data: chapters }, { data: settings }] = await Promise.all([
+    admin.from("chapters").select("id, title, content_html, sort_order").eq("project_id", projectId).order("sort_order"),
+    admin.from("projects").select("*").eq("id", projectId).maybeSingle(),
+  ]);
 
   return NextResponse.json({
     ...withUser,
     ...reader,
     access: "active",
+    downloads: settings?.arc_downloads !== false,
+    readerMark: { label: [invite.display_name, invite.email].filter(Boolean).join(" · "), code: traceCode(invite.id) },
     currentChapterId: invite.current_chapter_id || chapters?.[0]?.id || null,
     chapters: (chapters || []).map((c) => ({
       id: c.id,

@@ -8,6 +8,7 @@ import type { MailingAddress } from "@/lib/arc";
 import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ReportConcern } from "@/components/ReportConcern";
 import { ReviewForm } from "@/components/ReviewForm";
+import { GuardedText, type ReaderMark } from "@/components/GuardedText";
 import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type ReviewLink = LabeledLink & { key: string };
@@ -42,6 +43,8 @@ type ArcData = {
   mailingAddress?: MailingAddress | null;
   currentChapterId?: string | null;
   chapters?: { id: string; title: string; content_html: string }[];
+  downloads?: boolean;
+  readerMark?: ReaderMark;
 };
 
 const EMPTY_ADDRESS: MailingAddress = {
@@ -532,27 +535,34 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
         <>
           <details className="font-ui mt-8 border border-line p-4 text-sm">
             <summary className="cursor-pointer text-ink">
-              Reading this ARC{due ? ` · read by ${due}` : ""} · download for your e-reader
+              Reading this ARC{due ? ` · read by ${due}` : ""}
+              {data.downloads !== false ? " · download for your e-reader" : ""}
             </summary>
             <div className="mt-3 space-y-3 text-muted">
               <p>
                 {due ? `Please finish by ${due}, then leave an honest review. ` : "Read at your own pace, then leave an honest review. "}
                 The author sees how far you&apos;ve read, never what you highlight in private.
               </p>
-              <div>
-                <a href={`/api/arc/epub/${projectId}`} className="inline-block bg-accent px-4 py-2 text-paper">
-                  Download for your e-reader (EPUB)
-                </a>
-                <p className="mt-1 text-xs">Your copy is marked with your name. Please don&apos;t share it.</p>
-              </div>
-              <div className="text-xs">
-                <p className="text-ink">Send it to your Kindle</p>
-                <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-                  <li>Download the EPUB above.</li>
-                  <li>Go to amazon.com/sendtokindle and drag the file in, or email it to your Kindle address (find it under Devices in your Amazon account).</li>
-                  <li>It shows up in your Kindle library in a few minutes. Kobo, Apple Books, and Google Play Books open the EPUB directly.</li>
-                </ol>
-              </div>
+              {data.downloads !== false ? (
+                <>
+                  <div>
+                    <a href={`/api/arc/epub/${projectId}`} className="inline-block bg-accent px-4 py-2 text-paper">
+                      Download for your e-reader (EPUB)
+                    </a>
+                    <p className="mt-1 text-xs">Your copy is marked with your name. Please don&apos;t share it.</p>
+                  </div>
+                  <div className="text-xs">
+                    <p className="text-ink">Send it to your Kindle</p>
+                    <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+                      <li>Download the EPUB above.</li>
+                      <li>Go to amazon.com/sendtokindle and drag the file in, or email it to your Kindle address (find it under Devices in your Amazon account).</li>
+                      <li>It shows up in your Kindle library in a few minutes. Kobo, Apple Books, and Google Play Books open the EPUB directly.</li>
+                    </ol>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs">The author asked that this advance copy be read here in your browser, so there&apos;s no download.</p>
+              )}
               <div className="border-t border-line pt-3 text-xs">
                 <p className="text-ink">Can&apos;t finish? That&apos;s okay.</p>
                 <p className="mt-1">Step away and let the author know, instead of going quiet. A short reason helps them, but it&apos;s optional.</p>
@@ -579,11 +589,13 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
             </label>
           )}
           <h2 className="font-display mt-6 text-2xl">{chapter?.title || "Chapter"}</h2>
-          <article
-            ref={articleRef}
-            className="manuscript-prose mt-4 max-w-none"
-            dangerouslySetInnerHTML={{ __html: chapter?.content_html || "<p>Empty</p>" }}
-          />
+          <GuardedText mark={data.readerMark}>
+            <article
+              ref={articleRef}
+              className="manuscript-prose mt-4 max-w-none"
+              dangerouslySetInnerHTML={{ __html: chapter?.content_html || "<p>Empty</p>" }}
+            />
+          </GuardedText>
           <div className="font-ui mt-10 flex flex-wrap justify-between gap-2 border-t border-line pt-6">
             <button
               type="button"

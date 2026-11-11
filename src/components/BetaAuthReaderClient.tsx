@@ -8,6 +8,7 @@ import { BetaFormFields } from "@/components/BetaFormFields";
 import type { BetaApplicationForm } from "@/lib/beta-form";
 import { betaEndLabel, betaEndState } from "@/lib/beta-access";
 import { highlightPassageInElement } from "@/lib/passage-highlight";
+import { GuardedText, type ReaderMark } from "@/components/GuardedText";
 import { FINAL_PROMPTS, KIND_OPENERS, chapterPrompts, type FeedbackBrief } from "@/lib/feedback-brief";
 import { ReportConcern } from "@/components/ReportConcern";
 import { ReviewForm } from "@/components/ReviewForm";
@@ -151,6 +152,7 @@ export function BetaAuthReaderClient({
   const [finishMsg, setFinishMsg] = useState("");
   const [brief, setBrief] = useState<FeedbackBrief | null>(null);
   const [authorUserId, setAuthorUserId] = useState("");
+  const [readerMark, setReaderMark] = useState<ReaderMark | null>(null);
 
   composingRef.current = pop?.composing ?? false;
 
@@ -169,9 +171,11 @@ export function BetaAuthReaderClient({
     reviewBody?: string | null;
     brief?: FeedbackBrief | null;
     authorUserId?: string;
+    readerMark?: ReaderMark;
   }) {
     const list = Array.isArray(data.chapters) ? data.chapters : [];
     setChapters(list);
+    setReaderMark(data.readerMark || null);
     setUnlocked(true);
     setGateNeedsApplication(false);
     if (data.title) setTitle(data.title);
@@ -828,10 +832,12 @@ export function BetaAuthReaderClient({
       </p>
 
       <h2 className="font-display mt-6 text-2xl">{chapter?.title || "Chapter"}</h2>
-      <BetaManuscript
-        html={chapter?.content_html || "<p>Empty</p>"}
-        articleRef={articleRef}
-      />
+      <GuardedText mark={readerMark}>
+        <BetaManuscript
+          html={chapter?.content_html || "<p>Empty</p>"}
+          articleRef={articleRef}
+        />
+      </GuardedText>
       {popEl}
 
       <div className="font-ui mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-6">

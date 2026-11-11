@@ -165,6 +165,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   ]);
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
   const chapterTitle = new Map((chapters || []).map((c) => [c.id, c.title]));
+  const { data: settings } = await admin.from("projects").select("*").eq("id", projectId).maybeSingle();
   const consentByEmail = await emailConsentByEmail(
     admin,
     (invites || []).map((i) => ({ email: i.email, userId: i.reader_user_id }))
@@ -186,6 +187,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     windowOpen: isArcWindowOpen(project),
     collectAddress: Boolean(project.arc_collect_address),
     reviewLinks: normalizeReviewLinks(project.arc_review_links),
+    downloads: settings?.arc_downloads !== false,
     invites: (invites || []).map((i) => ({
       id: i.id,
       email: i.email,
@@ -226,6 +228,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     deadline?: string | null;
     collectAddress?: boolean;
     reviewLinks?: unknown;
+    downloads?: boolean;
     email?: string;
     displayName?: string;
     inviteId?: string;
@@ -261,6 +264,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .eq("project_id", projectId)
       .eq("status", "active");
     return NextResponse.json({ ok: true, deadline, reviewLinks });
+  }
+
+  if (body.action === "saveDownloads") {
+    const { error } = await admin.from("projects").update({ arc_downloads: Boolean(body.downloads), updated_at: now }).eq("id", projectId);
+    if (error) {
+      const hint = error.message.includes("arc_downloads") ? "Database needs an update. Run supabase/migration_arc_downloads.sql in the Supabase SQL editor." : error.message;
+      return NextResponse.json({ error: hint }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, downloads: Boolean(body.downloads) });
   }
 
   if (body.action === "open") {

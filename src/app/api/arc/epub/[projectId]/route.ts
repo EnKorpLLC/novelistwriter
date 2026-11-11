@@ -7,12 +7,13 @@ import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { getStyle } from "@/lib/book/styles";
 import { buildStyledEpub } from "@/lib/book/epub";
 import { loadCover } from "@/lib/book/load";
+import { markParagraphs, traceCode } from "@/lib/copy-guard";
 
 export const maxDuration = 120;
 
 /**
  * L7: an ARC reader's own copy for their e-reader. Built on request (nothing stored) and marked with
- * their name and email, so a shared file traces back to them.
+ * their name and email, plus their hidden code in every paragraph, so a shared file traces back to them.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -25,6 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
   const admin = createServiceClient();
   const { data: project } = await admin.from("projects").select("*").eq("id", projectId).maybeSingle();
   if (!project || !isArcWindowOpen(project)) return NextResponse.json({ error: "This ARC isn't open." }, { status: 403 });
+  if (project.arc_downloads === false) return NextResponse.json({ error: "The author asked that this copy be read in the browser." }, { status: 403 });
   const email = String(user.email || "").toLowerCase();
   const { data: invites } = await admin
     .from("arc_invites")
@@ -41,6 +43,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     loadCover(admin, project),
   ]);
   const reader = invite.display_name || email;
+  const code = traceCode(invite.id);
   const notice = {
     matter_type: "front_custom",
     title: "Advance reader copy",
@@ -57,7 +60,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     details: normalizeDetails(project.book_details),
     format,
     styleHeadingFormat: style.headingFormat,
-    chapters: chapters || [],
+    chapters: (chapters || []).map((c) => ({ ...c, content_html: markParagraphs(c.content_html || "", code) })),
     // Review requests and newsletter pages belong in the final book, not the ARC
     matter: [notice, ...(matter || []).filter((m) => !["back_review_request", "back_newsletter"].includes(m.matter_type))],
   });

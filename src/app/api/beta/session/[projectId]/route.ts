@@ -11,6 +11,7 @@ import { linkInvitesForEmail } from "@/lib/beta-platform";
 import { joinAuthorAudience } from "@/lib/audience";
 import { recordReadingDay, rewardReaderJoin } from "@/lib/pass-rewards";
 import { recordBookDay } from "@/lib/reader-insights";
+import { traceCode } from "@/lib/copy-guard";
 import {
   enforceBetaAccessGates,
   findReaderInvite,
@@ -123,6 +124,7 @@ export async function GET(
     brief: normalizeBetaApplicationForm(project.beta_application_form).brief || null,
     authorUserId: project.user_id,
     inviteId: invite!.id,
+    readerMark: { label: [invite!.display_name, invite!.email].filter(Boolean).join(" · "), code: traceCode(invite!.id) },
     status: invite!.status,
     finishedAt: invite!.finished_at,
     endsAt: project.beta_expires_at || null,

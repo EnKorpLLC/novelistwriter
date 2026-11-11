@@ -8,6 +8,7 @@ import { ReaderInsights } from "@/components/ReaderInsights";
 import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
 import { ReaderBadgeList } from "@/components/TrustBadges";
 import { FeedbackExport } from "@/components/FeedbackExport";
+import { TraceLeak } from "@/components/TraceLeak";
 import type { ReaderBadge } from "@/lib/beta-social";
 
 type ArcInvite = {
@@ -59,6 +60,7 @@ type ArcState = {
   windowOpen?: boolean;
   collectAddress?: boolean;
   reviewLinks?: LabeledLink[];
+  downloads?: boolean;
   invites?: ArcInvite[];
 };
 
@@ -433,6 +435,33 @@ export function ArcPanel({ projectId }: { projectId: string }) {
             >
               Save
             </button>
+          </section>
+
+          <section className="border border-line p-4">
+            <h3 className="font-display text-lg">Protecting your book</h3>
+            <p className="mt-1 text-xs text-muted">
+              Readers can copy only a short quote, the right-click menu and printing are off, and each reader&apos;s name and email show faintly
+              behind the text. Copied quotes and downloaded copies carry a hidden code for that reader. Nothing stops a screenshot, but a leak
+              can be traced.
+            </p>
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={state?.downloads !== false}
+                disabled={!!busy}
+                onChange={(e) =>
+                  void act(
+                    "saveDownloads",
+                    { downloads: e.target.checked },
+                    e.target.checked ? "ARC readers can download an EPUB again." : "Downloads are off. ARC readers read in the browser only."
+                  )
+                }
+              />
+              Let ARC readers download an EPUB for their e-reader (marked with their name)
+            </label>
+            <div className="mt-3">
+              <TraceLeak projectId={projectId} />
+            </div>
           </section>
 
           <section className="border border-line p-4">

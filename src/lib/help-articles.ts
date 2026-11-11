@@ -210,6 +210,10 @@ export const HELP_ARTICLES: HelpArticle[] = [
     tips: [
       { t: "Read feedback while you revise", d: "Each chapter's comments sit beside the text in the Write tab, so you can resolve and reply as you go." },
       { t: "Export everything", d: "Download every comment, reply, final review, and DNF reason as a Word document." },
+      {
+        t: "Your draft is protected",
+        d: "Readers can copy only a short quote, printing is off, and their name shows faintly behind the text. Found a passage shared online? Paste it under “Found your book shared somewhere?” to see whose copy it came from.",
+      },
     ],
     related: ["reader-feedback", "advance-copies", "audience"],
   },
@@ -230,6 +234,10 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
     tips: [
       { t: "Launch day push", d: "On launch day, every ARC reader can be asked to post their review. See [Plan your launch](/help/launch-plan)." },
+      {
+        t: "Protected copies",
+        d: "Readers can copy only a short quote, printing is off, and their name shows faintly behind the text. Downloads and copied quotes carry a hidden code, so under Protecting your book you can paste a leaked passage to see whose copy it was. You can also turn EPUB downloads off there.",
+      },
     ],
     related: ["beta-readers", "launch-plan", "reviews-author"],
   },
@@ -813,6 +821,10 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
     faq: [
       { q: "Why might an author ask for my address?", a: "Some authors send ARC readers a print copy or a small thank-you. Only that author ever sees your address." },
+      {
+        q: "Can I copy a passage for my review?",
+        a: "Yes, a short quote at a time. Advance and beta copies can't be copied in full or printed, and your copy is marked with your name, out of respect for the author's unreleased work. Some authors also turn off downloads, so their book is read in the browser only.",
+      },
     ],
     related: ["write-reviews", "reader-badges"],
   },

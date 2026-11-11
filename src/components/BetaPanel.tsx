@@ -22,6 +22,7 @@ import { ReaderInsights } from "@/components/ReaderInsights";
 import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
 import { ReaderBadgeList } from "@/components/TrustBadges";
 import { FeedbackExport } from "@/components/FeedbackExport";
+import { TraceLeak } from "@/components/TraceLeak";
 import type { ReaderBadge } from "@/lib/beta-social";
 
 type ChapterProgress = {
@@ -1162,6 +1163,13 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                   Turn on Ready, then copy your share link. Turning Ready off removes readers from
                   the manuscript (contacts stay so you can re-invite later).
                 </p>
+                <p className="font-ui mt-2 text-xs text-muted">
+                  Your draft is protected: readers can copy only a short quote (with a hidden code naming them), printing is off, and
+                  their name shows faintly behind the text.
+                </p>
+                <div className="font-ui mt-2">
+                  <TraceLeak projectId={projectId} />
+                </div>
                 {!loading && (
                   <label className="font-ui mt-3 flex items-center gap-2 text-sm">
                     <input
