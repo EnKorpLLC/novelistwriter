@@ -4,8 +4,10 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { deleteObject, objectSize, r2Configured, signedUploadUrl } from "@/lib/r2";
 import { newCode } from "@/lib/marketplace";
 import { sellerStatus } from "@/lib/direct-sales";
-import { SHOP_HINT, itemFromRow, shopSettings } from "@/lib/shop";
-import { ITEM_KINDS } from "@/lib/shop-rules";
+import { SHOP_HINT, itemFromRow, normalizeIncludes, shopSettings } from "@/lib/shop";
+import { ITEM_KINDS, hasIncludes } from "@/lib/shop-rules";
+
+const PACKAGES_HINT = "Packages, numbered editions, and pre-orders need a database update. Run supabase/migration_shop_packages.sql in the Supabase SQL editor.";
 
 async function me() {
   const supabase = await createClient();
@@ -22,12 +24,14 @@ export async function GET() {
   const admin = createServiceClient();
   const settings = await shopSettings(admin, user.id);
   if (!settings) return NextResponse.json({ migrationNeeded: true, error: SHOP_HINT });
-  const [{ data: rows }, { data: books }, status] = await Promise.all([
+  const [{ data: rows }, { data: books }, status, { data: extras }] = await Promise.all([
     admin.from("shop_items").select("*").eq("author_user_id", user.id).order("sort").order("created_at"),
     admin.from("projects").select("id, title").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(100),
     sellerStatus(admin, user.id),
+    admin.from("book_extras").select("id, title, project_id").eq("author_user_id", user.id).limit(100),
   ]);
   return NextResponse.json({
+    extras: (extras || []).map((e) => ({ id: e.id as string, title: e.title as string, projectId: e.project_id as string })),
     items: await Promise.all((rows || []).map(itemFromRow)),
     settings,
     books: (books || []).map((b) => ({ id: b.id as string, title: (b.title as string) || "Untitled" })),
@@ -82,6 +86,12 @@ export async function POST(req: Request) {
       const { data: p } = await admin.from("projects").select("id").eq("id", String(b.projectId)).eq("user_id", user.id).maybeSingle();
       projectId = (p?.id as string | null) || null;
     }
+    // A numbered edition's stock is always the numbers still unsold, so it's set once, from the edition size
+    const existing = b.id ? (await admin.from("shop_items").select("*").eq("id", String(b.id)).eq("author_user_id", user.id).maybeSingle()).data : null;
+    const limited = existing?.limited_total ?? (b.limitedTotal ? cents(b.limitedTotal, 1, 100000) : null);
+    if (b.limitedTotal && limited == null) return NextResponse.json({ error: "A numbered edition is 1 to 100,000 copies." }, { status: 400 });
+    const shipsOn = typeof b.shipsOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.shipsOn) ? b.shipsOn : null;
+    if (shipsOn && shipsOn <= now.slice(0, 10) && shipsOn !== existing?.ships_on) return NextResponse.json({ error: "A pre-order's ship date needs to be in the future." }, { status: 400 });
     const row = {
       author_user_id: user.id,
       project_id: projectId,
@@ -89,15 +99,19 @@ export async function POST(req: Request) {
       title,
       description: String(b.description || "").trim().slice(0, 600),
       price_cents: price,
-      stock,
+      stock: existing?.limited_total ? existing.stock : limited ?? stock,
       personalize: b.personalize === true,
       active: b.active !== false,
+      includes: kind === "package" ? await normalizeIncludes(admin, user.id, b.includes) : {},
+      limited_total: limited,
+      ships_on: shipsOn,
       ...(b.rights === true ? { rights_confirmed_at: now } : {}),
     };
+    if (kind === "package" && !hasIncludes(row.includes)) return NextResponse.json({ error: "A package includes at least one digital copy or extra. Pick what comes with it." }, { status: 400 });
     const { error } = b.id
       ? await admin.from("shop_items").update(row).eq("id", String(b.id)).eq("author_user_id", user.id)
       : await admin.from("shop_items").insert(row);
-    if (error) return NextResponse.json({ error: SHOP_HINT }, { status: 500 });
+    if (error) return NextResponse.json({ error: /includes|limited_total|ships_on|kind/.test(error.message) ? PACKAGES_HINT : SHOP_HINT }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 

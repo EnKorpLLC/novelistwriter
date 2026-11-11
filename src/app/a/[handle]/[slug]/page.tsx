@@ -395,6 +395,11 @@ export default async function LaunchPage({
                       <div className="min-w-0 flex-1">
                         <p className="text-ink">{it.title}</p>
                         {it.description && <p className="text-xs text-muted">{it.description}</p>}
+                        {it.includesLabel && <p className="text-[11px] text-muted">{it.includesLabel}</p>}
+                        {it.limitedTotal && <p className="text-[11px] text-muted">Numbered limited edition of {it.limitedTotal}</p>}
+                        {it.shipsOn && it.shipsOn > new Date().toISOString().slice(0, 10) && (
+                          <p className="text-[11px] text-muted">Pre-order: ships from {new Date(`${it.shipsOn}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" })}</p>
+                        )}
                         {it.personalize && <p className="text-[11px] text-muted">Can be signed to you</p>}
                       </div>
                       {!isOwner && <BuyItemButton itemId={it.id} priceCents={it.priceCents} stock={it.stock} personalize={it.personalize} canBuy={shopCanBuy} />}

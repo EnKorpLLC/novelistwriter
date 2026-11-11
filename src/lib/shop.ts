@@ -15,6 +15,7 @@ import {
   LATE_GRACE_DAYS,
   TRACKING_REQUIRED_OVER_CENTS,
   addBusinessDays,
+  type Includes,
   type ItemKind,
   type ShopItem,
   type ShopSettings,
@@ -41,10 +42,36 @@ type ItemRow = {
   personalize: boolean;
   photo_key: string | null;
   active: boolean;
+  includes?: unknown;
+  limited_total?: number | null;
+  ships_on?: string | null;
+};
+
+/** A package's digital copies, keeping only what this author owns. */
+export async function normalizeIncludes(admin: SupabaseClient, authorId: string, raw: unknown): Promise<Includes> {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const ids = [o.ebook, o.audiobook].filter((v): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v));
+  const { data: own } = ids.length ? await admin.from("projects").select("id").eq("user_id", authorId).in("id", ids) : { data: [] };
+  const mine = new Set((own || []).map((p) => p.id as string));
+  const extraIds = (Array.isArray(o.extraIds) ? o.extraIds : []).map(String).filter((v) => /^[0-9a-f-]{36}$/i.test(v)).slice(0, 10);
+  const { data: extras } = extraIds.length ? await admin.from("book_extras").select("id").eq("author_user_id", authorId).in("id", extraIds) : { data: [] };
+  return {
+    ebook: typeof o.ebook === "string" && mine.has(o.ebook) ? o.ebook : null,
+    audiobook: typeof o.audiobook === "string" && mine.has(o.audiobook) ? o.audiobook : null,
+    extraIds: (extras || []).map((e) => e.id as string),
+  };
+}
+
+const includesOf = (r: ItemRow): Includes => {
+  const o = (r.includes && typeof r.includes === "object" ? r.includes : {}) as Includes;
+  return { ebook: o.ebook || null, audiobook: o.audiobook || null, extraIds: Array.isArray(o.extraIds) ? o.extraIds : [] };
 };
 
 export async function itemFromRow(r: ItemRow): Promise<ShopItem> {
   return {
+    includes: includesOf(r),
+    limitedTotal: r.limited_total ?? null,
+    shipsOn: r.ships_on ?? null,
     id: r.id,
     projectId: r.project_id,
     kind: r.kind as ItemKind,
@@ -76,6 +103,18 @@ export async function itemsForBook(admin: SupabaseClient, authorId: string, proj
   if (!settings || settings.pausedReason || !selling) return { items: [] as ShopItem[], settings };
   const { data } = await admin.from("shop_items").select("*").eq("author_user_id", authorId).eq("active", true).or(`project_id.eq.${projectId},project_id.is.null`).order("sort").limit(8);
   const items = await Promise.all(((data || []) as ItemRow[]).map(itemFromRow));
+  // Say what a package includes, in words
+  const projectIds = [...new Set(items.flatMap((i) => [i.includes.ebook, i.includes.audiobook]).filter(Boolean))] as string[];
+  const { data: titles } = projectIds.length ? await admin.from("projects").select("id, title").in("id", projectIds) : { data: [] };
+  const titleOf = (id: string) => ((titles || []).find((t) => t.id === id)?.title as string) || "the book";
+  for (const i of items) {
+    const parts = [
+      i.includes.ebook ? `the ebook of ${titleOf(i.includes.ebook)}` : "",
+      i.includes.audiobook ? `the audiobook of ${titleOf(i.includes.audiobook)}` : "",
+      i.includes.extraIds?.length ? `${i.includes.extraIds.length} digital ${i.includes.extraIds.length === 1 ? "extra" : "extras"}` : "",
+    ].filter(Boolean);
+    if (parts.length) i.includesLabel = `Includes ${parts.join(", ")}, to download right away`;
+  }
   return { items: items.sort((a, b) => Number(Boolean(b.projectId)) - Number(Boolean(a.projectId))), settings };
 }
 
@@ -124,13 +163,19 @@ export async function recordItemPurchase(admin: SupabaseClient, sessionId: strin
 
   // Take it from stock; two buyers racing for the last one means the second is refunded straight away
   let taken = false;
+  let stockBefore = 0;
   for (let attempt = 0; attempt < 3 && !taken; attempt++) {
     const { data: now } = await admin.from("shop_items").select("stock").eq("id", item.id).maybeSingle();
     const stock = Number(now?.stock) || 0;
     if (stock < qty) break;
     const { data: upd } = await admin.from("shop_items").update({ stock: stock - qty }).eq("id", item.id).eq("stock", stock).select("id");
     taken = Boolean(upd?.length);
+    stockBefore = stock;
   }
+  // A numbered edition: the stock left before this order says which numbers it gets
+  const limited = item.limited_total ? Number(item.limited_total) : null;
+  const firstNumber = limited ? Math.max(1, limited - stockBefore + 1) : null;
+  const numbers = firstNumber ? (qty > 1 ? `No. ${firstNumber}–${firstNumber + qty - 1} of ${limited}` : `No. ${firstNumber} of ${limited}`) : "";
   if (!taken) {
     await refundOrder(admin, { stripe_payment_intent: pi?.id, id: session.id }, "sold_out");
     if (email) {
@@ -154,7 +199,9 @@ export async function recordItemPurchase(admin: SupabaseClient, sessionId: strin
   const ship = shippingOf(session);
   const a = ship?.address;
   const settings = await shopSettings(admin, item.author_user_id);
-  const shipBy = addBusinessDays(new Date(), settings?.handlingDays ?? 5);
+  // A pre-order is due a few business days after it's ready to ship, not after the order
+  const from = item.ships_on && Date.parse(`${item.ships_on}T12:00:00Z`) > Date.now() ? new Date(`${item.ships_on}T12:00:00Z`) : new Date();
+  const shipBy = addBusinessDays(from, settings?.handlingDays ?? 5);
   const { data: row, error } = await admin
     .from("book_purchases")
     .insert({
@@ -163,10 +210,11 @@ export async function recordItemPurchase(admin: SupabaseClient, sessionId: strin
       buyer_user_id: buyerId,
       buyer_email: email,
       buyer_name: (session.customer_details?.name || "").slice(0, 120),
-      title: qty > 1 ? `${item.title} × ${qty}` : item.title,
+      title: `${qty > 1 ? `${item.title} × ${qty}` : item.title}${numbers ? ` (${numbers})` : ""}`,
       format: "item",
       item_id: item.id,
       quantity: qty,
+      ...(firstNumber ? { edition_number: firstNumber } : {}),
       personalization: String(meta.personalization || "").slice(0, 60) || null,
       price_cents: price,
       tax_cents: tax,
@@ -193,11 +241,41 @@ export async function recordItemPurchase(admin: SupabaseClient, sessionId: strin
   }
   await recordRevenue(admin, { stripeRef: `sale:${session.id}`, kind: "sales_fee", amountCents: fee, occurredAt: new Date().toISOString(), userId: item.author_user_id }).catch(() => null);
 
+  // A package's digital copies: their own rows (and downloads) in the same order, with no money of their own
+  const inc = includesOf(item as ItemRow);
+  const digital: Record<string, unknown>[] = [];
+  const base = {
+    author_user_id: item.author_user_id,
+    buyer_user_id: buyerId,
+    buyer_email: email,
+    buyer_name: (session.customer_details?.name || "").slice(0, 120),
+    price_cents: 0,
+    currency: session.currency || "usd",
+    order_ref: session.id,
+    stripe_payment_intent: pi?.id || null,
+    stripe_charge_id: charge?.id || null,
+    available_at: new Date().toISOString(),
+  };
+  const titles = new Map<string, string>();
+  for (const id of [inc.ebook, inc.audiobook].filter(Boolean) as string[]) {
+    const { data: p } = await admin.from("projects").select("title").eq("id", id).maybeSingle();
+    titles.set(id, (p?.title as string) || "Your book");
+  }
+  if (inc.ebook) digital.push({ ...base, project_id: inc.ebook, title: titles.get(inc.ebook), format: "ebook", stripe_session_id: `${session.id}#ebook`, download_token: token() });
+  if (inc.audiobook) digital.push({ ...base, project_id: inc.audiobook, title: `${titles.get(inc.audiobook)} (audiobook)`, format: "audiobook", stripe_session_id: `${session.id}#audiobook`, download_token: token() });
+  for (const extraId of inc.extraIds || []) {
+    const { data: ex } = await admin.from("book_extras").select("project_id, title").eq("id", extraId).maybeSingle();
+    if (ex) digital.push({ ...base, project_id: ex.project_id, title: ex.title, format: "extra", extra_id: extraId, stripe_session_id: `${session.id}#extra-${extraId}`, download_token: token() });
+  }
+  if (digital.length) await admin.from("book_purchases").insert(digital).then(() => null, () => null);
+
   if (email) {
     const mail = renderEmail({
       heading: `Your order: ${item.title}`,
       paragraphs: [
         `Thank you for ordering direct from the author. They ship it themselves, by ${longDay(shipBy)}, and you'll get an email with tracking when it's on its way.`,
+        numbers ? `Yours is ${numbers}.` : "",
+        digital.length ? "The digital copies that come with it are ready now, from the page below." : "",
         meta.personalization ? `Personalized: “${meta.personalization}”` : "",
         `You paid ${dollars(session.amount_total ?? 0)}${tax ? ` including ${dollars(tax)} tax` : ""} and ${dollars(shipping)} shipping. Questions? Reply to this email.`,
       ].filter(Boolean),
@@ -290,10 +368,10 @@ export async function sweepShopOrders(admin: SupabaseClient, opts: { timeBudgetM
       await notifyUser(admin, p.author_user_id, { type: "book_sale", title: `Ship by ${longDay(p.ship_by)}: ${p.title}`, body: "Mark it shipped (with tracking) on your orders page once it's in the mail.", href: "/dashboard/orders" }).catch(() => null);
     } else if (p.ship_by < late) {
       await refundOrder(admin, p, "not_shipped").catch(() => null);
-      // Put it back in stock, and pause the shop until the author comes back to it
+      // Put it back in stock (not for numbered editions, where it would hand out the same number twice), and pause the shop
       if (p.item_id) {
-        const { data: it } = await admin.from("shop_items").select("stock").eq("id", p.item_id).maybeSingle();
-        if (it) await admin.from("shop_items").update({ stock: (Number(it.stock) || 0) + (Number(p.quantity) || 1) }).eq("id", p.item_id);
+        const { data: it } = await admin.from("shop_items").select("*").eq("id", p.item_id).maybeSingle();
+        if (it && !it.limited_total) await admin.from("shop_items").update({ stock: (Number(it.stock) || 0) + (Number(p.quantity) || 1) }).eq("id", p.item_id);
       }
       await admin.from("shop_settings").upsert({ author_user_id: p.author_user_id, paused_at: new Date().toISOString(), paused_reason: `An order (${p.title}) wasn't shipped within ${LATE_GRACE_DAYS} days of its ship-by date, so it was refunded.`, updated_at: new Date().toISOString() }, { onConflict: "author_user_id" });
       await notifyUser(admin, p.author_user_id, { type: "book_sale", title: `Refunded and paused: ${p.title}`, body: `It wasn't marked shipped by ${longDay(p.ship_by)}, so the reader was refunded and your shop is paused. Reopen it from your shop page.`, href: "/dashboard/shop" }).catch(() => null);

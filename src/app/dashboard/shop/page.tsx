@@ -7,6 +7,7 @@ import { ITEM_KINDS, type ShopItem, type ShopSettings } from "@/lib/shop-rules";
 
 type Data = {
   items: ShopItem[];
+  extras?: { id: string; title: string; projectId: string }[];
   settings: ShopSettings;
   books: { id: string; title: string }[];
   seller: { tier: string | null; termsAccepted: boolean; payoutsEnabled: boolean } | null;
@@ -14,9 +15,41 @@ type Data = {
   migrationNeeded?: boolean;
   error?: string;
 };
-type Form = { id?: string; kind: string; projectId: string; title: string; description: string; price: string; stock: string; personalize: boolean; active: boolean; rights: boolean };
+type Form = {
+  id?: string;
+  kind: string;
+  projectId: string;
+  title: string;
+  description: string;
+  price: string;
+  stock: string;
+  personalize: boolean;
+  active: boolean;
+  rights: boolean;
+  includes: { ebook: string; audiobook: string; extraIds: string[] };
+  numbered: boolean;
+  limitedTotal: string;
+  /** Set when editing a numbered edition: its size can't change */
+  lockedTotal: number | null;
+  shipsOn: string;
+};
 
-const blank: Form = { kind: "signed_book", projectId: "", title: "", description: "", price: "24.99", stock: "10", personalize: true, active: true, rights: false };
+const blank: Form = {
+  kind: "signed_book",
+  projectId: "",
+  title: "",
+  description: "",
+  price: "24.99",
+  stock: "10",
+  personalize: true,
+  active: true,
+  rights: false,
+  includes: { ebook: "", audiobook: "", extraIds: [] },
+  numbered: false,
+  limitedTotal: "100",
+  lockedTotal: null,
+  shipsOn: "",
+};
 const toCents = (v: string) => Math.round(Number(v.replace(/[^0-9.]/g, "")) * 100) || 0;
 
 /** The author's shop: signed books, bookmarks, and prints they ship themselves, and their shipping rates. */
@@ -150,6 +183,9 @@ export default function ShopPage() {
                     <span className="block text-xs text-muted">
                       {ITEM_KINDS.find((k) => k.id === it.kind)?.label} · {dollars(it.priceCents)} · {it.stock ? `${it.stock} in stock` : "sold out"}
                       {it.personalize ? " · can be personalized" : ""}
+                      {it.limitedTotal ? ` · numbered edition of ${it.limitedTotal} (${it.limitedTotal - it.stock} sold)` : ""}
+                      {it.shipsOn ? ` · pre-order, ready ${it.shipsOn}` : ""}
+                      {it.kind === "package" ? " · with digital copies" : ""}
                       {it.projectId ? ` · ${d.books.find((b) => b.id === it.projectId)?.title || "a book"}` : " · all your launch pages"}
                     </span>
                     <span className="mt-1 flex flex-wrap gap-3 text-xs">
@@ -157,7 +193,23 @@ export default function ShopPage() {
                         type="button"
                         className="text-accent underline"
                         onClick={() =>
-                          setForm({ id: it.id, kind: it.kind, projectId: it.projectId || "", title: it.title, description: it.description, price: (it.priceCents / 100).toFixed(2), stock: String(it.stock), personalize: it.personalize, active: it.active, rights: true })
+                          setForm({
+                            id: it.id,
+                            kind: it.kind,
+                            projectId: it.projectId || "",
+                            title: it.title,
+                            description: it.description,
+                            price: (it.priceCents / 100).toFixed(2),
+                            stock: String(it.stock),
+                            personalize: it.personalize,
+                            active: it.active,
+                            rights: true,
+                            includes: { ebook: it.includes.ebook || "", audiobook: it.includes.audiobook || "", extraIds: it.includes.extraIds || [] },
+                            numbered: Boolean(it.limitedTotal),
+                            limitedTotal: String(it.limitedTotal || 100),
+                            lockedTotal: it.limitedTotal,
+                            shipsOn: it.shipsOn || "",
+                          })
                         }
                       >
                         Edit
@@ -200,7 +252,14 @@ export default function ShopPage() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   void run(async () => {
-                    await post({ action: "save_item", ...form, priceCents: toCents(form.price), stock: Number(form.stock) || 0 });
+                    await post({
+                      action: "save_item",
+                      ...form,
+                      priceCents: toCents(form.price),
+                      stock: Number(form.stock) || 0,
+                      limitedTotal: form.numbered && !form.lockedTotal ? Number(form.limitedTotal) : undefined,
+                      shipsOn: form.shipsOn || null,
+                    });
                     setForm(null);
                     return "Saved.";
                   });
@@ -209,7 +268,11 @@ export default function ShopPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-xs text-muted">
                     What it is
-                    <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value, personalize: e.target.value === "signed_book" ? form.personalize : false })} className={input}>
+                    <select
+                      value={form.kind}
+                      onChange={(e) => setForm({ ...form, kind: e.target.value, personalize: e.target.value === "signed_book" || e.target.value === "package" ? form.personalize : false })}
+                      className={input}
+                    >
                       {ITEM_KINDS.map((k) => (
                         <option key={k.id} value={k.id}>
                           {k.label}
@@ -242,20 +305,93 @@ export default function ShopPage() {
                     Price (USD)
                     <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} inputMode="decimal" className={input} />
                   </label>
-                  <label className="text-xs text-muted">
-                    How many you have
-                    <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value.replace(/\D/g, "") })} inputMode="numeric" className={input} />
-                  </label>
+                  {form.numbered ? (
+                    <label className="text-xs text-muted">
+                      Edition size (numbered)
+                      <input
+                        value={form.lockedTotal ? String(form.lockedTotal) : form.limitedTotal}
+                        disabled={Boolean(form.lockedTotal)}
+                        onChange={(e) => setForm({ ...form, limitedTotal: e.target.value.replace(/\D/g, "") })}
+                        inputMode="numeric"
+                        className={input}
+                      />
+                    </label>
+                  ) : (
+                    <label className="text-xs text-muted">
+                      How many you have
+                      <input value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value.replace(/\D/g, "") })} inputMode="numeric" className={input} />
+                    </label>
+                  )}
                   <label className="flex items-center gap-2 pt-5 text-xs">
                     <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> For sale
                   </label>
                 </div>
-                {form.kind === "signed_book" && (
+                {form.kind === "package" && (
+                  <fieldset className="space-y-2 border border-line p-3 text-xs">
+                    <legend className="px-1 text-muted">Digital copies that come with it (delivered right away)</legend>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="text-muted">
+                        Ebook of
+                        <select value={form.includes.ebook} onChange={(e) => setForm({ ...form, includes: { ...form.includes, ebook: e.target.value } })} className={input}>
+                          <option value="">None</option>
+                          {d.books.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-muted">
+                        Audiobook of
+                        <select value={form.includes.audiobook} onChange={(e) => setForm({ ...form, includes: { ...form.includes, audiobook: e.target.value } })} className={input}>
+                          <option value="">None</option>
+                          {d.books.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {(d.extras || []).length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-muted">Extras</p>
+                        {(d.extras || []).map((x) => (
+                          <label key={x.id} className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={form.includes.extraIds.includes(x.id)}
+                              onChange={(e) =>
+                                setForm({ ...form, includes: { ...form.includes, extraIds: e.target.checked ? [...form.includes.extraIds, x.id] : form.includes.extraIds.filter((y) => y !== x.id) } })
+                              }
+                            />
+                            {x.title}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-muted">The audiobook only arrives if its files are uploaded in that book&apos;s Audio tab.</p>
+                  </fieldset>
+                )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex items-start gap-2 text-xs">
+                    <input type="checkbox" className="mt-0.5" checked={form.numbered} disabled={Boolean(form.lockedTotal)} onChange={(e) => setForm({ ...form, numbered: e.target.checked })} />
+                    <span>
+                      Numbered limited edition
+                      <span className="block text-muted">Each copy gets its number (“No. 12 of 100”) on the order and packing slip. The size can&apos;t change once saved.</span>
+                    </span>
+                  </label>
+                  <label className="text-xs text-muted">
+                    Pre-order: ready to ship on (optional)
+                    <input type="date" value={form.shipsOn} onChange={(e) => setForm({ ...form, shipsOn: e.target.value })} className={input} />
+                  </label>
+                </div>
+                {(form.kind === "signed_book" || form.kind === "package") && (
                   <label className="flex items-center gap-2 text-xs">
                     <input type="checkbox" checked={form.personalize} onChange={(e) => setForm({ ...form, personalize: e.target.checked })} /> Readers can ask for a dedication (“To Sam”, up to 60 characters)
                   </label>
                 )}
-                {form.kind !== "signed_book" && !form.id && (
+                {form.kind !== "signed_book" && form.kind !== "package" && !form.id && (
                   <label className="flex items-start gap-2 text-xs">
                     <input type="checkbox" className="mt-0.5" checked={form.rights} onChange={(e) => setForm({ ...form, rights: e.target.checked })} />
                     <span>I made this art, or I have the right to sell it as merchandise (art made for your book often only covers the book itself).</span>

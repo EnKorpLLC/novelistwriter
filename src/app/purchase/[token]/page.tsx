@@ -104,7 +104,7 @@ async function load(token: string) {
         : project
           ? coverPublicUrl(projectCoverPath(project), project.updated_at ? Date.parse(project.updated_at) : undefined)
           : null,
-      others: (others || []).map((o) => ({ title: o.title as string, download_token: o.download_token as string, isAudio: o.format === "audiobook" })),
+      others: (others || []).map((o) => ({ title: o.title as string, download_token: o.download_token as string, isAudio: o.format === "audiobook", hasPage: ["audiobook", "extra", "item", "paperback"].includes(o.format as string) })),
     };
   } catch {
     return null;
@@ -260,8 +260,8 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
               {p.others.map((o) => (
                 <li key={o.download_token} className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-display text-base">{o.title}</span>
-                  <a href={o.isAudio ? `/purchase/${o.download_token}` : `/purchase/${o.download_token}/epub`} className="border border-accent px-3 py-1 text-xs text-accent">
-                    {o.isAudio ? "Listen and download" : "Download the EPUB"}
+                  <a href={o.hasPage ? `/purchase/${o.download_token}` : `/purchase/${o.download_token}/epub`} className="border border-accent px-3 py-1 text-xs text-accent">
+                    {o.isAudio ? "Listen and download" : o.hasPage ? "Open" : "Download the EPUB"}
                   </a>
                 </li>
               ))}
