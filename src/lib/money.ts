@@ -132,8 +132,8 @@ export async function recordInvoice(admin: SupabaseClient, invoice: Stripe.Invoi
 export async function recordCheckout(admin: SupabaseClient, session: Stripe.Checkout.Session, userId: string | null) {
   if (session.mode !== "payment" || session.payment_status !== "paid") return;
   const kind = session.metadata?.kind;
-  // Book sales are mostly the author's money; only our fee is recorded, as sales_fee
-  if (kind === "book_purchase") return;
+  // Book sales and narration payments are mostly someone else's money; only our fee is recorded, as sales_fee
+  if (kind === "book_purchase" || kind === "narration") return;
   await recordRevenue(admin, {
     stripeRef: `checkout:${session.id}`,
     kind: kind === "project_unlock" ? "project_unlock" : kind === "credits" || !kind ? "credits" : "other",
@@ -151,6 +151,9 @@ export async function recordRefund(admin: SupabaseClient, refund: Stripe.Refund)
     // A bundle has several rows for one payment
     const { data: book } = await admin.from("book_purchases").select("id").eq("stripe_payment_intent", pi).limit(1);
     if (book?.length) return;
+    // Narration refunds record our share themselves (lib/narration-money.ts)
+    const { data: narration } = await admin.from("narration_payments").select("id").eq("stripe_payment_intent", pi).limit(1);
+    if (narration?.length) return;
   }
   await recordRevenue(admin, {
     stripeRef: `refund:${refund.id}`,

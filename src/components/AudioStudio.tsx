@@ -758,6 +758,7 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                   coverUrl={coverPath ? coverPublicUrl(coverPath) : null}
                   userId={userId}
                   canEditSettings={role === "owner"}
+                  deliver={role === "narrator" && storageReady ? post : null}
                   onSettings={(s) => {
                     setSettings(s);
                     void post({ action: "settings", settings: s }).catch((e) => setNote(e instanceof Error ? e.message : "Couldn't save"));

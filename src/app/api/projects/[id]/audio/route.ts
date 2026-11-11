@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { audioAccess } from "@/lib/narration-access";
 import { deleteObject, objectSize, r2Configured, signedUploadUrl } from "@/lib/r2";
 import { REVIEW_MAX_BYTES, latestReviewCopies, removeChapterCopies, reviewKey } from "@/lib/review-copies";
+import { MONEY_HINT } from "@/lib/narration-money";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 
@@ -129,6 +130,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // Narrators record, fix, and send chapters for review; notes, approval, and book settings are the author's
   if (role === "narrator") {
     const authorOnly = ["add_note", "update_note", "delete_note", "settings", "checkpoint"];
+    // A job needs its deposit before full production; until then only the checkpoint can be sent
+    if (access.job && access.job.terms.pay === "per_finished_hour" && b.action === "deliver_done") {
+      const { data: r } = await createServiceClient().from("narrator_jobs").select("deposit_paid_at").eq("id", access.job.id).maybeSingle();
+      if (!r?.deposit_paid_at) return NextResponse.json({ error: "The author hasn't paid the deposit yet." }, { status: 409 });
+    }
     if (authorOnly.includes(String(b.action)) || (b.action === "chapter_status" && b.status !== "review")) {
       return NextResponse.json({ error: "Only the author can do that." }, { status: 403 });
     }
@@ -325,9 +331,49 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true, id: copy.id, checkpoint });
   }
 
+  // Delivery: the narrator uploads the mastered files; the author can download them once the balance is paid
+  if (b.action === "delivery_upload_url" || b.action === "delivery_uploaded" || b.action === "deliver_done") {
+    if (role !== "narrator" || !job) return NextResponse.json({ error: "Only the narrator delivers files." }, { status: 403 });
+    if (!r2Configured()) return NextResponse.json({ error: "Audio storage isn't set up yet." }, { status: 503 });
+    const safe = String(b.name || "").replace(/[\\/:*?"<>|]+/g, "").trim().slice(0, 120);
+    const prefix = `delivery/${id}/${job.id}/`;
+    if (b.action === "delivery_upload_url") {
+      if (!/\.(mp3|jpg|txt)$/i.test(safe)) return NextResponse.json({ error: "Only the exported MP3s, cover, and guides are delivered." }, { status: 400 });
+      return NextResponse.json({ key: `${prefix}${safe}`, url: await signedUploadUrl(`${prefix}${safe}`, 3600) });
+    }
+    if (b.action === "delivery_uploaded") {
+      const key = `${prefix}${safe}`;
+      const bytes = await objectSize(key).catch(() => null);
+      if (bytes == null) return NextResponse.json({ error: `${safe} didn't arrive. Try again.` }, { status: 400 });
+      const { error } = await admin
+        .from("narration_deliveries")
+        .upsert({ job_id: job.id, project_id: id, file_name: safe, r2_key: key, bytes, duration_ms: Math.max(0, Math.round(num(b.durationMs))), deleted_at: null }, { onConflict: "job_id,file_name" });
+      if (error) return NextResponse.json({ error: MONEY_HINT }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+    const { count } = await admin.from("narration_deliveries").select("id", { count: "exact", head: true }).eq("job_id", job.id).is("deleted_at", null);
+    if (!count) return NextResponse.json({ error: "Export and upload the files first." }, { status: 400 });
+    await admin.from("narrator_jobs").update({ delivered_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", job.id);
+    await tell(
+      "author",
+      `Your narrator delivered the finished audiobook`,
+      [
+        `${job.narratorName || "Your narrator"} delivered ${count} finished file${count === 1 ? "" : "s"}, mastered to ACX's specs.`,
+        job.terms.pay === "per_finished_hour" ? "Once every chapter is approved, pay the balance in the Audio tab to unlock the downloads." : "Once every chapter is approved, the downloads unlock in the Audio tab.",
+      ],
+      `/project/${id}?tab=audio`
+    );
+    return NextResponse.json({ ok: true, files: count });
+  }
+
   if (b.action === "checkpoint") {
     if (!job) return NextResponse.json({ error: "There's no narrator job on this book." }, { status: 400 });
     const approve = b.decision === "approve";
+    // On a paid job, approving the checkpoint is the moment the deposit is collected (the webhook approves it)
+    if (approve && job.terms.pay === "per_finished_hour") {
+      const { data: r } = await admin.from("narrator_jobs").select("deposit_paid_at").eq("id", job.id).maybeSingle();
+      if (!r?.deposit_paid_at) return NextResponse.json({ error: "Approving the checkpoint collects the deposit. Use “Approve and pay the deposit”.", needsDeposit: true }, { status: 402 });
+    }
     const note = String(b.note || "").trim().slice(0, 1000);
     const { error } = await admin
       .from("narrator_jobs")
@@ -338,7 +384,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       "narrator",
       approve ? "Checkpoint approved: start full production" : "Checkpoint: the author asked for changes",
       approve
-        ? ["The author approved your checkpoint. You're clear to record the rest of the book.", "Payments: the held deposit is collected at this step once payments open in an upcoming update."]
+        ? ["The author approved your checkpoint. You're clear to record the rest of the book."]
         : ["The author listened to your checkpoint and asked for some changes before full production.", note ? `Their note: "${note}"` : "See their notes in the studio's Review view."],
       `/narrator/book/${job.id}`
     );

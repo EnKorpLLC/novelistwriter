@@ -18,6 +18,77 @@ type Job = {
   createdAt: string;
 };
 
+type PayoutInfo = { hasAccount: boolean; payoutsEnabled: boolean; paidCents: number; waitingCents: number; payouts: { amountCents: number; status: string; reason: string; createdAt: string }[]; migrationNeeded?: boolean };
+
+/** Payout setup through Stripe (the same kind of account sellers and affiliates use), and what's been paid. */
+function Payouts() {
+  const [info, setInfo] = useState<PayoutInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    void fetch("/api/narration/payouts")
+      .then((r) => r.json())
+      .then(setInfo)
+      .catch(() => null);
+  }, []);
+  async function go(action: "onboard" | "stripe_dashboard") {
+    setBusy(true);
+    setMsg(null);
+    const d = await fetch("/api/narration/payouts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) })
+      .then((r) => r.json())
+      .catch(() => ({ error: "Stripe isn't available right now." }));
+    if (d.url) window.location.href = d.url;
+    else {
+      setMsg(d.error || "Couldn't open Stripe");
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="border border-line p-4 text-sm">
+      <h2 className="font-display text-lg">Getting paid</h2>
+      {!info ? (
+        <p className="mt-1 text-muted">Loading…</p>
+      ) : info.migrationNeeded ? (
+        <p className="mt-1 text-danger">Payouts need a database update (migration_narration_payments.sql).</p>
+      ) : (
+        <>
+          <p className="mt-1 text-muted">
+            Authors pay a deposit when they approve your checkpoint and the balance when the book is finished. Novelist Writer holds it and sends your full fee to your bank through Stripe; our 10% is paid by the author, on top.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {info.payoutsEnabled ? (
+              <>
+                <span className="text-accent">✓ Payouts are set up</span>
+                <button type="button" disabled={busy} className="border border-line px-3 py-1.5 text-xs" onClick={() => void go("stripe_dashboard")}>
+                  Open Stripe
+                </button>
+              </>
+            ) : (
+              <button type="button" disabled={busy} className="bg-accent px-3 py-1.5 text-xs text-paper disabled:opacity-60" onClick={() => void go("onboard")}>
+                {info.hasAccount ? "Finish setting up payouts" : "Set up payouts with Stripe"}
+              </button>
+            )}
+            <span className="text-xs text-muted">
+              Paid {dollars(info.paidCents)}
+              {info.waitingCents > 0 ? ` · ${dollars(info.waitingCents)} waiting${info.payoutsEnabled ? " (sending soon)" : " for your payout setup"}` : ""}
+            </span>
+          </div>
+          {msg && <p className="mt-2 text-xs text-danger">{msg}</p>}
+          {info.payouts.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-muted">
+              {info.payouts.slice(0, 10).map((p, i) => (
+                <li key={i}>
+                  {new Date(p.createdAt).toLocaleDateString()} · {dollars(p.amountCents)} · {p.reason} · {p.status === "paid" ? "sent" : p.status === "cancelled" ? "held (payment disputed)" : "waiting"}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 const payLine = (t: NarrationTerms) =>
   t.pay === "per_finished_hour" ? `${dollars(t.rateCents)} per finished hour · about ${dollars(estimateCost(t).fee)}` : `${t.sharePct}% royalty share for ${t.shareYears} years`;
 
@@ -102,12 +173,7 @@ export function NarratorDashboard() {
         )}
       </section>
 
-      <section className="border border-line p-4 text-sm">
-        <h2 className="font-display text-lg">Getting paid</h2>
-        <p className="mt-1 text-muted">
-          Deposits held for you, payouts to your bank through Stripe, and royalty-share statements are coming in the next update. Your agreements already record what you&apos;re owed.
-        </p>
-      </section>
+      <Payouts />
 
       {past.length > 0 && (
         <section>

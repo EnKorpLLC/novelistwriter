@@ -111,7 +111,10 @@ export function AudioExport({
   onSettings,
   userId = null,
   canEditSettings = true,
+  deliver = null,
 }: {
+  /** Narrators: hands the exported files to the author through storage (unlocked once the author pays) */
+  deliver?: ((body: Record<string, unknown>) => Promise<Record<string, unknown>>) | null;
   userId?: string | null;
   /** The credits name and retail sample are the author's choices */
   canEditSettings?: boolean;
@@ -217,6 +220,30 @@ export function AudioExport({
         } else setMsg("Add a cover in the Cover tab to get a square audiobook cover with the export.");
         for (const [store_, text] of Object.entries(CHECKLISTS)) await saveFile(store, EXPORT_FOLDER, `How to upload - ${store_}.txt`, new Blob([text], { type: "text/plain" }));
       }
+    } finally {
+      setBusy(null);
+      setProgress(0);
+    }
+  }
+
+  async function deliverFiles() {
+    if (!store || !deliver) return;
+    setMsg(null);
+    try {
+      const files = (await folderFiles(store, EXPORT_FOLDER)).filter((f) => /\.(mp3|jpg|txt)$/i.test(f.name));
+      if (!files.some((f) => f.name.endsWith(".mp3"))) return setMsg("Export everything first, then deliver.");
+      for (const [i, f] of files.entries()) {
+        setBusy(`Delivering ${i + 1} of ${files.length}: ${f.name}`);
+        setProgress(i / files.length);
+        const up = await deliver({ action: "delivery_upload_url", name: f.name });
+        const put = await fetch(String(up.url), { method: "PUT", body: f, headers: { "Content-Type": f.type || "application/octet-stream" } });
+        if (!put.ok) throw new Error(`${f.name} didn't upload (${put.status}). Try again; finished files are kept.`);
+        await deliver({ action: "delivery_uploaded", name: f.name });
+      }
+      const done = await deliver({ action: "deliver_done" });
+      setMsg(`Delivered ${done.files} files. The author can download them once every chapter is approved and the balance is paid.`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Delivery failed");
     } finally {
       setBusy(null);
       setProgress(0);
@@ -364,6 +391,11 @@ export function AudioExport({
         <button type="button" disabled={Boolean(busy) || !store} className="border border-line px-3 py-2 disabled:opacity-50" onClick={() => void downloadZip()}>
           Download the export as a zip
         </button>
+        {deliver && (
+          <button type="button" disabled={Boolean(busy) || !store} className="bg-ink px-3 py-2 text-paper disabled:opacity-50" onClick={() => void deliverFiles()}>
+            Deliver to the author
+          </button>
+        )}
         {busy && (
           <span className="text-muted">
             {busy} {progress > 0 && progress < 1 ? `${Math.round(progress * 100)}%` : ""}

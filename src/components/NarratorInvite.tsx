@@ -142,7 +142,7 @@ export function NarratorInvite({ token }: { token: string }) {
           <section className="mt-8 border border-line p-4 sm:p-5">
             <h2 className="font-display text-xl">The agreement</h2>
             <p className="mt-1 text-xs text-muted">
-              Held deposits and payouts through Novelist Writer open in an upcoming update. Until then nothing is charged or paid here, and you can start with the checkpoint.
+              Novelist Writer holds the author&apos;s deposit and pays your full fee to your bank through Stripe when the book is finished. Set up payouts from your narrator dashboard.
             </p>
             <div className="mt-3">
               <NarrationAgreement terms={invite.terms} book={invite.book} author={invite.author} narrator={name || "the narrator"} viewer="narrator" />

@@ -155,7 +155,11 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Can I make my own audiobook?",
-    a: "Yes, on Studio. Record it yourself in the browser, chapter by chapter, with the script on screen. Review it with the text alongside, fix lines with pickups, then export MP3 files mastered to ACX's specs (loudness, peaks, noise floor, room tone) with opening and closing credits, a retail sample, and a square cover. The files work at ACX, Spotify for Authors, Google Play, Kobo, and anywhere else, so you're never locked into one store. Your recordings stay on your computer; we never upload them. Hiring a narrator and selling the audiobook here are coming next.",
+    a: "Yes, on Studio. Record it yourself in the browser, chapter by chapter, with the script on screen. Review it with the text alongside, fix lines with pickups, then export MP3 files mastered to ACX's specs (loudness, peaks, noise floor, room tone) with opening and closing credits, a retail sample, and a square cover. The files work at ACX, Spotify for Authors, Google Play, Kobo, and anywhere else, so you're never locked into one store. Your recordings stay on your computer; we never upload them. Selling the audiobook here is coming next.",
+  },
+  {
+    q: "How does hiring a narrator work, and what does it cost?",
+    a: "Invite any narrator by email from your book's Audio tab with your terms: a rate per finished hour or a royalty share of sales made here, revision rounds, a deadline, and a 15-minute checkpoint. They get a free narrator account that opens only your book's script and studio. They send review copies, you pin notes to lines, and they record just those pickups. On a per-hour job you pay half the estimate as a deposit when you approve the checkpoint and the rest on delivery; we hold it and pay the narrator their full rate. Our fee is 10%, paid by you on top. Hiring a narrator is part of Studio; narrators never pay.",
   },
   {
     q: "Will Novelist Writer write my marketing posts?",

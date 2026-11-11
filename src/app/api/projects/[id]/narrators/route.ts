@@ -6,6 +6,8 @@ import { userHasStudio } from "@/lib/credits";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { appUrl } from "@/lib/stripe";
 import { jobFromRow } from "@/lib/narration-access";
+import { MONEY_HINT, finishedMs, jobMoney, narrationCheckoutUrl, settleCancellation, settleFromDeposit } from "@/lib/narration-money";
+import { signedDownloadUrl } from "@/lib/r2";
 import { dollars, estimateCost, normalizeTerms, termsProblem } from "@/lib/narration";
 
 const HINT = "Narrator invites need a database update. Run supabase/migration_narrators.sql in the Supabase SQL editor.";
@@ -43,14 +45,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const admin = createServiceClient();
   const { data, error } = await admin.from("narrator_jobs").select("*").eq("project_id", id).order("created_at", { ascending: false }).limit(20);
   if (error) return NextResponse.json({ migrationNeeded: true, error: HINT, jobs: [] });
-  return NextResponse.json({ jobs: (data || []).map(jobFromRow), studio: await userHasStudio(own.user.id) });
+  // Money for the current job, or the most recent finished one
+  const current = (data || []).find((r) => r.status === "active" || r.status === "completed");
+  const money = current ? await jobMoney(admin, current).catch(() => null) : null;
+  return NextResponse.json({
+    jobs: (data || []).map(jobFromRow),
+    studio: await userHasStudio(own.user.id),
+    money: current && money ? { jobId: current.id, ...money } : null,
+    moneyHint: current && !money ? MONEY_HINT : null,
+  });
 }
 
 /**
  *   { action: "invite", email, name, terms, message }
  *   { action: "update_terms", id, terms }   (before the narrator accepts; they see the new version)
  *   { action: "resend", id }
- *   { action: "cancel", id }
+ *   { action: "cancel", id }   (after the deposit, settles what the narrator is owed and refunds the rest)
+ *   { action: "pay_deposit", id } / { action: "pay_balance", id } → { url } for Stripe Checkout (or { settled } when the deposit covers it)
+ *   { action: "downloads", id } → signed links to the delivered files, once paid
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -107,9 +119,41 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await sendInvite(job, own.title, author);
     return NextResponse.json({ ok: true });
   }
+  if (b.action === "pay_deposit" || b.action === "pay_balance") {
+    if (job.status !== "active") return NextResponse.json({ error: "This job isn't under way." }, { status: 409 });
+    try {
+      if (b.action === "pay_balance") {
+        if (!job.delivered_at) return NextResponse.json({ error: "Your narrator hasn't delivered the finished files yet." }, { status: 409 });
+        const { count } = await admin.from("chapters").select("id", { count: "exact", head: true }).eq("project_id", id);
+        const { count: approved } = await admin.from("audio_chapters").select("chapter_id", { count: "exact", head: true }).eq("project_id", id).eq("status", "approved");
+        if ((approved || 0) < (count || 0)) return NextResponse.json({ error: "Approve every chapter first." }, { status: 409 });
+        // Lock in the finished length the fee is based on
+        await admin.from("narrator_jobs").update({ finished_ms: await finishedMs(admin, id) }).eq("id", job.id);
+        const { data: fresh } = await admin.from("narrator_jobs").select("*").eq("id", job.id).single();
+        const money = await jobMoney(admin, fresh);
+        if (money && money.balanceDue < 50) {
+          await settleFromDeposit(admin, fresh);
+          return NextResponse.json({ ok: true, settled: true });
+        }
+        return NextResponse.json({ url: await narrationCheckoutUrl(admin, fresh, "final", own.user.email || null, own.title) });
+      }
+      return NextResponse.json({ url: await narrationCheckoutUrl(admin, job, "deposit", own.user.email || null, own.title) });
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Checkout isn't available right now." }, { status: 400 });
+    }
+  }
+  if (b.action === "downloads") {
+    if (!job.final_paid_at) return NextResponse.json({ error: "The files unlock once the balance is paid." }, { status: 402 });
+    const { data: files } = await admin.from("narration_deliveries").select("file_name, r2_key, bytes").eq("job_id", job.id).is("deleted_at", null).order("file_name");
+    return NextResponse.json({
+      files: await Promise.all((files || []).map(async (f) => ({ name: f.file_name as string, bytes: Number(f.bytes) || 0, url: await signedDownloadUrl(f.r2_key as string, 6 * 3600, f.file_name as string) }))),
+    });
+  }
   if (b.action === "cancel") {
     if (!["invited", "active"].includes(job.status)) return NextResponse.json({ error: "This job is already closed." }, { status: 409 });
     await admin.from("narrator_jobs").update({ status: "cancelled", cancelled_by: own.user.id, updated_at: new Date().toISOString() }).eq("id", job.id);
+    // After the deposit: pay for approved work plus the cancellation fee, refund the rest
+    const settled = job.status === "active" && job.deposit_paid_at ? await settleCancellation(admin, job).catch(() => null) : null;
     if (job.status === "active" && job.narrator_id) {
       const { data: n } = await admin.from("profiles").select("email").eq("id", job.narrator_id).maybeSingle();
       if (n?.email) {
@@ -118,7 +162,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           heading: `"${own.title}" narration was cancelled`,
           paragraphs: [
             `${author} cancelled the narration job for "${own.title}".`,
-            cost.fee ? "Under the agreement, work finished and approved before cancelling is paid, plus the cancellation fee once past the checkpoint. Payments arrive in an upcoming update; we'll email you about anything owed." : "",
+            settled && settled.narratorCents > 0
+              ? `Under the agreement you're paid ${dollars(settled.narratorCents)} from the deposit for approved work plus the cancellation fee. It's sent through Stripe once your payouts are set up.`
+              : cost.fee && !job.deposit_paid_at
+                ? "The job was cancelled before the deposit, so there's nothing to pay out."
+                : "",
             "Your recordings are still on your computer.",
           ].filter(Boolean),
           button: { label: "Open your narrator dashboard", url: appUrl("/narrator") },
@@ -126,7 +174,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await sendEmail({ to: n.email as string, subject: `Narration cancelled: "${own.title}"`, text: mail.text, html: mail.html }).catch(() => null);
       }
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, settled });
   }
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }

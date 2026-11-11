@@ -4,6 +4,24 @@ import { useCallback, useEffect, useState } from "react";
 import { NarrationAgreement } from "@/components/NarrationAgreement";
 import { DEFAULT_TERMS, NARRATION_FEE_PCT, dollars, estimateCost, estimateHours, termsProblem, type NarrationTerms } from "@/lib/narration";
 
+type Money = {
+  jobId: string;
+  pay: "per_finished_hour" | "royalty_share";
+  depositDue: number;
+  depositPaid: number;
+  finishedMs: number;
+  finalFee: number;
+  finalTotal: number;
+  balanceDue: number;
+  paidToNarrator: number;
+  delivered: { name: string; bytes: number }[];
+  depositPaidAt: string | null;
+  deliveredAt: string | null;
+  finalPaidAt: string | null;
+};
+
+const mb = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(2)} GB` : `${Math.max(1, Math.round(b / 1024 ** 2))} MB`);
+
 type Job = {
   id: string;
   status: "invited" | "active" | "declined" | "cancelled" | "completed";
@@ -26,6 +44,47 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [checkNote, setCheckNote] = useState("");
+  const [money, setMoney] = useState<Money | null>(null);
+  const [moneyHint, setMoneyHint] = useState<string | null>(null);
+  const [files, setFiles] = useState<{ name: string; bytes: number; url: string }[] | null>(null);
+
+  // Back from Stripe Checkout: the webhook records the payment within a few seconds
+  useEffect(() => {
+    const paid = new URLSearchParams(window.location.search).get("narration");
+    if (!paid) return;
+    setMsg(paid === "deposit-paid" ? "Deposit paid, thank you. It's held until delivery; updating…" : "Payment received; unlocking your files…");
+    const t = setTimeout(() => void load(), 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function pay(action: "pay_deposit" | "pay_balance", id: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/narrators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, id }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Checkout isn't available right now");
+      if (d.url) {
+        window.location.href = d.url;
+        return;
+      }
+      if (d.settled) setMsg("The deposit already covered the finished length, so the difference was refunded and your files are unlocked.");
+      await load();
+      onChange();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Checkout isn't available right now");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadFiles(id: string) {
+    const r = await fetch(`/api/projects/${projectId}/narrators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "downloads", id }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return setMsg(d.error || "Couldn't open the files");
+    setFiles(d.files || []);
+  }
 
   async function checkpoint(decision: "approve" | "changes") {
     setBusy(true);
@@ -52,6 +111,8 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
     setHint(d.migrationNeeded ? d.error : null);
     setStudio(d.studio !== false);
     setJobs(d.jobs || []);
+    setMoney(d.money || null);
+    setMoneyHint(d.moneyHint || null);
   }, [projectId]);
 
   useEffect(() => {
@@ -140,9 +201,15 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
                     className="mt-2 w-full border border-line bg-paper p-2"
                   />
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" disabled={busy} className="bg-accent px-3 py-1.5 text-paper" onClick={() => void checkpoint("approve")}>
-                      Approve: start full production
-                    </button>
+                    {open.terms.pay === "per_finished_hour" && !(money?.depositPaid ?? 0) ? (
+                      <button type="button" disabled={busy || !money} className="bg-accent px-3 py-1.5 text-paper disabled:opacity-60" onClick={() => void pay("pay_deposit", open.id)}>
+                        Approve and pay the deposit{money ? ` (${dollars(money.depositDue)})` : ""}
+                      </button>
+                    ) : (
+                      <button type="button" disabled={busy} className="bg-accent px-3 py-1.5 text-paper" onClick={() => void checkpoint("approve")}>
+                        Approve: start full production
+                      </button>
+                    )}
                     <button type="button" disabled={busy || !checkNote.trim()} className="border border-line px-3 py-1.5 disabled:opacity-50" onClick={() => void checkpoint("changes")}>
                       Ask for changes
                     </button>
@@ -152,6 +219,42 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
                 <p className="text-muted">You asked for changes to the checkpoint{open.checkpointNote ? `: “${open.checkpointNote}”` : ""}. Waiting for a new recording.</p>
               ) : (
                 <p className="text-muted">Checkpoint: waiting for your narrator&apos;s first ~15 minutes.</p>
+              )}
+            </div>
+          )}
+          {open.status === "active" && moneyHint && <p className="mt-2 text-xs text-danger">{moneyHint}</p>}
+          {open.status === "active" && money && money.jobId === open.id && (money.pay === "per_finished_hour" || money.deliveredAt) && (
+            <div className="mt-2 border border-line px-3 py-2 text-xs">
+              {money.pay !== "per_finished_hour" ? null : money.depositPaid > 0 ? (
+                <p>
+                  <span className="text-accent">✓</span> Deposit paid: {dollars(money.depositPaid)}, held by Novelist Writer until delivery.
+                </p>
+              ) : !open.terms.checkpoint ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>There&apos;s no checkpoint, so the deposit starts production.</span>
+                  <button type="button" disabled={busy} className="bg-accent px-3 py-1.5 text-paper" onClick={() => void pay("pay_deposit", open.id)}>
+                    Pay the deposit ({dollars(money.depositDue)})
+                  </button>
+                </div>
+              ) : (
+                <p className="text-muted">The deposit ({dollars(money.depositDue)}) is paid when you approve the checkpoint.</p>
+              )}
+              {money.deliveredAt && (
+                <div className="mt-2">
+                  <p className="text-ink">
+                    <b>Delivered:</b> {money.delivered.length} file{money.delivered.length === 1 ? "" : "s"} ({mb(money.delivered.reduce((n, f) => n + f.bytes, 0))}), mastered to ACX&apos;s specs.
+                  </p>
+                  {money.pay === "per_finished_hour" && (
+                    <p className="mt-1">
+                      Finished length {(money.finishedMs / 3_600_000).toFixed(2)} hours (approved chapters) · fee {dollars(money.finalFee)} + our {NARRATION_FEE_PCT}% = {dollars(money.finalTotal)}
+                      {money.depositPaid ? ` − deposit ${dollars(money.depositPaid)}` : ""}
+                    </p>
+                  )}
+                  <button type="button" disabled={busy} className="mt-2 bg-accent px-3 py-1.5 text-paper disabled:opacity-60" onClick={() => void pay("pay_balance", open.id)}>
+                    {money.balanceDue > 0 ? `Pay the balance (${dollars(money.balanceDue)}) and unlock the files` : "Unlock the files"}
+                  </button>
+                  <p className="mt-1 text-muted">Approve every chapter first. Your narrator is paid the moment this clears.</p>
+                </div>
               )}
             </div>
           )}
@@ -274,7 +377,7 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
           {form.terms.pay === "per_finished_hour" && cost.fee > 0 && (
             <p className="border border-line bg-paper-deep/40 px-3 py-2 text-xs">
               Narrator fee about <b>{dollars(cost.fee)}</b> + our {NARRATION_FEE_PCT}% ({dollars(cost.platform)}) = <b>{dollars(cost.total)}</b>. The narrator gets their full rate. Half ({dollars(cost.deposit)}) is paid as a held
-              deposit when the checkpoint is approved; payments open in the next update.
+              deposit when the checkpoint is approved, and the rest when the finished files are delivered.
             </p>
           )}
           {form.terms.pay === "royalty_share" && (
@@ -310,6 +413,29 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
         </div>
       )}
 
+      {!open && money?.finalPaidAt && (
+        <div className="mt-2 border border-accent px-3 py-2 text-xs">
+          <p>
+            <span className="text-accent">✓</span> Your audiobook is finished and paid. The files are kept for 60 days; download them and keep your own copy.
+          </p>
+          {files ? (
+            <ul className="mt-2 space-y-1">
+              {files.map((f) => (
+                <li key={f.name}>
+                  <a href={f.url} className="text-accent underline">
+                    {f.name}
+                  </a>{" "}
+                  <span className="text-muted">({mb(f.bytes)})</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <button type="button" className="mt-2 bg-accent px-3 py-1.5 text-paper" onClick={() => void loadFiles(money.jobId)}>
+              Show the download links
+            </button>
+          )}
+        </div>
+      )}
       {msg && <p className="mt-2 text-xs text-ink">{msg}</p>}
       {past.length > 0 && !form && (
         <p className="mt-2 text-[11px] text-muted">
