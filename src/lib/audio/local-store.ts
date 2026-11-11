@@ -95,6 +95,34 @@ export function chapterFolder(index: number) {
   return `chapter-${String(index + 1).padStart(2, "0")}`;
 }
 
+/** Mastered, store-ready files go here, next to the raw recordings. */
+export const EXPORT_FOLDER = "export";
+
+/** Removes every file in a folder (used to clear old exports before a full export). */
+export async function clearFolder(store: AudioStore, folder: string) {
+  try {
+    const dir = (await dirFor(store.root, [folder], false)) as DirHandle;
+    if (!dir.values) return;
+    const names: string[] = [];
+    for await (const h of dir.values()) if (h.kind === "file") names.push(h.name);
+    for (const n of names) await dir.removeEntry(n);
+  } catch {
+    /* nothing there yet */
+  }
+}
+
+/** Every file in one folder. */
+export async function folderFiles(store: AudioStore, folder: string): Promise<File[]> {
+  try {
+    const dir = (await dirFor(store.root, [folder], false)) as DirHandle;
+    const out: File[] = [];
+    if (dir.values) for await (const h of dir.values()) if (h.kind === "file") out.push(await (h as FileSystemFileHandle).getFile());
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
 async function dirFor(root: DirHandle, parts: string[], create: boolean) {
   let d: FileSystemDirectoryHandle = root;
   for (const p of parts) d = await d.getDirectoryHandle(p, { create });

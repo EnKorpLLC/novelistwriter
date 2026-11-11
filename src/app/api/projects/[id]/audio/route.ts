@@ -5,7 +5,22 @@ import { userHasStudio } from "@/lib/credits";
 
 const HINT = "Database needs an update. Run supabase/migration_audiobook.sql in the Supabase SQL editor.";
 const REVIEW_HINT = "Review and pickups need a database update. Run supabase/migration_audiobook_review.sql in the Supabase SQL editor.";
+const EXPORT_HINT = "Credits and export settings need a database update. Run supabase/migration_audiobook_export.sql in the Supabase SQL editor.";
 const STATUSES = ["recording", "review", "approved"] as const;
+/** Opening and closing credits are recorded like chapters but aren't chapters. */
+const SEGMENTS = ["opening", "closing"] as const;
+type Segment = (typeof SEGMENTS)[number];
+const segmentOf = (v: unknown) => SEGMENTS.find((s) => s === v) as Segment | undefined;
+
+export type AudioSettings = { narrator: string; sampleChapterId: string | null; sampleSentence: number };
+function normalizeSettings(raw: unknown): AudioSettings {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    narrator: typeof r.narrator === "string" ? r.narrator.slice(0, 120) : "",
+    sampleChapterId: typeof r.sampleChapterId === "string" ? r.sampleChapterId : null,
+    sampleSentence: Number.isFinite(Number(r.sampleSentence)) ? Math.max(0, Math.round(Number(r.sampleSentence))) : 0,
+  };
+}
 
 async function owner(projectId: string) {
   const supabase = await createClient();
@@ -23,23 +38,28 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const user = await owner(id);
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const admin = createServiceClient();
-  const [studio, takes, sessions, notes, chapters] = await Promise.all([
+  const [studio, takes, sessions, notes, chapters, settings, profile] = await Promise.all([
     userHasStudio(user.id),
     admin.from("audio_takes").select("*").eq("project_id", id).order("take_no"),
     admin.from("narration_sessions").select("id, started_at, ended_at, recorded_ms, takes, noise_floor_db").eq("project_id", id).order("started_at"),
     admin.from("audio_notes").select("*").eq("project_id", id).order("sentence"),
     admin.from("audio_chapters").select("chapter_id, status, rounds, approved_at").eq("project_id", id),
+    admin.from("projects").select("audio_settings").eq("id", id).maybeSingle(),
+    admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
   ]);
   if (takes.error || sessions.error) return NextResponse.json({ studio, migrationNeeded: true, error: HINT, takes: [], record: null });
   const reviewReady = !notes.error && !chapters.error;
   const rows = takes.data || [];
   const recorded = rows.filter((t) => !t.imported);
-  const chaptersRecorded = new Set(recorded.map((t) => t.chapter_id)).size;
+  const chaptersRecorded = new Set(recorded.map((t) => t.chapter_id ?? t.segment)).size;
   return NextResponse.json({
     studio,
+    exportHint: settings.error ? EXPORT_HINT : null,
+    settings: normalizeSettings(settings.data?.audio_settings),
+    authorName: (profile.data?.display_name as string) || "",
     takes: rows.map((t) => ({
       id: t.id,
-      chapterId: t.chapter_id,
+      chapterId: t.chapter_id ?? t.segment,
       takeNo: t.take_no,
       fileName: t.file_name,
       fromSentence: t.from_sentence,
@@ -91,6 +111,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
  *   { action: "add_note", chapterId, sentence, toSentence, quote, body, atMs? }
  *   { action: "update_note", id, status?, body? }   { action: "delete_note", id }
  *   { action: "chapter_status", chapterId, status: recording | review | approved }
+ *   { action: "settings", settings: { narrator, sampleChapterId, sampleSentence } }
+ * chapterId "opening" or "closing" records the credits.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -129,24 +151,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   };
   const optInt = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Math.max(0, Math.round(Number(v))));
 
-  // One chosen take per chapter and sentence range: the whole chapter, or each pickup's lines
-  async function choose(takeId: string, chapterId: string, from: number, to: number | null) {
-    let q = admin.from("audio_takes").update({ chosen: false }).eq("chapter_id", chapterId).eq("from_sentence", from).neq("id", takeId);
+  // A slot is a chapter id, or "opening" / "closing" for the credits
+  const slotColumn = (slot: string) => (segmentOf(slot) ? "segment" : "chapter_id");
+
+  // One chosen take per slot and sentence range: the whole chapter, or each pickup's lines
+  async function choose(takeId: string, slot: string, from: number, to: number | null) {
+    let q = admin.from("audio_takes").update({ chosen: false }).eq("project_id", id).eq(slotColumn(slot), slot).eq("from_sentence", from).neq("id", takeId);
     q = to == null ? q.is("to_sentence", null) : q.eq("to_sentence", to);
     const { error } = await q;
     // Before the review migration there's no to_sentence; fall back to the starting sentence alone
-    if (error) await admin.from("audio_takes").update({ chosen: false }).eq("chapter_id", chapterId).eq("from_sentence", from).neq("id", takeId);
+    if (error) await admin.from("audio_takes").update({ chosen: false }).eq("project_id", id).eq(slotColumn(slot), slot).eq("from_sentence", from).neq("id", takeId);
     await admin.from("audio_takes").update({ chosen: true }).eq("id", takeId);
   }
 
+  if (b.action === "settings") {
+    const { error } = await admin.from("projects").update({ audio_settings: normalizeSettings(b.settings) }).eq("id", id);
+    if (error) return NextResponse.json({ error: EXPORT_HINT }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
   if (b.action === "add_take") {
-    const chapterId = await chapterOf(b.chapterId);
-    if (!chapterId) return NextResponse.json({ error: "Chapter not found" }, { status: 400 });
+    const segment = segmentOf(b.chapterId);
+    const chapterId = segment ? null : await chapterOf(b.chapterId);
+    if (!segment && !chapterId) return NextResponse.json({ error: "Chapter not found" }, { status: 400 });
     const from = Math.max(0, Math.round(num(b.fromSentence)));
     const to = optInt(b.toSentence);
     const row = {
       project_id: id,
       chapter_id: chapterId,
+      ...(segment ? { segment } : {}),
       user_id: user.id,
       session_id: typeof b.sessionId === "string" ? b.sessionId : null,
       take_no: Math.max(1, Math.round(num(b.takeNo, 1))),
@@ -164,9 +197,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .select("id")
       .single();
     if (ins.error) ins = await admin.from("audio_takes").insert(row).select("id").single();
-    if (ins.error || !ins.data) return NextResponse.json({ error: HINT }, { status: 500 });
+    if (ins.error || !ins.data) return NextResponse.json({ error: segment ? EXPORT_HINT : HINT }, { status: 500 });
     // The newest take for a range is the chosen one until the narrator picks another
-    await choose(ins.data.id, chapterId, from, to == null ? null : Math.max(from, to));
+    await choose(ins.data.id, segment || chapterId!, from, to == null ? null : Math.max(from, to));
     if (noteId) await admin.from("audio_notes").update({ status: "fixed", pickup_take_id: ins.data.id, resolved_at: new Date().toISOString() }).eq("id", noteId).eq("project_id", id);
     return NextResponse.json({ id: ins.data.id });
   }
@@ -234,14 +267,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const takeId = String(b.id || "");
   const { data: take } = await admin.from("audio_takes").select("*").eq("id", takeId).eq("project_id", id).maybeSingle();
   if (!take) return NextResponse.json({ error: "Take not found" }, { status: 404 });
+  const slot = (take.chapter_id ?? take.segment) as string;
   if (b.action === "choose_take") {
-    await choose(take.id, take.chapter_id, take.from_sentence, take.to_sentence ?? null);
+    await choose(take.id, slot, take.from_sentence, take.to_sentence ?? null);
     return NextResponse.json({ ok: true });
   }
   if (b.action === "place_take") {
     // Where this pickup cuts into its parent take, worked out (and adjustable) in the narrator's browser
     const parentId = String(b.parentId || "");
-    const { data: parent } = await admin.from("audio_takes").select("id").eq("id", parentId).eq("chapter_id", take.chapter_id).maybeSingle();
+    const { data: parent } = await admin.from("audio_takes").select("id").eq("id", parentId).eq("project_id", id).eq(slotColumn(slot), slot).maybeSingle();
     if (!parent || parent.id === take.id) return NextResponse.json({ error: "Parent take not found" }, { status: 400 });
     const inMs = optInt(b.inMs);
     const outMs = optInt(b.outMs);

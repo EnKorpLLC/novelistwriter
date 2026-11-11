@@ -986,7 +986,7 @@ export function ProjectWorkspace({
 
         {tab === "sell" && <SellPanel projectId={project.id} />}
 
-        {tab === "audio" && <AudioStudio projectId={project.id} chapters={chapters} />}
+        {tab === "audio" && <AudioStudio projectId={project.id} chapters={chapters} bookTitle={projectTitle || "Untitled"} coverPath={coverPath} />}
 
         {tab === "format" && (
           <FormatPanel projectId={project.id} project={project} chapters={chapters} matter={matter} />

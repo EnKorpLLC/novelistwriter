@@ -18,7 +18,7 @@ import {
   type PlacedTake,
   type Sentence,
 } from "@/lib/audio/assemble";
-import { chapterFolder, readFile, type AudioStore } from "@/lib/audio/local-store";
+import { readFile, type AudioStore } from "@/lib/audio/local-store";
 
 export type StudioTake = PlacedTake & { takeNo: number; fileName: string; chosen: boolean; durationMs: number; noteId: string | null };
 export type AudioNote = {
@@ -46,14 +46,14 @@ export function rangeLabel(from: number, to: number | null) {
 }
 
 /** Loads takes from the narrator's folder, keeping the last few in memory while they review. */
-function useTakeLoader(store: AudioStore, chapterIndex: number, takes: StudioTake[]) {
+function useTakeLoader(store: AudioStore, folder: string, takes: StudioTake[]) {
   const cache = useRef(new Map<string, Pcm>());
   return async (id: string) => {
     const hit = cache.current.get(id);
     if (hit) return hit;
     const t = takes.find((x) => x.id === id);
     if (!t) return null;
-    const f = await readFile(store, chapterFolder(chapterIndex), t.fileName);
+    const f = await readFile(store, folder, t.fileName);
     if (!f) return null;
     const pcm = await readPcm(f);
     if (cache.current.size > 6) cache.current.delete(cache.current.keys().next().value as string);
@@ -87,7 +87,7 @@ export async function placeTake(
 export function AudioReview({
   store,
   chapterId,
-  chapterIndex,
+  folder,
   sentences,
   takes,
   notes,
@@ -99,7 +99,7 @@ export function AudioReview({
 }: {
   store: AudioStore;
   chapterId: string;
-  chapterIndex: number;
+  folder: string;
   sentences: Sentence[];
   takes: StudioTake[];
   notes: AudioNote[];
@@ -111,7 +111,7 @@ export function AudioReview({
 }) {
   const root = rootTake(takes);
   const chosen = useMemo(() => takes.filter((t) => t.chosen), [takes]);
-  const load = useTakeLoader(store, chapterIndex, takes);
+  const load = useTakeLoader(store, folder, takes);
   const [built, setBuilt] = useState<{ url: string; cuts: number[]; ms: number } | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -314,7 +314,7 @@ export function AudioReview({
               <span className="tabular-nums text-muted">
                 {mmss(pos * 1000)} / {mmss(built.ms)}
               </span>
-              <a href={built.url} download={`chapter-${String(chapterIndex + 1).padStart(2, "0")}.wav`} className="underline">
+              <a href={built.url} download={`${folder}.wav`} className="underline">
                 Download (WAV)
               </a>
             </>

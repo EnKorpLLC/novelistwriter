@@ -7,6 +7,8 @@ import { Recorder, listMicrophones, openMicrophone } from "@/lib/audio/recorder"
 import { allFiles, browserStore, chapterFolder, chooseFolder, deleteFile, forgetFolder, readFile, restoreFolder, saveFile, supportsFolders, type AudioStore } from "@/lib/audio/local-store";
 import { readPcm, sentencesOf } from "@/lib/audio/assemble";
 import { AudioReview, isPickup, placeTake, rangeLabel, type AudioNote, type ChapterReview, type StudioTake } from "@/components/AudioReview";
+import { AudioExport, creditsScripts, type AudioSettings, type AudioSlot } from "@/components/AudioExport";
+import { coverPublicUrl } from "@/lib/cover";
 
 type Take = StudioTake & { chapterId: string; peakDb: number | null; rmsDb: number | null; imported: boolean };
 type RecordSummary = { sessions: number; recordedMs: number; takes: number; retakes: number; firstAt: string | null; lastAt: string | null };
@@ -17,8 +19,21 @@ const hours = (ms: number) => (ms >= 3_600_000 ? `${(ms / 3_600_000).toFixed(1)}
 const LONG_TAKE_MS = 45 * 60_000;
 
 /** Audio tab (Studio): record the audiobook chapter by chapter. Recordings stay on this computer. */
-export function AudioStudio({ projectId, chapters }: { projectId: string; chapters: Chapter[] }) {
+export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { projectId: string; chapters: Chapter[]; bookTitle: string; coverPath: string | null }) {
   const ordered = useMemo(() => [...chapters].sort((a, b) => a.sort_order - b.sort_order), [chapters]);
+  const [settings, setSettings] = useState<AudioSettings>({ narrator: "", sampleChapterId: null, sampleSentence: 0 });
+  const [authorName, setAuthorName] = useState("");
+  const [exportHint, setExportHint] = useState<string | null>(null);
+  const scripts = creditsScripts({ title: bookTitle, author: authorName, narrator: settings.narrator });
+  // Opening credits, the chapters, closing credits: everything that becomes a file
+  const slots = useMemo<AudioSlot[]>(
+    () => [
+      ...(exportHint ? [] : [{ id: "opening", kind: "opening" as const, title: "Opening credits", content_text: scripts.opening, folder: "opening-credits" }]),
+      ...ordered.map((c, i) => ({ id: c.id, kind: "chapter" as const, title: c.title?.trim() || `Chapter ${i + 1}`, content_text: c.content_text || "", folder: chapterFolder(i) })),
+      ...(exportHint ? [] : [{ id: "closing", kind: "closing" as const, title: "Closing credits", content_text: scripts.closing, folder: "closing-credits" }]),
+    ],
+    [ordered, scripts.opening, scripts.closing, exportHint]
+  );
   const [studio, setStudio] = useState<boolean | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [takes, setTakes] = useState<Take[]>([]);
@@ -64,6 +79,9 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
     setNotes(d.notes || []);
     setReviews(d.chapters || {});
     setReviewHint(d.reviewHint || null);
+    setExportHint(d.exportHint || null);
+    if (d.settings) setSettings(d.settings);
+    setAuthorName(d.authorName || "");
   }, [projectId]);
 
   useEffect(() => {
@@ -149,8 +167,8 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
     }
   }
 
-  const chapterIndex = ordered.findIndex((c) => c.id === chapterId);
-  const chapter = ordered[chapterIndex];
+  const chapter = slots.find((s) => s.id === chapterId);
+  const folder = chapter?.folder || "";
   const sentences = useMemo(() => sentencesOf(chapter?.content_text || ""), [chapter?.content_text]);
   const chapterTakes = takes.filter((t) => t.chapterId === chapterId).sort((a, b) => b.takeNo - a.takeNo);
   const chapterNotesOpen = notes.filter((n) => n.chapterId === chapterId && n.status === "open").length;
@@ -185,7 +203,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
     const levels = measure(samples, sampleRate);
     try {
       // Saved to this computer first; only the take's details go to the server
-      await saveFile(store, chapterFolder(chapterIndex), fileName, encodeWav(samples, sampleRate));
+      await saveFile(store, folder, fileName, encodeWav(samples, sampleRate));
       const durationMs = Math.round((samples.length / sampleRate) * 1000);
       const saved = await post({
         action: "add_take",
@@ -210,7 +228,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
         const all = [...chapterTakes, fresh];
         const err = await placeTake(fresh, all, sentences, async (tid) => {
           const t = all.find((x) => x.id === tid);
-          const f = t && (await readFile(store, chapterFolder(chapterIndex), t.fileName));
+          const f = t && (await readFile(store, folder, t.fileName));
           return f ? readPcm(f) : null;
         }, post).catch((e) => (e instanceof Error ? e.message : "Couldn't place the pickup"));
         placed = err ? ` ${err}` : " It's cut into the chapter; hear it in Review.";
@@ -227,7 +245,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
     if (playing?.id === t.id) return void player.current?.play();
     stopPlayback();
     if (!store) return;
-    const file = await readFile(store, chapterFolder(chapterIndex), t.fileName);
+    const file = await readFile(store, folder, t.fileName);
     if (!file) return setNote(`Couldn't find ${t.fileName} in ${store.label}. Was it moved or deleted?`);
     setPlayPos(0);
     setPlayLen(t.durationMs / 1000);
@@ -246,7 +264,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
   async function removeTake(t: Take) {
     if (!window.confirm(`Delete take ${t.takeNo}? This removes the file from ${store?.label || "your computer"}.`)) return;
     if (playing?.id === t.id) stopPlayback();
-    if (store) await deleteFile(store, chapterFolder(chapterIndex), t.fileName);
+    if (store) await deleteFile(store, folder, t.fileName);
     await post({ action: "delete_take", id: t.id }).catch(() => null);
     await load();
   }
@@ -459,7 +477,8 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                           type="button"
                           role="tab"
                           aria-selected={mode === m}
-                          disabled={recording}
+                          disabled={recording || (m === "review" && chapter?.kind !== "chapter")}
+                          title={m === "review" && chapter?.kind !== "chapter" ? "Credits are short: play the take in Record" : undefined}
                           onClick={() => {
                             stopPlayback();
                             setMode(m);
@@ -478,16 +497,19 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                       stopPlayback();
                       setChapterId(e.target.value);
                       setRange(null);
+                      if (!slots.find((s) => s.id === e.target.value && s.kind === "chapter")) setMode("record");
                     }}
                     className="max-w-full border border-line bg-paper px-2 py-1.5 text-xs"
                   >
-                    {ordered.map((c, i) => {
+                    {slots.map((c) => {
                       const n = takes.filter((t) => t.chapterId === c.id).length;
                       const st = reviews[c.id]?.status;
+                      const num = c.kind === "chapter" ? `${ordered.findIndex((o) => o.id === c.id) + 1}. ` : "";
                       return (
                         <option key={c.id} value={c.id}>
                           {st === "approved" ? "✓ " : ""}
-                          {i + 1}. {c.title || "Untitled"} {n ? `(${n} take${n === 1 ? "" : "s"}${st === "review" ? ", in review" : ""})` : ""}
+                          {num}
+                          {c.title} {n ? `(${n} take${n === 1 ? "" : "s"}${st === "review" ? ", in review" : ""})` : ""}
                         </option>
                       );
                     })}
@@ -496,13 +518,13 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
 
                 {!chapter ? (
                   <p className="mt-3 text-muted">Write a chapter first, then record it here.</p>
-                ) : mode === "review" ? (
+                ) : mode === "review" && chapter.kind === "chapter" ? (
                   store ? (
                     <AudioReview
                       key={chapter.id}
                       store={store}
                       chapterId={chapter.id}
-                      chapterIndex={chapterIndex}
+                      folder={folder}
                       sentences={sentences}
                       takes={chapterTakes}
                       notes={notes.filter((n) => n.chapterId === chapter.id)}
@@ -664,6 +686,24 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                     </aside>
                   </div>
                 )}
+              </section>
+
+              {/* 4. Master and export */}
+              <section className="border border-line p-4 text-sm">
+                <h3 className="font-display text-lg">4. Master and export</h3>
+                <AudioExport
+                  store={store}
+                  slots={slots}
+                  takes={takes}
+                  reviews={reviews}
+                  settings={settings}
+                  exportHint={exportHint}
+                  coverUrl={coverPath ? coverPublicUrl(coverPath) : null}
+                  onSettings={(s) => {
+                    setSettings(s);
+                    void post({ action: "settings", settings: s }).catch((e) => setNote(e instanceof Error ? e.message : "Couldn't save"));
+                  }}
+                />
               </section>
             </>
           )}

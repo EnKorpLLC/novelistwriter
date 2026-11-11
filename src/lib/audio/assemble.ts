@@ -88,15 +88,20 @@ export function frameDb(pcm: Pcm): Float32Array {
 export type Pause = { startMs: number; endMs: number };
 export type PauseMap = { pauses: Pause[]; speechStartMs: number; speechEndMs: number; totalMs: number };
 
-/** Pauses between phrases: stretches well below speaking level, at least minMs long, inside the speech. */
-export function findPauses(db: Float32Array, minMs = 160): PauseMap {
-  const totalMs = db.length * FRAME_MS;
-  if (db.length < 3) return { pauses: [], speechStartMs: 0, speechEndMs: totalMs, totalMs };
+/** The level between room noise and speech, from 20 ms frame levels; null when it's all one or the other. */
+export function speechThreshold(db: Float32Array): number | null {
+  if (db.length < 3) return null;
   const sorted = Float32Array.from(db).sort();
   const lo = sorted[Math.floor(sorted.length * 0.1)];
   const hi = sorted[Math.floor(sorted.length * 0.9)];
-  if (hi - lo < 6) return { pauses: [], speechStartMs: 0, speechEndMs: totalMs, totalMs };
-  const thr = lo + Math.max(6, (hi - lo) * 0.3);
+  return hi - lo < 6 ? null : lo + Math.max(6, (hi - lo) * 0.3);
+}
+
+/** Pauses between phrases: stretches well below speaking level, at least minMs long, inside the speech. */
+export function findPauses(db: Float32Array, minMs = 160): PauseMap {
+  const totalMs = db.length * FRAME_MS;
+  const thr = speechThreshold(db);
+  if (thr == null) return { pauses: [], speechStartMs: 0, speechEndMs: totalMs, totalMs };
   let first = 0;
   while (first < db.length && db[first] <= thr) first++;
   let last = db.length - 1;
