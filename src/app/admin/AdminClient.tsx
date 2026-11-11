@@ -37,6 +37,8 @@ type AdminUser = {
   isAuthor: boolean;
   isBetaReader: boolean;
   isPlatformAdmin: boolean;
+  isNarrator?: boolean;
+  pro?: { status: string; founding: boolean; specialties: string[] } | null;
   tier: string;
   passBankDays: number;
   passActiveUntil: string | null;
@@ -61,6 +63,15 @@ const TABS = [
   { id: "gifts", label: "Studio days" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
+
+const USER_ROLES = [
+  { id: "author", label: "Authors", plural: "authors" },
+  { id: "reader", label: "Readers", plural: "readers" },
+  { id: "narrator", label: "Narrators", plural: "narrators" },
+  { id: "editor", label: "Editors", plural: "editors and proofreaders" },
+  { id: "artist", label: "Artists", plural: "artists and designers" },
+] as const;
+type UserRole = (typeof USER_ROLES)[number]["id"];
 
 function when(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -87,7 +98,7 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   const [userBusy, setUserBusy] = useState<string | null>(null);
   const [tempShown, setTempShown] = useState<{ email: string; password: string } | null>(null);
   const [giftUserId, setGiftUserId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<"author" | "reader">("author");
+  const [userRole, setUserRole] = useState<UserRole>("author");
   const [userPage, setUserPage] = useState(1);
   const [userPageSize, setUserPageSize] = useState(10);
   const [userTotal, setUserTotal] = useState(0);
@@ -141,6 +152,7 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
       }
       setUsers(data.users || []);
       setUserTotal(data.total || 0);
+      if (data.note) setNote(data.note);
     } finally {
       setUsersLoading(false);
     }
@@ -149,6 +161,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   useEffect(() => {
     if (tab === "users") void loadUsers();
   }, [tab, loadUsers]);
+
+  const roleWord = USER_ROLES.find((r) => r.id === userRole)?.plural || "accounts";
 
   function searchUsers(e?: React.FormEvent) {
     e?.preventDefault();
@@ -342,19 +356,19 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
         {tab === "users" && (
           <section className="mt-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-              <div className="flex gap-3">
-                {(["author", "reader"] as const).map((r) => (
+              <div className="flex flex-wrap gap-3">
+                {USER_ROLES.map((r) => (
                   <button
-                    key={r}
+                    key={r.id}
                     type="button"
-                    className={userRole === r ? "text-ink underline" : "text-muted hover:text-ink"}
+                    className={userRole === r.id ? "text-ink underline" : "text-muted hover:text-ink"}
                     onClick={() => {
-                      setUserRole(r);
+                      setUserRole(r.id);
                       setUserPage(1);
                       setGiftUserId(null);
                     }}
                   >
-                    {r === "author" ? "Authors" : "Readers"}
+                    {r.label}
                   </button>
                 ))}
               </div>
@@ -404,8 +418,18 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
               {usersLoading
                 ? "Loading…"
                 : userTotal
-                  ? `Showing ${(userPage - 1) * userPageSize + 1}–${Math.min(userTotal, userPage * userPageSize)} of ${userTotal} ${userRole === "author" ? "authors" : "readers"}${appliedQuery ? ` matching “${appliedQuery}”` : ""}`
-                  : `No ${userRole === "author" ? "authors" : "readers"}${appliedQuery ? ` match “${appliedQuery}”` : " yet"}.`}
+                  ? `Showing ${(userPage - 1) * userPageSize + 1}–${Math.min(userTotal, userPage * userPageSize)} of ${userTotal} ${roleWord}${appliedQuery ? ` matching “${appliedQuery}”` : ""}`
+                  : `No ${roleWord}${appliedQuery ? ` match “${appliedQuery}”` : " yet"}.`}
+              {(userRole === "editor" || userRole === "artist" || userRole === "narrator") && (
+                <>
+                  {" "}
+                  Applications and invites are on the{" "}
+                  <button type="button" className="underline" onClick={() => setTab("marketplace")}>
+                    Marketplace
+                  </button>{" "}
+                  tab.
+                </>
+              )}
             </p>
 
             {tempShown && (
@@ -434,6 +458,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                         {[
                           u.isAuthor ? "Author" : null,
                           u.isBetaReader ? "Reader" : null,
+                          u.isNarrator ? "Narrator" : null,
+                          u.pro ? `Pro (${u.pro.status}${u.pro.founding ? ", founding" : ""}): ${u.pro.specialties.join(", ") || "nothing picked yet"}` : null,
                           u.isPlatformAdmin ? "Admin" : null,
                         ]
                           .filter(Boolean)
