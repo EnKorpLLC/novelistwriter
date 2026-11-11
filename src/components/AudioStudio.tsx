@@ -5,24 +5,16 @@ import type { Chapter } from "@/lib/types";
 import { encodeWav, measure, roomAdvice, type Levels } from "@/lib/audio/wav";
 import { Recorder, listMicrophones, openMicrophone } from "@/lib/audio/recorder";
 import { allFiles, browserStore, chapterFolder, chooseFolder, deleteFile, forgetFolder, readFile, restoreFolder, saveFile, supportsFolders, type AudioStore } from "@/lib/audio/local-store";
+import { readPcm, sentencesOf } from "@/lib/audio/assemble";
+import { AudioReview, isPickup, placeTake, rangeLabel, type AudioNote, type ChapterReview, type StudioTake } from "@/components/AudioReview";
 
-type Take = { id: string; chapterId: string; takeNo: number; fileName: string; fromSentence: number; durationMs: number; peakDb: number | null; rmsDb: number | null; chosen: boolean; imported: boolean; createdAt: string };
+type Take = StudioTake & { chapterId: string; peakDb: number | null; rmsDb: number | null; imported: boolean };
 type RecordSummary = { sessions: number; recordedMs: number; takes: number; retakes: number; firstAt: string | null; lastAt: string | null };
 
 const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
 const hours = (ms: number) => (ms >= 3_600_000 ? `${(ms / 3_600_000).toFixed(1)} hours` : `${Math.round(ms / 60000)} minutes`);
 // A chapter held in memory grows about 6 MB a minute; past this, ask the narrator to split it
 const LONG_TAKE_MS = 45 * 60_000;
-
-/** Sentences to read from, split on sentence ends; blank lines start new paragraphs. */
-function sentencesOf(text: string): { text: string; paraStart: boolean }[] {
-  const out: { text: string; paraStart: boolean }[] = [];
-  for (const para of text.split(/\n+/).map((p) => p.trim()).filter(Boolean)) {
-    const parts = para.split(/(?<=[.!?…]["”’)\]]?)\s+(?=["“‘(\[]?[A-Z0-9])/);
-    parts.forEach((s, i) => out.push({ text: s, paraStart: i === 0 }));
-  }
-  return out;
-}
 
 /** Audio tab (Studio): record the audiobook chapter by chapter. Recordings stay on this computer. */
 export function AudioStudio({ projectId, chapters }: { projectId: string; chapters: Chapter[] }) {
@@ -39,7 +31,13 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
   const [roomCheck, setRoomCheck] = useState<{ kind: "silence" | "voice"; levels: Levels } | null>(null);
   const [checking, setChecking] = useState<"silence" | "voice" | null>(null);
   const [chapterId, setChapterId] = useState(ordered[0]?.id || "");
-  const [fromSentence, setFromSentence] = useState(0);
+  // What the next take covers: null for the whole chapter, or a pickup's lines (to = null for "to the end")
+  const [range, setRange] = useState<{ from: number; to: number | null; noteId?: string } | null>(null);
+  const fromSentence = range?.from ?? 0;
+  const [mode, setMode] = useState<"record" | "review">("record");
+  const [notes, setNotes] = useState<AudioNote[]>([]);
+  const [reviews, setReviews] = useState<Record<string, ChapterReview>>({});
+  const [reviewHint, setReviewHint] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [note, setNote] = useState<string | null>(null);
@@ -63,6 +61,9 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
     setHint(d.migrationNeeded ? d.error : null);
     setTakes(d.takes || []);
     setSummary(d.record || null);
+    setNotes(d.notes || []);
+    setReviews(d.chapters || {});
+    setReviewHint(d.reviewHint || null);
   }, [projectId]);
 
   useEffect(() => {
@@ -152,6 +153,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
   const chapter = ordered[chapterIndex];
   const sentences = useMemo(() => sentencesOf(chapter?.content_text || ""), [chapter?.content_text]);
   const chapterTakes = takes.filter((t) => t.chapterId === chapterId).sort((a, b) => b.takeNo - a.takeNo);
+  const chapterNotesOpen = notes.filter((n) => n.chapterId === chapterId && n.status === "open").length;
 
   async function startRecording() {
     if (!store || !chapter) return;
@@ -184,21 +186,37 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
     try {
       // Saved to this computer first; only the take's details go to the server
       await saveFile(store, chapterFolder(chapterIndex), fileName, encodeWav(samples, sampleRate));
-      await post({
+      const durationMs = Math.round((samples.length / sampleRate) * 1000);
+      const saved = await post({
         action: "add_take",
         chapterId: chapter.id,
         sessionId: sessionId.current,
         takeNo,
         fileName,
         fromSentence,
-        durationMs: Math.round((samples.length / sampleRate) * 1000),
+        toSentence: range?.to ?? null,
+        noteId: range?.noteId ?? null,
+        durationMs,
         sampleRate,
         peakDb: levels.peakDb,
         rmsDb: levels.rmsDb,
       });
       if (sessionId.current) await post({ action: "end_session", id: sessionId.current });
       const warn = roomAdvice(levels, "voice").find((a) => !a.ok);
-      setNote(warn ? `Take ${takeNo} saved. ${warn.message}` : `Take ${takeNo} saved to ${store.label}.`);
+      let placed = "";
+      if (range) {
+        // Cut the pickup straight into the chapter at the pauses around its lines
+        const fresh: Take = { ...chapterTakes[0], id: saved.id, takeNo, fileName, fromSentence, toSentence: range.to, parentId: null, inMs: null, outMs: null, noteId: range.noteId ?? null, chosen: true, durationMs, createdAt: new Date().toISOString() };
+        const all = [...chapterTakes, fresh];
+        const err = await placeTake(fresh, all, sentences, async (tid) => {
+          const t = all.find((x) => x.id === tid);
+          const f = t && (await readFile(store, chapterFolder(chapterIndex), t.fileName));
+          return f ? readPcm(f) : null;
+        }, post).catch((e) => (e instanceof Error ? e.message : "Couldn't place the pickup"));
+        placed = err ? ` ${err}` : " It's cut into the chapter; hear it in Review.";
+        setRange(null);
+      }
+      setNote(warn ? `Take ${takeNo} saved. ${warn.message}${placed}` : `Take ${takeNo} saved to ${store.label}.${placed}`);
       await load();
     } catch (e) {
       setNote(e instanceof Error ? `Couldn't save the take: ${e.message}` : "Couldn't save the take");
@@ -261,7 +279,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
       if (e.code !== "Space" || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(el.tagName) || el.isContentEditable) return;
-      if (!store) return;
+      if (!store || mode !== "record") return;
       e.preventDefault();
       void (recording ? stopRecording() : startRecording());
     };
@@ -432,22 +450,44 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
               {/* 3. Record */}
               <section className="border border-line p-4 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="font-display text-lg">3. Record</h3>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="font-display text-lg">3. Record and review</h3>
+                    <div className="flex border border-line text-xs" role="tablist">
+                      {(["record", "review"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          role="tab"
+                          aria-selected={mode === m}
+                          disabled={recording}
+                          onClick={() => {
+                            stopPlayback();
+                            setMode(m);
+                          }}
+                          className={`px-3 py-1.5 ${mode === m ? "bg-ink text-paper" : ""}`}
+                        >
+                          {m === "record" ? "Record" : `Review${chapterNotesOpen ? ` (${chapterNotesOpen})` : ""}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <select
                     value={chapterId}
                     disabled={recording}
                     onChange={(e) => {
                       stopPlayback();
                       setChapterId(e.target.value);
-                      setFromSentence(0);
+                      setRange(null);
                     }}
                     className="max-w-full border border-line bg-paper px-2 py-1.5 text-xs"
                   >
                     {ordered.map((c, i) => {
                       const n = takes.filter((t) => t.chapterId === c.id).length;
+                      const st = reviews[c.id]?.status;
                       return (
                         <option key={c.id} value={c.id}>
-                          {i + 1}. {c.title || "Untitled"} {n ? `(${n} take${n === 1 ? "" : "s"})` : ""}
+                          {st === "approved" ? "✓ " : ""}
+                          {i + 1}. {c.title || "Untitled"} {n ? `(${n} take${n === 1 ? "" : "s"}${st === "review" ? ", in review" : ""})` : ""}
                         </option>
                       );
                     })}
@@ -456,25 +496,67 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
 
                 {!chapter ? (
                   <p className="mt-3 text-muted">Write a chapter first, then record it here.</p>
+                ) : mode === "review" ? (
+                  store ? (
+                    <AudioReview
+                      key={chapter.id}
+                      store={store}
+                      chapterId={chapter.id}
+                      chapterIndex={chapterIndex}
+                      sentences={sentences}
+                      takes={chapterTakes}
+                      notes={notes.filter((n) => n.chapterId === chapter.id)}
+                      review={reviews[chapter.id]}
+                      reviewHint={reviewHint}
+                      post={post}
+                      reload={load}
+                      onRecordPickup={(n) => {
+                        setRange({ from: n.sentence, to: n.toSentence, noteId: n.id });
+                        setMode("record");
+                        setNote(`Recording a pickup for: “${n.body}”`);
+                      }}
+                    />
+                  ) : (
+                    <p className="mt-3 text-muted">Choose where recordings are saved first, so the studio can open your takes.</p>
+                  )
                 ) : (
                   <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
                     <div className="min-w-0">
                       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-paper py-2">
                         {!recording ? (
                           <button type="button" disabled={!store} onClick={() => void startRecording()} className="flex items-center gap-2 bg-danger px-4 py-2 text-paper disabled:opacity-50">
-                            <span className="h-2.5 w-2.5 rounded-full bg-paper" aria-hidden="true" /> Record {fromSentence > 0 ? `from sentence ${fromSentence + 1}` : "chapter"}
+                            <span className="h-2.5 w-2.5 rounded-full bg-paper" aria-hidden="true" /> Record {range ? `pickup: ${rangeLabel(range.from, range.to)}` : "chapter"}
                           </button>
                         ) : (
                           <button type="button" onClick={() => void stopRecording()} className="flex items-center gap-2 bg-ink px-4 py-2 text-paper">
                             <span className="h-2.5 w-2.5 bg-paper" aria-hidden="true" /> Stop · {mmss(elapsed)}
                           </button>
                         )}
-                        {fromSentence > 0 && !recording && (
-                          <button type="button" className="text-xs text-muted underline" onClick={() => setFromSentence(0)}>
-                            Start from the top instead
-                          </button>
+                        {range && !recording && (
+                          <>
+                            <label className="flex items-center gap-1 text-xs text-muted">
+                              through
+                              <select
+                                value={range.to == null ? "end" : String(range.to)}
+                                onChange={(e) => setRange({ ...range, to: e.target.value === "end" ? null : Number(e.target.value) })}
+                                className="border border-line bg-paper px-1 py-1 text-xs"
+                              >
+                                {Array.from({ length: Math.min(12, sentences.length - range.from) }, (_, k) => range.from + k).map((s) => (
+                                  <option key={s} value={s}>
+                                    sentence {s + 1}
+                                  </option>
+                                ))}
+                                <option value="end">the end of the chapter</option>
+                              </select>
+                            </label>
+                            <button type="button" className="text-xs text-muted underline" onClick={() => setRange(null)}>
+                              Record the whole chapter instead
+                            </button>
+                          </>
                         )}
-                        <span className="text-xs text-muted">{store ? "Space starts and stops. Click a sentence to record a pickup from there." : "Choose where recordings are saved first."}</span>
+                        <span className="text-xs text-muted">
+                          {store ? "Space starts and stops. Click a sentence to record a pickup from there; pickups are cut into the chapter automatically." : "Choose where recordings are saved first."}
+                        </span>
                         {recording && elapsed > LONG_TAKE_MS && <span className="text-xs text-danger">Long take: stop soon and continue with a pickup, so nothing is lost if the browser crashes.</span>}
                       </div>
                       <div className="mt-2 max-h-[60vh] overflow-y-auto pr-1 font-display text-lg leading-relaxed">
@@ -487,8 +569,10 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                               <button
                                 type="button"
                                 disabled={recording}
-                                onClick={() => setFromSentence(i)}
-                                className={`inline text-left ${i === fromSentence && fromSentence > 0 ? "bg-accent/15 underline decoration-accent" : i < fromSentence ? "text-muted" : ""} hover:bg-accent/10`}
+                                onClick={() => setRange({ from: i, to: null })}
+                                className={`inline text-left ${
+                                  range && i >= range.from && i <= (range.to ?? Infinity) ? "bg-accent/15" : range && i < range.from ? "text-muted" : ""
+                                } ${range?.from === i ? "underline decoration-accent" : ""} hover:bg-accent/10`}
                               >
                                 {s.text}
                               </button>{" "}
@@ -537,7 +621,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                                 </span>
                               </div>
                               <p className="mt-0.5 text-muted">
-                                {t.fromSentence > 0 ? `Pickup from “${(sentences[t.fromSentence]?.text || "").slice(0, 40)}…”` : "Whole chapter"}
+                                {isPickup(t) ? `Pickup, ${rangeLabel(t.fromSentence, t.toSentence)}: “${(sentences[t.fromSentence]?.text || "").slice(0, 40)}…”` : "Whole chapter"}
                                 {t.peakDb != null && t.peakDb > -3 ? " · too loud in places" : ""}
                               </p>
                               {playing?.id === t.id && (
@@ -575,7 +659,7 @@ export function AudioStudio({ projectId, chapters }: { projectId: string; chapte
                         </ul>
                       )}
                       <p className="mt-2 text-[11px] text-muted">
-                        The ✓ take is used when the chapter is put together. Pickups replace the chapter from their sentence on; review and splicing come in the next step.
+                        The ✓ takes are used when the chapter is put together: the whole-chapter take, with each pickup cut in over its lines. Listen to the result in Review.
                       </p>
                     </aside>
                   </div>
