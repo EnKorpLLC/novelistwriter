@@ -43,7 +43,10 @@ async function load(token: string) {
       const listen = await signedFiles(files, p.project_id);
       audio = listen.map((f, i) => ({ title: f.title, durationMs: f.durationMs, url: f.url, download: `/purchase/${token}/mp3/${i + 1}`, fileName: f.fileName }));
     }
+    const { readAlongAccess } = await import("@/lib/read-along");
+    const readAlong = p.status === "paid" ? Boolean(await readAlongAccess(admin, token).catch(() => null)) : false;
     return {
+      readAlong,
       title: p.title as string,
       status: p.status as string,
       buyer_email: p.buyer_email as string,
@@ -97,6 +100,12 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
             )}
           </div>
         </div>
+        {!refunded && p.readAlong && (
+          <a href={`/purchase/${token}/read`} className="font-ui mt-6 block border border-accent px-4 py-3 text-sm">
+            <span className="font-medium text-accent">Read and listen</span>
+            <span className="block text-xs text-muted">You have the ebook and the audiobook: read the book here and switch to listening at the same spot.</span>
+          </a>
+        )}
         {!refunded && p.isAudio && p.audio.length > 0 && (
           <section className="mt-8">
             <AudiobookPlayer
