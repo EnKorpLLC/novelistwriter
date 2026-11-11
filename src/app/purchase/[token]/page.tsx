@@ -4,9 +4,10 @@ import type { Metadata } from "next";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
+import { AudiobookPlayer } from "@/components/AudiobookPlayer";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Your ebook | Novelist Writer", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Your book | Novelist Writer", robots: { index: false, follow: false } };
 
 async function load(token: string) {
   if (!/^[\w-]{20,64}$/.test(token)) return null;
@@ -16,7 +17,19 @@ async function load(token: string) {
     // select("*") so the page works before and after the audiobook migration adds format
     const { data: p } = await admin.from("book_purchases").select("*").eq("download_token", token).maybeSingle();
     if (!p) return null;
-    const { data: project } = p.project_id ? await admin.from("projects").select("cover_path, metadata, updated_at").eq("id", p.project_id).maybeSingle() : { data: null };
+    const { data: project } = p.project_id ? await admin.from("projects").select("cover_path, metadata, updated_at, user_id").eq("id", p.project_id).maybeSingle() : { data: null };
+    const { data: author } = project?.user_id ? await admin.from("profiles").select("display_name").eq("id", project.user_id).maybeSingle() : { data: null };
+    // Listening position syncs to the account only when the buyer is the one signed in
+    let viewerIsBuyer = false;
+    try {
+      const { createClient } = await import("@/lib/supabase/server");
+      const {
+        data: { user },
+      } = await (await createClient()).auth.getUser();
+      viewerIsBuyer = Boolean(user && (user.id === p.buyer_user_id || (user.email || "").toLowerCase() === String(p.buyer_email || "").toLowerCase()));
+    } catch {
+      viewerIsBuyer = false;
+    }
     // The rest of a bundle or an ebook + audiobook set bought in the same checkout
     const { data: others } = p.order_ref
       ? await admin.from("book_purchases").select("*").eq("order_ref", p.order_ref).neq("download_token", token).order("stripe_session_id")
@@ -36,6 +49,9 @@ async function load(token: string) {
       buyer_name: (p.buyer_name as string) || "",
       buyer_user_id: p.buyer_user_id as string | null,
       price_cents: p.price_cents as number,
+      projectId: (p.project_id as string | null) || null,
+      author: (author?.display_name as string) || "",
+      viewerIsBuyer,
       isAudio,
       audio,
       coverUrl: project ? coverPublicUrl(projectCoverPath(project), project.updated_at ? Date.parse(project.updated_at) : undefined) : null,
@@ -81,26 +97,30 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
           </div>
         </div>
         {!refunded && p.isAudio && p.audio.length > 0 && (
-          <section className="font-ui mt-8 text-sm">
-            <ol className="divide-y divide-line border-y border-line">
-              {p.audio.map((f, i) => (
-                <li key={f.fileName} className="py-3">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-display text-base">
+          <section className="mt-8">
+            <AudiobookPlayer
+              projectId={p.projectId!}
+              storageKey={token}
+              files={p.audio.map((f) => ({ title: f.title, url: f.url, durationMs: f.durationMs }))}
+              signedIn={p.viewerIsBuyer}
+              title={p.title}
+              author={p.author}
+              coverUrl={p.coverUrl}
+            />
+            <details className="font-ui mt-4 text-sm">
+              <summary className="cursor-pointer text-accent">Download the MP3 files</summary>
+              <ol className="mt-2 space-y-1 text-xs">
+                {p.audio.map((f, i) => (
+                  <li key={f.fileName}>
+                    <a href={f.download} className="text-accent underline">
                       {i + 1}. {f.title}
-                    </span>
-                    <span className="text-xs text-muted">
-                      {Math.round(f.durationMs / 60000)} min ·{" "}
-                      <a href={f.download} className="text-accent underline">
-                        Download MP3
-                      </a>
-                    </span>
-                  </div>
-                  <audio controls preload="none" src={f.url} className="mt-2 w-full" />
-                </li>
-              ))}
-            </ol>
-            <p className="mt-2 text-xs text-muted">The links on this page refresh each time you open it. Listening with your place saved across devices is coming to your library.</p>
+                    </a>{" "}
+                    <span className="text-muted">({Math.round(f.durationMs / 60000)} min)</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-2 text-xs text-muted">No copy protection: they play in any app. The links refresh each time you open this page.</p>
+            </details>
           </section>
         )}
         {!refunded && p.others.length > 0 && (

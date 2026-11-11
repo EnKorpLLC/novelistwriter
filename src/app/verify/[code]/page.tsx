@@ -95,6 +95,23 @@ export default async function VerifyCodePage({ params }: { params: Promise<Param
               </div>
             ))}
           </dl>
+          {v.audiobook && (
+            <div className="font-ui mt-4 border border-line px-3 py-2 text-sm">
+              <p className="text-[10px] uppercase tracking-wide text-muted">Audiobook</p>
+              <p className="mt-1 text-ink">
+                {v.audiobook.recordedHere ? (
+                  <>
+                    <span className="text-accent">✓ Recorded in Novelist Writer.</span> At least 90% of the {v.audiobook.hours.toFixed(1)}-hour audiobook was recorded in our studio, take by take,
+                    with the narration record to show it.
+                  </>
+                ) : v.audiobook.humanNarrated ? (
+                  <>Human narrated, as stated by the author ({v.audiobook.hours.toFixed(1)} hours). It wasn&apos;t recorded in our studio, so we can&apos;t check it ourselves.</>
+                ) : (
+                  <>{v.audiobook.hours.toFixed(1)}-hour audiobook.</>
+                )}
+              </p>
+            </div>
+          )}
           <p className="font-ui mt-4 text-sm">
             {v.recordUrl && (
               <>

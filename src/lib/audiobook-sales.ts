@@ -102,4 +102,29 @@ export async function adoptDeliveredFiles(admin: SupabaseClient, projectId: stri
   return mp3s.length;
 }
 
+export type AudiobookBadge = { hours: number; humanNarrated: boolean; recordedHere: boolean };
+
+/**
+ * Audiobook badges for books on sale: "Human narrated" is the author's statement; "Recorded in Novelist Writer"
+ * is earned when the takes recorded in our studio (not imported) cover at least 90% of the finished length.
+ */
+export async function audiobookBadges(admin: SupabaseClient, projects: { id: string; audiobook_sale?: unknown }[]): Promise<Map<string, AudiobookBadge>> {
+  const out = new Map<string, AudiobookBadge>();
+  const onSale = projects.filter((p) => normalizeAudiobookSale(p.audiobook_sale).on);
+  if (!onSale.length) return out;
+  const ids = onSale.map((p) => p.id);
+  const [{ data: files, error }, { data: takes }] = await Promise.all([
+    admin.from("audiobook_files").select("project_id, duration_ms, is_sample").in("project_id", ids),
+    admin.from("audio_takes").select("project_id, duration_ms, imported").in("project_id", ids).eq("imported", false),
+  ]);
+  if (error) return out;
+  for (const p of onSale) {
+    const finished = (files || []).filter((f) => f.project_id === p.id && !f.is_sample).reduce((n, f) => n + (f.duration_ms || 0), 0);
+    if (!finished) continue;
+    const recorded = (takes || []).filter((t) => t.project_id === p.id).reduce((n, t) => n + (t.duration_ms || 0), 0);
+    out.set(p.id, { hours: finished / 3_600_000, humanNarrated: normalizeAudiobookSale(p.audiobook_sale).humanNarrated, recordedHere: recorded >= finished * 0.9 });
+  }
+  return out;
+}
+
 export type { AudiobookSale };

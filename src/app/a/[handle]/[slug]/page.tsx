@@ -16,7 +16,7 @@ import { LibraryButton } from "@/components/LibraryButton";
 import { BuyDirectButton } from "@/components/BuyDirectButton";
 import { buyerCountryAllowed, bundlesForBook, saleReadiness } from "@/lib/direct-sales";
 import { BuyBundleButton } from "@/components/BuyBundleButton";
-import { audiobookReadiness, signedFiles } from "@/lib/audiobook-sales";
+import { audiobookBadges, audiobookReadiness, signedFiles } from "@/lib/audiobook-sales";
 import { currentPrice, normalizeDirectSale } from "@/lib/direct-sale-rules";
 import { MagnetForm } from "@/components/MagnetForm";
 import { GuestListSignup } from "@/components/GuestListSignup";
@@ -111,8 +111,10 @@ export default async function LaunchPage({
   const direct = saleReady?.ok ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed() } : null;
   // The audiobook, and the ebook + audiobook set, sold the same way
   const audioReady = recordFlag && book.stage === "published" ? await audiobookReadiness(admin, recordFlag).catch(() => null) : null;
+  const audioBadge = audioReady?.ok && recordFlag ? (await audiobookBadges(admin, [recordFlag]).catch(() => new Map())).get(book.id) : null;
   const audio = audioReady?.ok
     ? {
+        recordedHere: Boolean(audioBadge?.recordedHere),
         priceCents: audioReady.sale.priceCents,
         bundleCents: direct ? audioReady.bundleCents : null,
         hours: (audioReady.durationMs / 3_600_000).toFixed(1),
@@ -264,7 +266,7 @@ export default async function LaunchPage({
                   format="audiobook"
                   quiet={Boolean(direct)}
                   label="Buy the audiobook"
-                  note={`${audio.hours} hours${audio.humanNarrated ? " · human narrated" : ""} · MP3, yours to keep`}
+                  note={`${audio.hours} hours${audio.recordedHere ? " · Recorded in Novelist Writer" : audio.humanNarrated ? " · human narrated" : ""} · MP3, yours to keep`}
                   price={{ cents: audio.priceCents, regularCents: null }}
                   canBuy={audio.canBuy}
                 />

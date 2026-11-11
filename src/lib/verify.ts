@@ -82,6 +82,8 @@ export type Verification = {
   firstSession: string | null;
   lastSession: string | null;
   checkedAt: string;
+  /** When the audiobook is on sale here: "Recorded in Novelist Writer" is earned; "human narrated" is the author's statement */
+  audiobook: { hours: number; humanNarrated: boolean; recordedHere: boolean } | null;
 };
 
 export function badgeLabel(status: VerifyStatus, typedPercent: number) {
@@ -150,5 +152,18 @@ export async function loadVerification(admin: SupabaseClient, code: string): Pro
     firstSession: record.firstAt,
     lastSession: record.lastAt,
     checkedAt: new Date().toISOString(),
+    audiobook: await audiobookFor(admin, p.id),
   };
+}
+
+async function audiobookFor(admin: SupabaseClient, projectId: string) {
+  try {
+    // Separate query: before migration_audiobook_sales.sql there's no audiobook_sale column
+    const { data, error } = await admin.from("projects").select("id, audiobook_sale").eq("id", projectId).maybeSingle();
+    if (error || !data) return null;
+    const { audiobookBadges } = await import("@/lib/audiobook-sales");
+    return (await audiobookBadges(admin, [data])).get(projectId) || null;
+  } catch {
+    return null;
+  }
 }

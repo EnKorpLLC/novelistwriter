@@ -343,9 +343,9 @@ function Purchases() {
   if (!items.length) return null;
   return (
     <section className="mt-12 border-t border-line pt-8">
-      <h2 className="font-display text-2xl">Your ebooks</h2>
+      <h2 className="font-display text-2xl">Your books</h2>
       <p className="mt-1 text-xs text-muted">
-        Yours to keep. Download them again anytime.{" "}
+        Yours to keep. Download them again anytime; audiobooks remember your place on every device.{" "}
         <a href="/refunds" className="underline">
           Refunds and your books
         </a>
@@ -359,7 +359,7 @@ function Purchases() {
                 {p.priceCents ? "Bought" : "Free since"} {new Date(p.boughtAt).toLocaleDateString()}
               </span>
               <a href={p.downloadUrl} className="border border-accent px-2 py-1 text-accent">
-                Download
+                {p.title.endsWith("(audiobook)") ? "Listen" : "Download"}
               </a>
             </span>
           </li>

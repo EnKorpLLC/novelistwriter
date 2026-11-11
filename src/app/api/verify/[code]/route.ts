@@ -47,6 +47,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ code: s
         lastSession: v.lastSession,
         fullRecordUrl: v.recordUrl,
       },
+      audiobook: v.audiobook
+        ? { hours: Math.round(v.audiobook.hours * 10) / 10, recordedInNovelistWriter: v.audiobook.recordedHere, humanNarratedStatedByAuthor: v.audiobook.humanNarrated }
+        : null,
       standard: appUrl("/human-authorship-standard"),
       checkedAt: v.checkedAt,
     },

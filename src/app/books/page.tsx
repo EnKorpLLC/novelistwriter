@@ -11,6 +11,7 @@ import { launchingThisWeek } from "@/lib/spotlight";
 import { createClient } from "@/lib/supabase/server";
 import { TbrButton } from "@/components/LibraryButton";
 import { applyContentFilters, contentFiltersFor } from "@/lib/reader-recs";
+import { audiobookBadges, type AudiobookBadge } from "@/lib/audiobook-sales";
 
 export const metadata = {
   title: "Published books — Novelist Writer",
@@ -22,9 +23,9 @@ export const dynamic = "force-dynamic";
 export default async function PublishedBooksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ genre?: string }>;
+  searchParams: Promise<{ genre?: string; format?: string }>;
 }) {
-  const { genre } = await searchParams;
+  const { genre, format } = await searchParams;
   const admin = createServiceClient();
   const [books, launching] = await Promise.all([listPublishedBooks(admin), launchingThisWeek(admin)]);
   const genres = [...new Set(books.map((b) => b.genre))].sort((a, b) => a.localeCompare(b));
@@ -33,7 +34,12 @@ export default async function PublishedBooksPage({
     data: { user },
   } = await supabase.auth.getUser();
   const filters = await contentFiltersFor(admin, user?.id).catch(() => []);
-  const { shown, hidden } = await applyContentFilters(admin, filters, genre ? books.filter((b) => b.genre === genre) : books);
+  // Audiobooks on sale here, with their badges (before migration_audiobook_sales.sql, none)
+  const { data: abRows } = await admin.from("projects").select("id, audiobook_sale").in("id", books.map((b) => b.id));
+  const audio = await audiobookBadges(admin, abRows || []).catch(() => new Map<string, AudiobookBadge>());
+  const audioOnly = format === "audiobook";
+  const picked = books.filter((b) => (!genre || b.genre === genre) && (!audioOnly || audio.has(b.id)));
+  const { shown, hidden } = await applyContentFilters(admin, filters, picked);
   // Badges and writing records the authors chose to show readers (RX1); the first screens' worth
   const trust = await readerTrustForBooks(admin, shown.slice(0, 60).map((b) => ({ id: b.id, user_id: b.authorUserId }))).catch(() => new Map());
 
@@ -52,14 +58,22 @@ export default async function PublishedBooksPage({
           </div>
         )}
 
-        {genres.length > 1 && (
+        {(genres.length > 1 || audio.size > 0) && (
           <div className="font-ui mt-6 flex flex-wrap gap-2 text-xs">
             <Link
               href="/books"
-              className={`border px-2.5 py-1 ${!genre ? "border-accent text-ink" : "border-line text-muted hover:text-ink"}`}
+              className={`border px-2.5 py-1 ${!genre && !audioOnly ? "border-accent text-ink" : "border-line text-muted hover:text-ink"}`}
             >
               All
             </Link>
+            {audio.size > 0 && (
+              <Link
+                href={audioOnly ? "/books" : "/books?format=audiobook"}
+                className={`border px-2.5 py-1 ${audioOnly ? "border-accent text-ink" : "border-line text-muted hover:text-ink"}`}
+              >
+                Audiobooks
+              </Link>
+            )}
             {genres.map((g) => (
               <Link
                 key={g}
@@ -109,6 +123,11 @@ export default async function PublishedBooksPage({
                   <p className="font-ui text-xs text-muted">
                     {b.authorName} · {b.genre}
                   </p>
+                  {audio.get(b.id) && (
+                    <p className="font-ui text-[11px] text-accent">
+                      Audiobook · {audio.get(b.id)!.recordedHere ? "Recorded in Novelist Writer" : audio.get(b.id)!.humanNarrated ? "human narrated" : `${audio.get(b.id)!.hours.toFixed(1)} hr`}
+                    </p>
+                  )}
                 </Link>
                 <div className="mt-1">
                   <CompactTrust trust={trust.get(b.id)?.trust} record={trust.get(b.id)?.record} />
