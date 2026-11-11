@@ -93,7 +93,7 @@ export default async function PricingPage() {
         </section>
 
         <section className="mt-16">
-          <h2 className="font-display text-3xl">Selling your ebook direct</h2>
+          <h2 className="font-display text-3xl">Selling direct to readers</h2>
           <p className="font-ui mt-2 max-w-2xl text-sm text-muted">
             On Pro and Studio, readers can buy your ebook right from your launch page. What you keep per sale, after our fee and Stripe&apos;s card fee.
             Sales tax is added on top at checkout, and we handle it.
@@ -126,7 +126,12 @@ export default async function PricingPage() {
             </Link>
           </p>
           <p className="font-ui mt-3 text-sm text-ink">
-            <strong>Audiobooks</strong> sell direct at the same fees, alone or as ebook + audiobook at one price. <strong>Hiring a narrator</strong> (Studio): our fee is 10% of the
+            <strong>Audiobooks</strong> sell direct at the same fees, alone or as ebook + audiobook at one price. So do <strong>pre-orders</strong>, <strong>extras</strong>{" "}
+            (character art, maps, bonus stories), <strong>box sets</strong> (Studio), and <strong>your shop</strong> of signed books, bookmarks, and prints you ship, where
+            you also keep the shipping you charge. <strong>Paperbacks printed on demand</strong> open soon: you&apos;ll keep the price less printing and the same fee.
+          </p>
+          <p className="font-ui mt-3 text-sm text-ink">
+            <strong>Hiring a narrator</strong> (Studio): our fee is 10% of the
             narration fee, paid by you on top, so the narrator gets their full rate; narrators never pay.{" "}
             <Link href="/narrators" className="text-accent underline">
               How it works for narrators

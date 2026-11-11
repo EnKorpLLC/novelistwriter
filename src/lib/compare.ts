@@ -14,14 +14,25 @@ export const FEATURES = [
   "Author website and launch pages",
   "Proof a human wrote the book",
   "Works on Windows, Mac, and Chromebook",
+  "Sell direct to readers",
+  "Human-narrated audiobooks",
+  "Hire human editors, designers, and narrators",
 ] as const;
+
+/** Rows added after most comparisons were written; a comparison that doesn't mention one shows this. */
+export const NEWER_FEATURES = ["Sell direct to readers", "Human-narrated audiobooks", "Hire human editors, designers, and narrators"] as const;
+const NOT_LISTED: [Mark, string?] = ["no", "Not listed on their site"];
+type CoreFeature = Exclude<(typeof FEATURES)[number], (typeof NEWER_FEATURES)[number]>;
+
+/** A comparison's mark for a feature, with the newer rows defaulting to "Not listed on their site". */
+export const markFor = (marks: Comparison["marks"], f: (typeof FEATURES)[number]): [Mark, string?] => marks[f] ?? NOT_LISTED;
 
 export type Comparison = {
   slug: string;
   name: string;
   what: string;
   price: string;
-  marks: Record<(typeof FEATURES)[number], [Mark, string?]>;
+  marks: Record<CoreFeature, [Mark, string?]> & Partial<Record<(typeof NEWER_FEATURES)[number], [Mark, string?]>>;
   chooseThem: string[];
   chooseUs: string[];
   switchSlug?: string;
@@ -39,6 +50,9 @@ const US: Comparison["marks"] = {
   "Author website and launch pages": ["yes", "Pro"],
   "Proof a human wrote the book": ["yes", "Writing record and badges"],
   "Works on Windows, Mac, and Chromebook": ["yes", "In the browser"],
+  "Sell direct to readers": ["yes", "Ebooks, audiobooks, pre-orders, extras, and signed copies from your shop (Pro)"],
+  "Human-narrated audiobooks": ["yes", "Record it yourself or hire a narrator, mastered to ACX's specs (Studio)"],
+  "Hire human editors, designers, and narrators": ["yes", "Agreements and held payments on every plan; the directory opens as founding pros join"],
 };
 
 export const NOVELIST_WRITER = { name: "Novelist Writer", price: "Free; Pro $19/month; Studio $49/month", marks: US };
@@ -173,8 +187,6 @@ export const COMPARISONS: Comparison[] = [
     extraRows: [
       ["AI drafts your prose", ["no", "By design: you write every word"], ["yes", "StoryWriter drafts scenes in your voice"]],
       ["AI feedback on your draft", ["yes", "Chapter critiques, on request"], ["yes", "StoryEdit, plus paid copy and line edits"]],
-      ["Sell your ebook direct to readers", ["yes", "Pro and Studio"], ["no", "Not listed on their site"]],
-      ["Record and export your audiobook", ["yes", "Studio, mastered to ACX's specs"], ["no", "Not listed on their site"]],
     ],
     chooseThem: [
       "You want AI to map your structure and draft scenes for you to revise",
@@ -201,11 +213,10 @@ export const COMPARISONS: Comparison[] = [
       "Author website and launch pages": ["no", "Not listed on their site"],
       "Proof a human wrote the book": ["no", "It generates chapters for you"],
       "Works on Windows, Mac, and Chromebook": ["yes", "In the browser"],
+      "Human-narrated audiobooks": ["no", "AI multi-voice narration with your own voice-service keys"],
     },
     extraRows: [
       ["AI drafts your prose", ["no", "By design: you write every word"], ["yes", "Generates chapters and whole novels"]],
-      ["Audiobooks", ["yes", "Human narration you record, mastered to ACX's specs"], ["yes", "AI multi-voice narration with your own voice-service keys"]],
-      ["Sell your ebook direct to readers", ["yes", "Pro and Studio"], ["no", "Not listed on their site"]],
     ],
     chooseThem: ["You want AI to generate chapters or a whole draft from your outline", "You want an AI-voiced audiobook made from your manuscript"],
     chooseUs: [
@@ -229,11 +240,10 @@ export const COMPARISONS: Comparison[] = [
       "Author website and launch pages": ["no", "A browser library for sharing, not launch pages"],
       "Proof a human wrote the book": ["no", "Not listed on their site"],
       "Works on Windows, Mac, and Chromebook": ["partial", "Windows app and Android companion; Mac not yet"],
+      "Human-narrated audiobooks": ["no", "AI narration, 2 to 10 hours a month on Pro and Ultimate"],
     },
     extraRows: [
       ["AI drafts your prose", ["no", "By design: you write every word"], ["partial", "Optional: AI assists, and can draft if you choose"]],
-      ["Audiobooks", ["yes", "Human narration you record, mastered to ACX's specs"], ["yes", "AI narration, 2 to 10 hours a month on Pro and Ultimate"]],
-      ["Sell your ebook direct to readers", ["yes", "Pro and Studio"], ["no", "Not listed on their site"]],
     ],
     chooseThem: ["You want a desktop app that keeps manuscripts on your computer and works offline", "You'd like to pay once ($79) and use your own AI keys"],
     chooseUs: [
@@ -338,11 +348,9 @@ export const COMPARISONS: Comparison[] = [
       "Author website and launch pages": ["no", "Not in Studio"],
       "Proof a human wrote the book": ["no", "Not listed on their site"],
       "Works on Windows, Mac, and Chromebook": ["yes", "In the browser"],
+      "Sell direct to readers": ["no", "Not in Studio"],
+      "Hire human editors, designers, and narrators": ["yes", "The Reedsy Marketplace, its biggest strength (10% from each side)"],
     },
-    extraRows: [
-      ["Hire editors and designers", ["partial", "Opening as founding pros join: 10% paid by the author only, human-made work"], ["yes", "The Reedsy Marketplace, its biggest strength (10% from each side)"]],
-      ["Sell your ebook direct to readers", ["yes", "Pro and Studio"], ["no", "Not in Studio"]],
-    ],
     chooseThem: ["You want a free, simple app to write and format your book", "You plan to hire an editor or cover designer and want them all in one marketplace"],
     chooseUs: [
       "You want beta readers with progress and feedback, ARCs, an author site, and launch pages for your book",
@@ -370,7 +378,6 @@ export const COMPARISONS: Comparison[] = [
     extraRows: [
       ["AI drafts your prose", ["no", "By design: you write every word"], ["yes", "First Draft, Write, and Draft generate prose"]],
       ["AI feedback on your draft", ["yes", "Chapter critiques, on request"], ["yes", "AI developmental and line edits on Professional and Max"]],
-      ["Sell your ebook direct to readers", ["yes", "Pro and Studio"], ["no", "Not listed on their site"]],
     ],
     chooseThem: ["You want an AI co-writer to continue scenes and draft chapters for you", "You write dark or adult fiction and want an AI that won't refuse it"],
     chooseUs: [
@@ -397,7 +404,6 @@ export const COMPARISONS: Comparison[] = [
     },
     extraRows: [
       ["AI drafts your prose", ["no", "By design: you write every word"], ["partial", "Optional: writes from your scene beats, on your own key"]],
-      ["Sell your ebook direct to readers", ["yes", "Pro and Studio"], ["no", "Not listed on their site"]],
     ],
     chooseThem: ["You want a deep story bible with mention tracking and character progressions", "You want optional AI on your own key, or a $4 plan with no AI at all"],
     chooseUs: [
@@ -580,4 +586,6 @@ export const REPLACES: { tool: string; cost: string; plan: "Free" | "Pro" | "Stu
   { tool: "Beta reader service (BetaBooks)", cost: "$15–$35/mo", plan: "Studio" },
   { tool: "ARC service (Booksprout, BookFunnel)", cost: "$9–$59/mo", plan: "Studio" },
   { tool: "NetGalley listing", cost: "$450–$575+ per book", plan: "Studio" },
+  { tool: "Ebook store and delivery (Payhip, BookFunnel)", cost: "$0–$29/mo plus fees", plan: "Pro" },
+  { tool: "Shop for signed copies (Shopify)", cost: "$29–$39/mo", plan: "Pro" },
 ];

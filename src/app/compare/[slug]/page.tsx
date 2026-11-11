@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { WriteHereCta } from "@/components/WriteHereCta";
-import { COMPARED_ON, COMPARISONS, FEATURES, NOVELIST_WRITER, type Mark } from "@/lib/compare";
+import { COMPARED_ON, COMPARISONS, FEATURES, markFor, NOVELIST_WRITER, type Mark } from "@/lib/compare";
 import { breadcrumbJsonLd, contentMetadata, faqJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/JsonLd";
 
@@ -82,8 +82,8 @@ export default async function CompareOne({ params }: { params: Promise<{ slug: s
             {FEATURES.map((f) => (
               <tr key={f} className="border-b border-line/60">
                 <td className="py-2 pr-3 align-top text-ink">{f}</td>
-                <Cell v={NOVELIST_WRITER.marks[f]} />
-                <Cell v={c.marks[f]} />
+                <Cell v={markFor(NOVELIST_WRITER.marks, f)} />
+                <Cell v={markFor(c.marks, f)} />
               </tr>
             ))}
             {(c.extraRows || []).map(([f, us, them]) => (

@@ -196,7 +196,7 @@ export function softwareJsonLd(): Json {
     operatingSystem: "Web browser",
     url: appUrl("/"),
     description:
-      "Write your novel, keep a verifiable record of how you wrote it, run beta and ARC readers, format a store-ready ebook and print-ready paperback with book styles, and launch with an author site and launch pages.",
+      "Write your novel, keep a verifiable record of how you wrote it, run beta and ARC readers, format a store-ready ebook and print-ready paperback with book styles, launch with an author site and launch pages, sell ebooks, audiobooks, and signed copies direct to readers, record a human-narrated audiobook, and hire human editors and artists.",
     offers: PLANS.map((p) => ({
       "@type": "Offer",
       name: p.name,

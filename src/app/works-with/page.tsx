@@ -27,6 +27,12 @@ const GROUPS: { t: string; items: string[]; d: string; link?: { href: string; la
     d: "A separate ebook for each store, with links that point to that store, plus print-ready paperback PDFs and the exact cover size for KDP Print and IngramSpark.",
   },
   {
+    t: "Publish your audiobook",
+    items: ["ACX (Audible)", "Spotify for Authors", "Google Play Books", "Kobo"],
+    d: "Record it yourself or with a narrator you hire, then export MP3s mastered to ACX's specs, with credits, a retail sample, and a square cover. You can sell it direct here too.",
+    link: { href: "/narrators", label: "How narration works" },
+  },
+  {
     t: "Post as a serial",
     items: serialSites,
     d: "Copy any chapter ready to paste, with italics and scene breaks kept. Post the same story on as many sites as you like, and your launch page links readers to each one.",

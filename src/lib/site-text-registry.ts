@@ -162,6 +162,65 @@ export const SITE_TEXT: TextEntry[] = [
     },
   },
   {
+    key: "home.sell",
+    page: "Home",
+    label: "Sell direct",
+    fields: ["kicker", "heading", "intro", "items"],
+    paths: ["/"],
+    default: {
+      kicker: "Sell direct · Pro and Studio",
+      heading: "Sell to readers yourself, and keep more",
+      intro:
+        "Readers buy from your launch page in dollars and get their book right away. We're the seller, so we handle sales tax, and you're paid monthly. Your store links stay on the page; direct sales add to them. Open to US readers for now.",
+      items: [
+        { t: "Ebooks and audiobooks", d: "Each buyer gets a copy to keep forever, with no copy protection. Sell them alone or together at one price." },
+        { t: "Pre-orders", d: "Take orders up to 90 days ahead. Readers get the book the moment it's out, and can cancel anytime before." },
+        { t: "Extras", d: "Character art, maps, and bonus stories, sold on their own or included free with the ebook." },
+        { t: "Bundles and box sets", d: "Several books at one price, with sale prices and discount codes. Box sets on Studio." },
+        { t: "Your own shop", d: "Signed and personalized copies, bookmarks, and prints you ship, plus numbered limited editions and packages with the ebook inside." },
+        { t: "Paperbacks, printed for you", d: "Opening soon: each order printed on demand and shipped for you, with no stock to keep. [See what you keep](/pricing)" },
+      ],
+    },
+  },
+  {
+    key: "home.audio",
+    page: "Home",
+    label: "Audiobooks",
+    fields: ["kicker", "heading", "intro", "items"],
+    paths: ["/"],
+    default: {
+      kicker: "Audiobooks · Studio, early access",
+      heading: "Record your audiobook, or hire a narrator",
+      intro:
+        "Record in your browser, chapter by chapter, and export files mastered to ACX's specs. Or invite a narrator with a plain-language agreement and hear each chapter with the text highlighted before you approve it. Human voices only.",
+      items: [
+        { t: "Checks before you record", d: "Room and level checks tell you your setup sounds right before you read a whole chapter." },
+        { t: "Notes on the sentence", d: "Pin notes to the exact line as you listen, and pickups are spliced in for you." },
+        { t: "Ready for every store", d: "MP3s for ACX, Spotify for Authors, Google Play, and Kobo, with credits, a retail sample, and a square cover." },
+        { t: "Fair to narrators", d: "A 15-minute checkpoint, a held deposit, and their full rate. Our 10% is paid by you, on top. [For narrators](/narrators)" },
+      ],
+    },
+  },
+  {
+    key: "home.hire",
+    page: "Home",
+    label: "Hire help",
+    fields: ["kicker", "heading", "intro", "items"],
+    paths: ["/"],
+    default: {
+      kicker: "Hire help · Every plan",
+      heading: "Human editors and artists, paid fairly",
+      intro:
+        "Developmental editors, line and copy editors, proofreaders, cover designers, illustrators, map makers, and narrators, and every one promises their work is human-made. Hire someone you already know today; each kind of work opens to everyone once five founding pros have joined.",
+      items: [
+        { t: "Quotes in milestones", d: "A written scope, what you'll get, and how many revisions, for each step." },
+        { t: "Paid when you approve", d: "Each milestone is paid when it starts and held until you approve the work." },
+        { t: "One fee, on the quote", d: "Our 10% is paid by you and shown on every quote, so the pro keeps their full price." },
+        { t: "Edits flow into your book", d: "Accept or reject each change from your editor's Word file, and it lands in your chapters, with a version saved first." },
+      ],
+    },
+  },
+  {
     key: "home.challenges",
     page: "Home",
     label: "Writing challenges",
@@ -207,7 +266,7 @@ export const SITE_TEXT: TextEntry[] = [
         { t: "Know how it was written", d: "Listings can show “No AI used on this book” and a writing record, so you see how a book came together before you apply." },
         { t: "Your feedback, on the page", d: "Highlight a sentence and tell the author what you felt. Clear end dates and read-by dates, with time to send your final review." },
         { t: "Badges authors notice", d: "Finish books, leave thoughtful feedback, and post ARC reviews to earn badges that authors see when you apply." },
-        { t: "Buy direct, keep it forever", d: "Buy an ebook straight from the author in dollars, never coins. It's yours to download anytime, with no copy protection, and refundable within 14 days." },
+        { t: "Buy direct, keep it forever", d: "Buy ebooks and audiobooks straight from the author in dollars, never coins, or pre-order the next one. They're yours to download anytime, with no copy protection, and refundable within 14 days." },
         { t: "Your library, your history", d: "Shelves, series in order, and a TBR, free. Bring your Goodreads or StoryGraph history over in one step, and export it anytime." },
         { t: "Picks from readers like you", d: "Recommendations come from readers who loved the same books, never from ads or paid placement." },
       ],
@@ -234,7 +293,7 @@ export const SITE_TEXT: TextEntry[] = [
       kicker: "For authors",
       heading: "Write it yourself.\nProve it. Launch it.",
       intro:
-        "One studio from first draft to release day: a record of how you wrote it, beta readers and ARCs that live where your book does, their feedback right beside each chapter as you revise, and, from Pro up, polished ebook and paperback formatting plus an author site and launch pages you can share anywhere. AI critiques and never writes, and it turns off with one switch.",
+        "One studio from first draft to release day: a record of how you wrote it, beta readers and ARCs that live where your book does, their feedback right beside each chapter as you revise, and, from Pro up, polished ebook and paperback formatting, an author site and launch pages you can share anywhere, and direct sales of your ebooks, audiobooks, and signed copies. Record your audiobook on Studio, and hire human editors and artists on any plan. AI critiques and never writes, and it turns off with one switch.",
     },
   },
   {
@@ -273,6 +332,8 @@ export const SITE_TEXT: TextEntry[] = [
         "A free “verified human-written” badge for any platform, with a [page anyone can check](/verify)",
         "Public pages (Pro and up) show up in AI search answers, with AI training blocked on them",
         "One switch to turn every AI tool off",
+        "[Hire human editors, proofreaders, and artists](/hire), with each milestone held until you approve it",
+        "Need an ISBN? [What you need and what it costs](/isbn)",
       ],
     },
   },
@@ -307,7 +368,7 @@ export const SITE_TEXT: TextEntry[] = [
       items: [
         { t: "Every book shows how it was written", d: "Authors can share a writing record and badges like “No AI used on this book”, checked by our [human authorship standard](/human-authorship-standard)." },
         { t: "No ads, ever", d: "No ads, no paid placement in recommendations, and we never sell your data." },
-        { t: "Nothing you buy expires", d: "Ebooks you buy here are yours to download anytime. No coins, no credits that run out, no subscription to read what you bought." },
+        { t: "Nothing you buy expires", d: "Ebooks and audiobooks you buy here are yours to download anytime. No coins, no credits that run out, no subscription to read what you bought." },
         { t: "Your reading history is yours", d: "Import your shelves from Goodreads or StoryGraph, and export everything anytime." },
       ],
     },
@@ -327,6 +388,9 @@ export const SITE_TEXT: TextEntry[] = [
         { t: "Finish, or say why you stopped", d: "Leave a short review when you finish a beta read, or mark it DNF with a reason. Both help the author more than you'd think." },
         { t: "ARC reviews in one tap", d: "When you finish an advance copy, you get a button for each store the author picked, plus Copy review so you can paste what you wrote." },
         { t: "Physical copies and thank-you gifts", d: "Some authors ask ARC readers for a mailing address to send a print copy or a small thank-you. Only that author ever sees it." },
+        { t: "Buy straight from the author", d: "Ebooks and audiobooks in dollars, never coins, kept in your library forever. Pre-order the next book, add extras like maps and character art, or order a signed copy from the author's shop." },
+        { t: "Listen in your browser", d: "Audiobooks you buy play right in your library, at your speed, and keep your place between devices." },
+        { t: "Rate and review", d: "Leave stars and a review on the page of a book you bought here, or one you read early as a beta or advance reader if you choose to show it. Every review says how the reader got the book." },
         { t: "Follow authors you love", d: "Get a notification (and an email, if you want one) when they open a new beta read or ARC, and join their email list in one click." },
         { t: "A weekly reading list", d: "Turn on the reader digest for one email every Thursday: new books from authors you follow, launches, new releases, free advance copies, and book promotions, focused on the genres you pick." },
         { t: "Know how a book was written", d: "Before you apply, listings can show badges like “No AI used on this book” or “Written in Novelist Writer,” a writing record summary (“written over 7 months, 94% typed”), and how often the author publishes, when the author chooses to share them. [How we verify](/human-authorship-standard)" },
@@ -354,7 +418,7 @@ export const SITE_TEXT: TextEntry[] = [
     default: {
       heading: "What it costs",
       intro:
-        "Nothing. Reader accounts are free, beta reads and advance copies are free, and there are no ads. Authors pay for the tools that run their reading programs, so readers never do. When you buy an ebook direct from an author, you pay the price shown in dollars (plus sales tax where it applies), keep it forever, download it anytime, and can get a refund within 14 days. [Refunds and your books](/refunds)",
+        "Nothing. Reader accounts are free, beta reads and advance copies are free, and there are no ads. Authors pay for the tools that run their reading programs, so readers never do. When you buy an ebook or audiobook direct from an author, you pay the price shown in dollars (plus sales tax where it applies), keep it forever, download it anytime, and can get a refund within 14 days. [Refunds and your books](/refunds)",
       note: "Also a writer? It's the same login. Switch between your reader and author dashboards anytime.",
     },
   },

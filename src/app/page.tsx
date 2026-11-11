@@ -58,7 +58,7 @@ function Points({ items, cols = 2, animate = false }: { items?: Point[]; cols?: 
 }
 
 export default async function HomePage() {
-  const [launching, hero, proof, ai, studio, format, launch, engine, challenges, earn, readers, yours] = await Promise.all([
+  const [launching, hero, proof, ai, studio, format, launch, engine, sell, audio, hire, challenges, earn, readers, yours] = await Promise.all([
     spotlight(),
     siteText("home.hero"),
     siteText("home.proof"),
@@ -67,6 +67,9 @@ export default async function HomePage() {
     siteText("home.format"),
     siteText("home.launch"),
     siteText("home.launch_engine"),
+    siteText("home.sell"),
+    siteText("home.audio"),
+    siteText("home.hire"),
     siteText("home.challenges"),
     siteText("home.earn"),
     siteText("home.readers"),
@@ -198,6 +201,33 @@ export default async function HomePage() {
           <Points items={engine.items} cols={3} />
         </section>
 
+        <section id="sell" className="scroll-mt-24 border-t border-line bg-paper-deep/30 px-6 py-20 md:px-10">
+          <div className="mx-auto max-w-5xl">
+            <SectionHead block={sell} />
+            <Points items={sell.items} cols={3} />
+          </div>
+        </section>
+
+        <section id="audiobooks" className="mx-auto max-w-5xl scroll-mt-24 px-6 py-20 md:px-10">
+          <SectionHead block={audio} />
+          <Points items={audio.items} />
+        </section>
+
+        <section id="hire" className="scroll-mt-24 border-t border-line px-6 py-20 md:px-10">
+          <div className="mx-auto max-w-5xl">
+            <SectionHead block={hire} />
+            <Points items={hire.items} />
+            <div className="font-ui mt-10 flex flex-wrap gap-3">
+              <Link href="/hire" className="rounded-sm border border-ink/20 px-6 py-3 text-ink transition hover:border-accent hover:text-accent">
+                Hire help
+              </Link>
+              <Link href="/pros" className="self-center px-2 py-3 text-accent underline-offset-4 hover:underline">
+                I&apos;m an editor or artist →
+              </Link>
+            </div>
+          </div>
+        </section>
+
         <section id="challenges" className="border-t border-line px-6 py-20 md:px-10">
           <div className="mx-auto max-w-5xl">
             <SectionHead block={challenges} />
@@ -262,6 +292,12 @@ export default async function HomePage() {
             </Link>
             <Link href="/challenges" className="hover:text-ink">
               Challenges
+            </Link>
+            <Link href="/hire" className="hover:text-ink">
+              Hire help
+            </Link>
+            <Link href="/narrators" className="hover:text-ink">
+              For narrators
             </Link>
             <Link href="/tools" className="hover:text-ink">
               Free tools
