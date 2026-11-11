@@ -201,7 +201,11 @@ export function PaperbackPanel({ projectId }: { projectId: string }) {
                 ) : (
                   " (save the page count to see the exact size Lulu needs)"
                 )}
-                . Lulu&apos;s spine can differ a little from KDP&apos;s, so match the cover builder&apos;s wrap to that size.
+                . Lulu&apos;s spine can differ a little from KDP&apos;s, so match the cover builder&apos;s wrap to that size. No ISBN is needed to sell here; if your KDP
+                paperback uses KDP&apos;s free ISBN, leave it and its barcode off this cover.{" "}
+                <a href="/isbn" target="_blank" className="underline">
+                  ISBNs explained
+                </a>
               </p>
               {!d.storageReady && <p className="mt-1 text-xs text-danger">File storage isn&apos;t set up yet.</p>}
               <div className="mt-2 grid gap-2 sm:grid-cols-2">

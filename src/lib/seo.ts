@@ -39,6 +39,7 @@ export const STATIC_PAGES = [
   { path: "/works-with", priority: 0.6, changeFrequency: "monthly" as const },
   { path: "/narrators", priority: 0.7, changeFrequency: "monthly" as const },
   { path: "/hire", priority: 0.7, changeFrequency: "weekly" as const },
+  { path: "/isbn", priority: 0.6, changeFrequency: "monthly" as const },
   { path: "/pros", priority: 0.7, changeFrequency: "weekly" as const },
   { path: "/leaving-amazon", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/refunds", priority: 0.3, changeFrequency: "yearly" as const },
@@ -272,6 +273,8 @@ export function bookJsonLd(book: {
   isbn?: string | null;
   buyLinks: { label: string; url: string }[];
   published: boolean;
+  /** Reader reviews on the launch page */
+  rating?: { avg: number; count: number } | null;
 }): Json {
   return {
     "@context": "https://schema.org",
@@ -285,6 +288,7 @@ export function bookJsonLd(book: {
     datePublished: book.releaseDate || undefined,
     isbn: book.isbn || undefined,
     bookFormat: "https://schema.org/EBook",
+    aggregateRating: book.rating ? { "@type": "AggregateRating", ratingValue: book.rating.avg, reviewCount: book.rating.count, bestRating: 5, worstRating: 1 } : undefined,
     offers: book.buyLinks
       .filter((l) => /^https?:\/\//.test(l.url))
       .map((l) => ({

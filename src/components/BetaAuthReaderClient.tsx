@@ -10,6 +10,7 @@ import { betaEndLabel, betaEndState } from "@/lib/beta-access";
 import { highlightPassageInElement } from "@/lib/passage-highlight";
 import { FINAL_PROMPTS, KIND_OPENERS, chapterPrompts, type FeedbackBrief } from "@/lib/feedback-brief";
 import { ReportConcern } from "@/components/ReportConcern";
+import { ReviewForm } from "@/components/ReviewForm";
 
 /** Tap a question to start your note with it; tap again to add another. */
 function PromptChips({ prompts, onPick, label }: { prompts: string[]; onPick: (p: string) => void; label: string }) {
@@ -770,6 +771,11 @@ export function BetaAuthReaderClient({
           </span>
         </span>
       </label>
+      {finished && (
+        <div className="mt-4">
+          <ReviewForm projectId={projectId} presetBody={reviewBody} heading="Show your review on the book's page when it's out?" />
+        </div>
+      )}
     </div>
   );
 

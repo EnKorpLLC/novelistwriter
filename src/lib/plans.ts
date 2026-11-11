@@ -211,6 +211,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
     a: "Yes, on Pro and Studio, for US readers. Upload the interior PDF from your print layout and the full cover PDF; Lulu checks both and tells you the exact cover size. Order a proof copy at cost, confirm it, then turn on selling. Each order is printed on demand and shipped by Lulu, so you never hold stock or mail anything. Readers pay your price plus shipping at cost, and can get the ebook free. Your share is the price less printing, our usual fee, and Stripe's fee, paid 14 days after the book ships; on a $16.99, 300-page paperback that's about $8 on Pro, where KDP pays about $5.60. Printed-to-order books can't be returned, but misprints and lost packages are replaced.",
   },
   {
+    q: "Do reviews show on my book's page?",
+    a: "Yes. Readers who bought the book here can rate and review it, and your ARC and beta readers can choose to show their review too. Every review says how the reader got the book (“Bought here”, “Advance reader (free copy)”, or “Beta reader”), as disclosure rules require. You can reply once to each, publicly, but you can't remove reviews; we hide only ones that break our rules. The average shows on your launch page and in the store.",
+  },
+  {
     q: "Can I sell signed books or bookmarks?",
     a: "Yes, from your shop on Pro and Studio. List signed copies (readers can ask for a dedication), bookmarks, prints, or stickers with how many you have, set flat US shipping, and say how many business days you take to ship. They show on your launch pages. You pack and mail each order, mark it shipped with tracking, and the reader is told. You get the price and the shipping you charged, less our usual fee and Stripe's, 14 days after you ship. An order not shipped within 5 days of its ship-by date is refunded and your shop pauses until you reopen it. You can also sell packages (a signed copy with the ebook, audiobook, or extras delivered right away), numbered limited editions (“No. 12 of 100”), and pre-orders that ship from a date you set.",
   },

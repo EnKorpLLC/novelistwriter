@@ -9,6 +9,7 @@ import { PreorderActions } from "@/components/PreorderActions";
 import { PREORDER_GRACE_DAYS, addDays, longDay } from "@/lib/direct-sale-rules";
 import { CANCEL_MINUTES, PRINT_DAYS } from "@/lib/print-rules";
 import { PaperbackCancel } from "@/components/PaperbackCancel";
+import { ReviewForm } from "@/components/ReviewForm";
 
 /** Where a printed order is, in plain words. */
 function printLine(status: string | null, shippedAt: string | null) {
@@ -279,6 +280,11 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
               <strong>Kobo, Apple Books, Google Play Books, and most other apps:</strong> open the EPUB file directly.
             </p>
           </section>
+        )}
+        {!refunded && p.viewerIsBuyer && p.projectId && !p.isExtra && !p.isBoxSet && !p.preorder && !p.paperback?.proof && (
+          <div className="mt-10">
+            <ReviewForm projectId={p.projectId} />
+          </div>
         )}
         <p className="font-ui mt-10 border-t border-line pt-4 text-sm text-muted">
           {p.buyer_user_id ? (

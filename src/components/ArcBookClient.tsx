@@ -7,6 +7,7 @@ import type { LabeledLink } from "@/lib/public-profile";
 import type { MailingAddress } from "@/lib/arc";
 import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ReportConcern } from "@/components/ReportConcern";
+import { ReviewForm } from "@/components/ReviewForm";
 import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type ReviewLink = LabeledLink & { key: string };
@@ -306,6 +307,11 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
             </li>
           ))}
         </ul>
+      )}
+      {finishedAt && (
+        <div className="mt-5">
+          <ReviewForm projectId={projectId} presetBody={review} heading="Also show your review on Novelist Writer?" />
+        </div>
       )}
     </section>
   );

@@ -22,6 +22,9 @@ import { listExtras } from "@/lib/digital-extras";
 import { paperbackReadiness } from "@/lib/print-sales";
 import { BuyPaperbackButton } from "@/components/BuyPaperbackButton";
 import { itemsForBook } from "@/lib/shop";
+import { reviewsFor } from "@/lib/book-reviews";
+import { BookReviews } from "@/components/BookReviews";
+import { isPlatformAdmin } from "@/lib/platform-admin";
 import { BuyItemButton } from "@/components/BuyItemButton";
 import { MagnetForm } from "@/components/MagnetForm";
 import { GuestListSignup } from "@/components/GuestListSignup";
@@ -116,6 +119,8 @@ export default async function LaunchPage({
   const direct = saleReady?.ok
     ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed(), preorderRelease: saleReady.preorder ? String(recordFlag?.release_date || "").slice(0, 10) : null }
     : null;
+  // Reader reviews: buyers here, plus advance and beta readers who chose to show theirs
+  const [reviewData, viewerIsAdmin] = await Promise.all([reviewsFor(admin, book.id, user?.id).catch(() => null), user ? isPlatformAdmin(supabase, user).catch(() => false) : Promise.resolve(false)]);
   // The paperback, printed and shipped by Lulu for each order
   const paperbackReady = recordFlag && book.stage === "published" ? await paperbackReadiness(admin, recordFlag).catch(() => null) : null;
   const paperback = paperbackReady?.ok ? { priceCents: paperbackReady.edition.price_cents, freeEbook: paperbackReady.edition.free_ebook, canBuy: direct?.canBuy ?? (await buyerCountryAllowed()) } : null;
@@ -200,6 +205,7 @@ export default async function LaunchPage({
               isbn,
               buyLinks: book.stage === "published" ? book.buyLinks : book.preorderLinks,
               published: book.stage === "published",
+              rating: reviewData?.count && reviewData.avg != null ? { avg: reviewData.avg, count: reviewData.count } : null,
             }),
             breadcrumbJsonLd([
               { name: author.name, path: authorPath(author.handle) },
@@ -450,6 +456,18 @@ export default async function LaunchPage({
             )}
           </div>
         </div>
+
+        {reviewData && (reviewData.count > 0 || !isOwner) && (
+          <BookReviews
+            projectId={book.id}
+            authorName={author.name}
+            avg={reviewData.avg}
+            count={reviewData.count}
+            reviews={reviewData.reviews}
+            isOwner={isOwner}
+            isAdmin={viewerIsAdmin}
+          />
+        )}
 
         <section className="mt-12 grid gap-6 border-t border-line pt-8 md:grid-cols-2">
           <div className="flex gap-4">

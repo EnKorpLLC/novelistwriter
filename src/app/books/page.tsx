@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TbrButton } from "@/components/LibraryButton";
 import { applyContentFilters, contentFiltersFor } from "@/lib/reader-recs";
 import { audiobookBadges, type AudiobookBadge } from "@/lib/audiobook-sales";
+import { ratingsFor } from "@/lib/book-reviews";
 
 export const metadata = {
   title: "Published books — Novelist Writer",
@@ -42,6 +43,7 @@ export default async function PublishedBooksPage({
   const { shown, hidden } = await applyContentFilters(admin, filters, picked);
   // Badges and writing records the authors chose to show readers (RX1); the first screens' worth
   const trust = await readerTrustForBooks(admin, shown.slice(0, 60).map((b) => ({ id: b.id, user_id: b.authorUserId }))).catch(() => new Map());
+  const ratings = await ratingsFor(admin, shown.slice(0, 200).map((b) => b.id)).catch(() => new Map<string, { avg: number; count: number }>());
 
   return (
     <div className="min-h-screen">
@@ -123,6 +125,11 @@ export default async function PublishedBooksPage({
                   <p className="font-ui text-xs text-muted">
                     {b.authorName} · {b.genre}
                   </p>
+                  {ratings.get(b.id) && (
+                    <p className="font-ui text-[11px] text-muted">
+                      <span className="text-accent">★</span> {ratings.get(b.id)!.avg.toFixed(1)} ({ratings.get(b.id)!.count})
+                    </p>
+                  )}
                   {audio.get(b.id) && (
                     <p className="font-ui text-[11px] text-accent">
                       Audiobook · {audio.get(b.id)!.recordedHere ? "Recorded in Novelist Writer" : audio.get(b.id)!.humanNarrated ? "human narrated" : `${audio.get(b.id)!.hours.toFixed(1)} hr`}
