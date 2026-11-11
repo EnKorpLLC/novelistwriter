@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { userHasStudio } from "@/lib/credits";
+import { audioAccess } from "@/lib/narration-access";
 
 const HINT = "Database needs an update. Run supabase/migration_audiobook.sql in the Supabase SQL editor.";
 const REVIEW_HINT = "Review and pickups need a database update. Run supabase/migration_audiobook_review.sql in the Supabase SQL editor.";
@@ -22,30 +21,20 @@ function normalizeSettings(raw: unknown): AudioSettings {
   };
 }
 
-async function owner(projectId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data } = await createServiceClient().from("projects").select("id").eq("id", projectId).eq("user_id", user.id).maybeSingle();
-  return data ? user : null;
-}
-
 /** Takes per chapter and the narration record so far. Audio itself never comes here. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await owner(id);
-  if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const access = await audioAccess(id);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { studio, role, job, authorId } = access;
   const admin = createServiceClient();
-  const [studio, takes, sessions, notes, chapters, settings, profile] = await Promise.all([
-    userHasStudio(user.id),
+  const [takes, sessions, notes, chapters, settings, profile] = await Promise.all([
     admin.from("audio_takes").select("*").eq("project_id", id).order("take_no"),
     admin.from("narration_sessions").select("id, started_at, ended_at, recorded_ms, takes, noise_floor_db").eq("project_id", id).order("started_at"),
     admin.from("audio_notes").select("*").eq("project_id", id).order("sentence"),
     admin.from("audio_chapters").select("chapter_id, status, rounds, approved_at").eq("project_id", id),
     admin.from("projects").select("audio_settings").eq("id", id).maybeSingle(),
-    admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+    admin.from("profiles").select("display_name").eq("id", authorId).maybeSingle(),
   ]);
   if (takes.error || sessions.error) return NextResponse.json({ studio, migrationNeeded: true, error: HINT, takes: [], record: null });
   const reviewReady = !notes.error && !chapters.error;
@@ -54,6 +43,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const chaptersRecorded = new Set(recorded.map((t) => t.chapter_id ?? t.segment)).size;
   return NextResponse.json({
     studio,
+    role,
+    userId: access.user.id,
+    narrator: job ? { name: job.narratorName, jobId: job.id } : null,
     exportHint: settings.error ? EXPORT_HINT : null,
     settings: normalizeSettings(settings.data?.audio_settings),
     authorName: (profile.data?.display_name as string) || "",
@@ -74,6 +66,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       chosen: t.chosen,
       imported: t.imported,
       createdAt: t.created_at,
+      recordedBy: t.user_id,
     })),
     reviewHint: reviewReady ? null : REVIEW_HINT,
     notes: (notes.data || []).map((n) => ({
@@ -116,11 +109,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await owner(id);
-  if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!(await userHasStudio(user.id))) return NextResponse.json({ error: "The audiobook studio is part of Studio." }, { status: 402 });
+  const access = await audioAccess(id);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!access.studio) return NextResponse.json({ error: "The audiobook studio is part of Studio." }, { status: 402 });
+  const { user, role } = access;
   const admin = createServiceClient();
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  // Narrators record, fix, and send chapters for review; notes, approval, and book settings are the author's
+  if (role === "narrator") {
+    const authorOnly = ["add_note", "update_note", "delete_note", "settings"];
+    if (authorOnly.includes(String(b.action)) || (b.action === "chapter_status" && b.status === "approved")) {
+      return NextResponse.json({ error: "Only the author can do that." }, { status: 403 });
+    }
+  }
   const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
   if (b.action === "start_session") {
@@ -267,6 +268,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const takeId = String(b.id || "");
   const { data: take } = await admin.from("audio_takes").select("*").eq("id", takeId).eq("project_id", id).maybeSingle();
   if (!take) return NextResponse.json({ error: "Take not found" }, { status: 404 });
+  // A take's file lives on the computer of whoever recorded it, so only they can place or delete it
+  if (take.user_id !== user.id && (b.action === "delete_take" || b.action === "place_take" || role === "narrator")) {
+    return NextResponse.json({ error: "That take was recorded by someone else." }, { status: 403 });
+  }
   const slot = (take.chapter_id ?? take.segment) as string;
   if (b.action === "choose_take") {
     await choose(take.id, slot, take.from_sentence, take.to_sentence ?? null);

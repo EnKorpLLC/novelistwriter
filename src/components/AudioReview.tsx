@@ -96,7 +96,13 @@ export function AudioReview({
   post,
   reload,
   onRecordPickup,
+  canManage = true,
+  listenBlocked = null,
 }: {
+  /** The author approves chapters and writes notes; a narrator reads notes and records pickups */
+  canManage?: boolean;
+  /** Why this browser can't play the chapter (the takes are on someone else's computer) */
+  listenBlocked?: string | null;
   store: AudioStore;
   chapterId: string;
   folder: string;
@@ -166,6 +172,7 @@ export function AudioReview({
 
   function clickSentence(i: number) {
     if (built && player.current) player.current.currentTime = built.cuts[i] / 1000;
+    if (!canManage) return;
     // A later sentence stretches a note that hasn't been written yet; anything else starts a new one
     setDraft((d) => (d && i > d.from && !d.body.trim() ? { ...d, to: i } : { from: i, to: i, body: "" }));
   }
@@ -247,29 +254,32 @@ export function AudioReview({
           </span>
           {status === "recording" && (
             <button type="button" className="border border-line px-2 py-1" onClick={() => void setStatus("review")}>
-              Ready for review
+              {canManage ? "Ready for review" : "Send for review"}
             </button>
           )}
-          {status !== "approved" && (
+          {canManage && status !== "approved" && (
             <button type="button" className="bg-accent px-2 py-1 text-paper" onClick={() => void setStatus("approved")}>
               Approve chapter
             </button>
           )}
-          {status === "review" && open.length > 0 && (
+          {canManage && status === "review" && open.length > 0 && (
             <button type="button" className="border border-line px-2 py-1" onClick={() => void setStatus("recording")}>
               Send back for {open.length} pickup{open.length === 1 ? "" : "s"}
             </button>
           )}
-          {status === "approved" && (
+          {canManage && status === "approved" && (
             <button type="button" className="underline" onClick={() => void setStatus("review")}>
               Reopen
             </button>
           )}
+          {!canManage && status === "review" && <span className="text-muted">Waiting for the author&apos;s review</span>}
         </div>
 
         {/* Player */}
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-paper py-2 text-xs">
-          {!built ? (
+          {listenBlocked ? (
+            <p className="text-muted">{listenBlocked}</p>
+          ) : !built ? (
             <button type="button" disabled={building} className="bg-ink px-4 py-2 text-paper disabled:opacity-60" onClick={() => void build()}>
               {building ? "Putting the chapter together…" : "Listen to the chapter"}
             </button>
@@ -319,7 +329,9 @@ export function AudioReview({
               </a>
             </>
           )}
-          <span className="w-full text-muted">Click a sentence to jump there and pin a note to it. Click a later sentence to stretch the note over several.</span>
+          <span className="w-full text-muted">
+            {canManage ? "Click a sentence to jump there and pin a note to it. Click a later sentence to stretch the note over several." : "Click a sentence to jump there. Notes from the author are underlined in red."}
+          </span>
         </div>
 
         {draft && (
@@ -372,7 +384,7 @@ export function AudioReview({
         <div>
           <p className="text-sm text-ink">Notes to fix {open.length > 0 && <span className="text-muted">({open.length})</span>}</p>
           {open.length === 0 ? (
-            <p className="mt-1 text-muted">{notes.length ? "All fixed." : "None yet. Listen through and click any sentence that needs another go."}</p>
+            <p className="mt-1 text-muted">{notes.length ? "All fixed." : canManage ? "None yet. Listen through and click any sentence that needs another go." : "None yet. The author's notes show up here."}</p>
           ) : (
             <ul className="mt-1 divide-y divide-line border-y border-line">
               {open.map((n) => (
@@ -386,12 +398,16 @@ export function AudioReview({
                     <button type="button" className="text-accent underline" onClick={() => onRecordPickup({ ...n, sentence: n.at, toSentence: n.at + (n.toSentence - n.sentence) })}>
                       Record pickup
                     </button>
-                    <button type="button" className="underline" onClick={() => void post({ action: "update_note", id: n.id, status: "dismissed" }).then(reload)}>
-                      Fine as is
-                    </button>
-                    <button type="button" className="text-danger underline" onClick={() => void post({ action: "delete_note", id: n.id }).then(reload)}>
-                      Delete
-                    </button>
+                    {canManage && (
+                      <>
+                        <button type="button" className="underline" onClick={() => void post({ action: "update_note", id: n.id, status: "dismissed" }).then(reload)}>
+                          Fine as is
+                        </button>
+                        <button type="button" className="text-danger underline" onClick={() => void post({ action: "delete_note", id: n.id }).then(reload)}>
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </span>
                 </li>
               ))}
@@ -405,9 +421,11 @@ export function AudioReview({
                   <li key={n.id}>
                     <span className="text-muted">{n.status === "fixed" ? "✓ Fixed: " : "Left as is: "}</span>
                     {n.body}{" "}
-                    <button type="button" className="underline" onClick={() => void post({ action: "update_note", id: n.id, status: "open" }).then(reload)}>
-                      Reopen
-                    </button>
+                    {canManage && (
+                      <button type="button" className="underline" onClick={() => void post({ action: "update_note", id: n.id, status: "open" }).then(reload)}>
+                        Reopen
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

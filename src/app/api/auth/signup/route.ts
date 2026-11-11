@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     email?: string;
     password?: string;
     displayName?: string;
-    role?: "author" | "beta_reader";
+    role?: "author" | "beta_reader" | "narrator";
     emailNotifications?: boolean;
     readerDigest?: boolean;
     source?: Record<string, unknown>;
@@ -50,6 +50,12 @@ export async function POST(req: Request) {
       );
     }
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  // Narrators get a free narrator-only account, not an author one (the trigger makes everyone else an author)
+  if (body.role === "narrator" && data.user?.id) {
+    const { error: roleErr } = await admin.from("profiles").update({ is_narrator: true, is_author: false }).eq("id", data.user.id);
+    if (roleErr) await admin.from("profiles").update({ is_author: true }).eq("id", data.user.id);
   }
 
   // The profile row is created by the auth trigger, so it exists by now

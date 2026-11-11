@@ -98,7 +98,7 @@ export const PLANS: PlanCopy[] = [
       "Host group promos: gather books around a theme on a public page, approve who's in, and see whose share brought readers",
       "An ebook for each store: Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble builds whose review and “Also by” links point only to that store",
       "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again",
-      "Audiobook studio (early access): record your own audiobook chapter by chapter with the script on screen, room and level checks, and retakes. Review with the text alongside, pin notes to sentences, and record pickups that are cut in for you. Then master and export files that meet ACX's specs, with credits, a retail sample, and a square cover, ready for ACX, Spotify for Authors, Google Play, and Kobo. Recordings stay on your computer",
+      "Audiobook studio (early access): record your own audiobook chapter by chapter with the script on screen, room and level checks, and retakes. Review with the text alongside, pin notes to sentences, and record pickups that are cut in for you. Then master and export files that meet ACX's specs, with credits, a retail sample, and a square cover, ready for ACX, Spotify for Authors, Google Play, and Kobo. Or invite a narrator with a plain-language agreement; they get a free narrator account that opens only your book. Recordings stay on the narrator's computer",
       "Series tools",
       `${SUB_ALLOWANCE.studio} AI credits every month, bring your own API key, priority AI`,
     ],

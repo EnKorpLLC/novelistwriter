@@ -109,10 +109,15 @@ export function AudioExport({
   exportHint,
   coverUrl,
   onSettings,
+  userId = null,
+  canEditSettings = true,
 }: {
+  userId?: string | null;
+  /** The credits name and retail sample are the author's choices */
+  canEditSettings?: boolean;
   store: AudioStore | null;
   slots: AudioSlot[];
-  takes: (StudioTake & { chapterId: string })[];
+  takes: (StudioTake & { chapterId: string; recordedBy?: string })[];
   reviews: Record<string, ChapterReview>;
   settings: AudioSettings;
   exportHint: string | null;
@@ -148,7 +153,13 @@ export function AudioExport({
     return r?.pcm || null;
   }
 
+  const recordedElsewhere = (s: AudioSlot) => {
+    const root = rootTake(takes.filter((t) => t.chapterId === s.id)) as (StudioTake & { recordedBy?: string }) | null;
+    return Boolean(root?.recordedBy && userId && root.recordedBy !== userId);
+  };
+
   async function exportOne(s: AudioSlot, i: number): Promise<Result> {
+    if (recordedElsewhere(s)) return { error: "Recorded on your narrator's computer. You'll get the finished files once the job is delivered and paid." };
     const pcm = await chapterAudio(s);
     if (!pcm) return { error: "Not recorded yet" };
     setBusy(`Mastering ${s.title}…`);
@@ -163,6 +174,7 @@ export function AudioExport({
 
   async function exportSample(): Promise<Result> {
     if (!sampleSlot) return { error: "No chapters yet" };
+    if (recordedElsewhere(sampleSlot)) return { error: "That chapter was recorded on your narrator's computer." };
     const pcm = await chapterAudio(sampleSlot);
     if (!pcm) return { error: `${sampleSlot.title} isn't recorded yet` };
     setBusy("Cutting the retail sample…");
@@ -292,6 +304,8 @@ export function AudioExport({
           <span className="text-muted">Narrated by (for the credits)</span>
           <input
             value={narrator}
+            disabled={!canEditSettings}
+            title={canEditSettings ? undefined : "Set by the author"}
             onChange={(e) => setNarrator(e.target.value)}
             onBlur={() => narrator !== settings.narrator && onSettings({ ...settings, narrator: narrator.trim() })}
             placeholder="Your name if you narrate it yourself"
@@ -303,6 +317,7 @@ export function AudioExport({
           <div className="mt-1 flex flex-wrap gap-2">
             <select
               value={sampleSlot?.id || ""}
+              disabled={!canEditSettings}
               onChange={(e) => onSettings({ ...settings, sampleChapterId: e.target.value, sampleSentence: 0 })}
               className="max-w-full border border-line bg-paper px-2 py-1.5"
             >
@@ -314,6 +329,7 @@ export function AudioExport({
             </select>
             <select
               value={settings.sampleSentence}
+              disabled={!canEditSettings}
               onChange={(e) => onSettings({ ...settings, sampleSentence: Number(e.target.value) })}
               className="min-w-0 max-w-full flex-1 border border-line bg-paper px-2 py-1.5"
               aria-label="Sample starts at"

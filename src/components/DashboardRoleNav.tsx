@@ -98,6 +98,11 @@ export function DashboardRoleNav({ roles, side }: Props) {
           {busy ? "Enabling…" : "Become an author"}
         </button>
       )}
+      {roles.is_narrator && (
+        <Link href="/narrator" className="text-accent hover:underline">
+          Narrator dashboard
+        </Link>
+      )}
       {note && <span className="text-xs text-danger">{note}</span>}
       <SiteFeedbackButton />
     </div>

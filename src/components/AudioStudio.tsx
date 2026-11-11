@@ -9,8 +9,9 @@ import { readPcm, sentencesOf } from "@/lib/audio/assemble";
 import { AudioReview, isPickup, placeTake, rangeLabel, type AudioNote, type ChapterReview, type StudioTake } from "@/components/AudioReview";
 import { AudioExport, creditsScripts, type AudioSettings, type AudioSlot } from "@/components/AudioExport";
 import { coverPublicUrl } from "@/lib/cover";
+import { NarratorPanel } from "@/components/NarratorPanel";
 
-type Take = StudioTake & { chapterId: string; peakDb: number | null; rmsDb: number | null; imported: boolean };
+type Take = StudioTake & { chapterId: string; peakDb: number | null; rmsDb: number | null; imported: boolean; recordedBy?: string };
 type RecordSummary = { sessions: number; recordedMs: number; takes: number; retakes: number; firstAt: string | null; lastAt: string | null };
 
 const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
@@ -24,7 +25,11 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
   const [settings, setSettings] = useState<AudioSettings>({ narrator: "", sampleChapterId: null, sampleSentence: 0 });
   const [authorName, setAuthorName] = useState("");
   const [exportHint, setExportHint] = useState<string | null>(null);
-  const scripts = creditsScripts({ title: bookTitle, author: authorName, narrator: settings.narrator });
+  // Who's using the studio: the author, or the narrator of the book's active job
+  const [role, setRole] = useState<"owner" | "narrator">("owner");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [narrator, setNarrator] = useState<{ name: string; jobId: string } | null>(null);
+  const scripts = creditsScripts({ title: bookTitle, author: authorName, narrator: settings.narrator || narrator?.name || "" });
   // Opening credits, the chapters, closing credits: everything that becomes a file
   const slots = useMemo<AudioSlot[]>(
     () => [
@@ -82,6 +87,9 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
     setExportHint(d.exportHint || null);
     if (d.settings) setSettings(d.settings);
     setAuthorName(d.authorName || "");
+    setRole(d.role === "narrator" ? "narrator" : "owner");
+    setUserId(d.userId || null);
+    setNarrator(d.narrator || null);
   }, [projectId]);
 
   useEffect(() => {
@@ -324,7 +332,7 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
 
           {!studio ? (
             <div className="border border-accent p-4 text-sm">
-              <p>The audiobook studio is part of Studio: record it yourself, or (soon) invite a narrator, then export files ready for ACX, Spotify, Google Play, and Kobo.</p>
+              <p>The audiobook studio is part of Studio: record it yourself or invite a narrator, then export files ready for ACX, Spotify, Google Play, and Kobo.</p>
               <a href="/billing" className="mt-3 inline-block bg-accent px-4 py-2 text-xs text-paper">
                 See Studio
               </a>
@@ -341,6 +349,22 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                 <p className="text-sm">
                   Narration record: <strong>{hours(summary.recordedMs)}</strong> recorded here across {summary.sessions} session{summary.sessions === 1 ? "" : "s"}, {summary.takes} take
                   {summary.takes === 1 ? "" : "s"} ({summary.retakes} retake{summary.retakes === 1 ? "" : "s"} and pickups).
+                </p>
+              )}
+
+              {role === "owner" && (
+                <NarratorPanel
+                  projectId={projectId}
+                  bookTitle={bookTitle}
+                  authorName={authorName}
+                  words={ordered.reduce((n, c) => n + (c.content_text || "").split(/\s+/).filter(Boolean).length, 0)}
+                  onChange={() => void load()}
+                />
+              )}
+              {role === "narrator" && (
+                <p className="border border-line bg-paper-deep/40 px-3 py-2 text-xs text-muted">
+                  You&apos;re narrating this book for {authorName || "the author"}. Your recordings stay on your computer. Record each chapter, fix the lines they pin notes to, and send chapters for
+                  review in Review. Sending review copies to the author arrives in the next update.
                 </p>
               )}
 
@@ -532,6 +556,12 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                       reviewHint={reviewHint}
                       post={post}
                       reload={load}
+                      canManage={role === "owner"}
+                      listenBlocked={
+                        chapterTakes.some((t) => t.chosen && !isPickup(t) && t.recordedBy && t.recordedBy !== userId)
+                          ? "Your narrator recorded this chapter on their computer. You'll be able to listen once they send a review copy (coming in the next update). You can already pin notes to the text."
+                          : null
+                      }
                       onRecordPickup={(n) => {
                         setRange({ from: n.sentence, to: n.toSentence, noteId: n.id });
                         setMode("record");
@@ -617,6 +647,9 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                                   {t.chosen && <span className="text-accent">✓ </span>}Take {t.takeNo}
                                   <span className="text-muted"> · {mmss(t.durationMs)}</span>
                                 </span>
+                                {t.recordedBy && userId && t.recordedBy !== userId ? (
+                                  <span className="text-muted">{role === "owner" ? "Your narrator's take" : "The author's take"}</span>
+                                ) : (
                                 <span className="flex gap-2">
                                   {playing?.id === t.id && !paused ? (
                                     <button type="button" className="text-accent underline" onClick={() => player.current?.pause()}>
@@ -641,6 +674,7 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                                     Delete
                                   </button>
                                 </span>
+                                )}
                               </div>
                               <p className="mt-0.5 text-muted">
                                 {isPickup(t) ? `Pickup, ${rangeLabel(t.fromSentence, t.toSentence)}: “${(sentences[t.fromSentence]?.text || "").slice(0, 40)}…”` : "Whole chapter"}
@@ -699,6 +733,8 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                   settings={settings}
                   exportHint={exportHint}
                   coverUrl={coverPath ? coverPublicUrl(coverPath) : null}
+                  userId={userId}
+                  canEditSettings={role === "owner"}
                   onSettings={(s) => {
                     setSettings(s);
                     void post({ action: "settings", settings: s }).catch((e) => setNote(e instanceof Error ? e.message : "Couldn't save"));
