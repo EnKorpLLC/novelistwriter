@@ -17,6 +17,9 @@ import { readerTrustForBooks } from "@/lib/trust-badges";
 import { isBetaClosedToNew } from "@/lib/beta-access";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { hiddenAuthorsFor } from "@/lib/reader-safety";
+import { normalizeTropes } from "@/lib/arc";
+import { normalizeFilters, readerFilterHit } from "@/lib/reader-recs";
+import { normalizePrefs } from "@/lib/reading-prefs";
 
 export async function GET() {
   const supabase = await createClient();
@@ -51,7 +54,7 @@ export async function GET() {
         : Promise.resolve({ data: [] as never[] }),
       admin
         .from("projects")
-        .select("id, title, genre, blurb, cover_path, updated_at, user_id, beta_ready, metadata, beta_expires_at, beta_application_form")
+        .select("id, title, genre, blurb, cover_path, updated_at, user_id, beta_ready, metadata, beta_expires_at, beta_application_form, tropes")
         .eq("beta_ready", true)
         .order("genre", { ascending: true })
         .order("title", { ascending: true }),
@@ -135,9 +138,21 @@ export async function GET() {
   const shelfIds = new Set(shelf.map((s) => s.projectId));
   // Authors this reader blocked, and authors removed from the catalog after conduct reports (RX4)
   const hidden = await hiddenAuthorsFor(admin, user.id);
-  const catalogRaw = (readyProjects || []).filter(
+  // The reader's genre and content warning choices, plus the words they skip in their library
+  const filters = { words: normalizeFilters(profile?.content_filters), prefs: normalizePrefs(profile?.reading_prefs) };
+  const filteredOut = (p: { genre?: string | null; metadata?: Record<string, unknown> | null; tropes?: unknown; beta_application_form?: unknown }) =>
+    Boolean(
+      readerFilterHit(filters, {
+        genre: [p.genre, ...catalogLabelsForProject(p)].filter(Boolean).join(", "),
+        tropes: normalizeTropes(p.tropes),
+        warnings: normalizeBetaApplicationForm(p.beta_application_form).contentWarnings,
+      })
+    );
+  const betaOpen = (readyProjects || []).filter(
     (p) => studioAuthors.has(p.user_id) && !isBetaClosedToNew(p.beta_expires_at) && !hidden.has(p.user_id)
   );
+  const catalogRaw = betaOpen.filter((p) => !filteredOut(p));
+  const hiddenBetas = betaOpen.length - catalogRaw.length;
 
   type CatalogBook = (typeof catalogRaw)[number];
   const byKeyword = new Map<string, CatalogBook[]>();
@@ -196,7 +211,7 @@ export async function GET() {
       : Promise.resolve({ data: [] as never[] }),
     admin
       .from("projects")
-      .select("id, title, genre, blurb, cover_path, metadata, updated_at, user_id, arc_open, arc_deadline")
+      .select("id, title, genre, blurb, cover_path, metadata, updated_at, user_id, arc_open, arc_deadline, tropes, beta_application_form")
       .eq("arc_open", true)
       .order("arc_deadline", { ascending: true })
       .limit(200),
@@ -222,8 +237,10 @@ export async function GET() {
   const myArcStatus = new Map(
     (arcRows || []).map((r) => [r.project_id, { status: r.status, finishedAt: r.finished_at }])
   );
-  const arcCatalog = openArcProjects
-    .filter((p) => studioAuthors.has(p.user_id) && !hidden.has(p.user_id))
+  const arcOpen = openArcProjects.filter((p) => studioAuthors.has(p.user_id) && !hidden.has(p.user_id));
+  const arcVisible = arcOpen.filter((p) => !filteredOut(p));
+  const hiddenArcs = arcOpen.length - arcVisible.length;
+  const arcCatalog = arcVisible
     .map((p) => ({
       projectId: p.id,
       title: p.title,
@@ -288,5 +305,6 @@ export async function GET() {
     arcShelf,
     catalog: catalog.map((g) => ({ ...g, books: g.books.map(withTrust) })),
     arcCatalog: arcCatalog.map(withTrust),
+    hiddenByPrefs: { betas: hiddenBetas, arcs: hiddenArcs },
   });
 }

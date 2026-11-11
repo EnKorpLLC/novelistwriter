@@ -9,6 +9,7 @@ import { DashboardRoleNav } from "@/components/DashboardRoleNav";
 import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 import { ClaimReferral } from "@/components/ClaimReferral";
 import { GettingStarted } from "@/components/GettingStarted";
+import { ReadingPrefsPanel } from "@/components/ReadingPrefsPanel";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
 import { betaEndLabel, betaEndState, formatBetaEndDate } from "@/lib/beta-access";
 import { CompactTrust, ReaderBadgeList, RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
@@ -352,6 +353,7 @@ export default function BetaDashboardClient() {
   const [arcShelf, setArcShelf] = useState<ArcShelfBook[]>([]);
   const [catalog, setCatalog] = useState<CatalogGenre[]>([]);
   const [arcCatalog, setArcCatalog] = useState<ArcCatalogBook[]>([]);
+  const [hiddenByPrefs, setHiddenByPrefs] = useState<{ betas: number; arcs: number } | null>(null);
   const [emailPrompt, setEmailPrompt] = useState(false);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
@@ -420,6 +422,7 @@ export default function BetaDashboardClient() {
       setArcShelf(dash.arcShelf || []);
       setCatalog(dash.catalog || []);
       setArcCatalog(dash.arcCatalog || []);
+      setHiddenByPrefs(dash.hiddenByPrefs || null);
       setEmailPrompt(Boolean(dash.emailPrompt));
       if (commentsRes.ok) setThreads(comments.threads || []);
 
@@ -807,6 +810,7 @@ export default function BetaDashboardClient() {
               {tab === "catalog" && (
                 <section>
                   <h2 className="sr-only">Available by keyword</h2>
+                  <ReadingPrefsPanel hidden={hiddenByPrefs} onSaved={() => void load()} />
                   {arcCatalog.length > 0 && (
                     <div className="mb-12">
                       <h3 className="font-display text-xl">Advance reader copies</h3>
@@ -892,7 +896,11 @@ export default function BetaDashboardClient() {
                     Browse by cover. Open the blurb, or sample the first chapter before applying.
                   </p>
                   {catalog.length === 0 ? (
-                    <p className="mt-3 text-sm text-muted">No books are open for beta right now.</p>
+                    <p className="mt-3 text-sm text-muted">
+                      {hiddenByPrefs?.betas
+                        ? `No beta reads match your reading preferences right now (${hiddenByPrefs.betas} hidden). Change them above to see more.`
+                        : "No books are open for beta right now."}
+                    </p>
                   ) : (
                     <div className="mt-6 space-y-10">
                       {catalog.map((g) => (

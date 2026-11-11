@@ -780,6 +780,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     open: { href: "/beta/dashboard", label: "Browse available books" },
     steps: [
       "On your reader dashboard, open Available. Browse by genre or keyword.",
+      "Open Reading preferences at the top to pick the genres you want, the genres you don't, and the content warnings you'd rather not see. They filter beta reads, advance copies, and books for sale in the store.",
       "Open a book to read its blurb and the author's feedback brief: what they want to hear about, how rough the draft is, and how long it takes.",
       "Read a sample chapter if there is one.",
       "Apply for the beta read or request the advance copy. Authors see your reader badges, so a good track record helps.",
@@ -896,7 +897,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "Bring your history over from Goodreads or StoryGraph in one step, and export it anytime.",
       "Series show in order with what's next. Tap “Tell me when the next one is out” to get a notice on release day.",
       "Recommendations come from readers who loved the same books, never from ads. Follow readers whose taste you trust, and make lists to share.",
-      "Set content filters to leave out a trope, theme, or content warning from your recommendations.",
+      "Set content filters to leave out a particular word or trope. Your reading preferences (genres and content warnings, set on the reader dashboard's Available tab) apply here too.",
     ],
     faq: [{ q: "Can authors see that I saved their book?", a: "Authors see only how many readers saved a book, never who." }],
     related: ["follow-authors"],

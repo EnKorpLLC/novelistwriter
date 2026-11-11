@@ -11,6 +11,7 @@ import { launchingThisWeek } from "@/lib/spotlight";
 import { createClient } from "@/lib/supabase/server";
 import { TbrButton } from "@/components/LibraryButton";
 import { applyContentFilters, contentFiltersFor } from "@/lib/reader-recs";
+import { NO_PREFS } from "@/lib/reading-prefs";
 import { audiobookBadges, type AudiobookBadge } from "@/lib/audiobook-sales";
 import { ratingsFor } from "@/lib/book-reviews";
 
@@ -34,7 +35,7 @@ export default async function PublishedBooksPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const filters = await contentFiltersFor(admin, user?.id).catch(() => []);
+  const filters = await contentFiltersFor(admin, user?.id).catch(() => ({ words: [], prefs: NO_PREFS }));
   // Audiobooks on sale here, with their badges (before migration_audiobook_sales.sql, none)
   const { data: abRows } = await admin.from("projects").select("id, audiobook_sale").in("id", books.map((b) => b.id));
   const audio = await audiobookBadges(admin, abRows || []).catch(() => new Map<string, AudiobookBadge>());
@@ -91,6 +92,10 @@ export default async function PublishedBooksPage({
         {hidden > 0 && (
           <p className="font-ui mt-4 text-xs text-muted">
             {hidden} book{hidden === 1 ? " is" : "s are"} hidden because of your{" "}
+            <Link href="/beta/dashboard?tab=catalog#reading-prefs" className="text-accent underline">
+              reading preferences
+            </Link>{" "}
+            or{" "}
             <Link href="/library" className="text-accent underline">
               content filters
             </Link>
@@ -99,7 +104,7 @@ export default async function PublishedBooksPage({
         )}
 
         {shown.length === 0 ? (
-          <p className="font-ui mt-10 text-sm text-muted">{hidden > 0 ? "Every book here matches your content filters." : "No published books yet."}</p>
+          <p className="font-ui mt-10 text-sm text-muted">{hidden > 0 ? "Every book here is hidden by your reading preferences or content filters." : "No published books yet."}</p>
         ) : (
           <ul className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4">
             {shown.map((b) => (
