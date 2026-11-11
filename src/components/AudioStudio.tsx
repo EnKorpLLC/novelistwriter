@@ -6,7 +6,7 @@ import { encodeWav, measure, roomAdvice, type Levels } from "@/lib/audio/wav";
 import { Recorder, listMicrophones, openMicrophone } from "@/lib/audio/recorder";
 import { allFiles, browserStore, chapterFolder, chooseFolder, deleteFile, forgetFolder, readFile, restoreFolder, saveFile, supportsFolders, type AudioStore } from "@/lib/audio/local-store";
 import { readPcm, sentencesOf } from "@/lib/audio/assemble";
-import { AudioReview, isPickup, placeTake, rangeLabel, type AudioNote, type ChapterReview, type StudioTake } from "@/components/AudioReview";
+import { AudioReview, isPickup, placeTake, rangeLabel, type AudioNote, type ChapterReview, type RemoteCopy, type StudioTake } from "@/components/AudioReview";
 import { AudioExport, creditsScripts, type AudioSettings, type AudioSlot } from "@/components/AudioExport";
 import { coverPublicUrl } from "@/lib/cover";
 import { NarratorPanel } from "@/components/NarratorPanel";
@@ -28,7 +28,9 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
   // Who's using the studio: the author, or the narrator of the book's active job
   const [role, setRole] = useState<"owner" | "narrator">("owner");
   const [userId, setUserId] = useState<string | null>(null);
-  const [narrator, setNarrator] = useState<{ name: string; jobId: string } | null>(null);
+  const [narrator, setNarrator] = useState<{ name: string; jobId: string; checkpoint?: { required: boolean; status: "pending" | "submitted" | "approved" | "changes"; note: string | null } } | null>(null);
+  const [reviewCopies, setReviewCopies] = useState<Record<string, RemoteCopy>>({});
+  const [storageReady, setStorageReady] = useState(false);
   const scripts = creditsScripts({ title: bookTitle, author: authorName, narrator: settings.narrator || narrator?.name || "" });
   // Opening credits, the chapters, closing credits: everything that becomes a file
   const slots = useMemo<AudioSlot[]>(
@@ -90,6 +92,9 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
     setRole(d.role === "narrator" ? "narrator" : "owner");
     setUserId(d.userId || null);
     setNarrator(d.narrator || null);
+    setReviewCopies(d.reviewCopies || {});
+    setStorageReady(Boolean(d.storageReady));
+    if (d.reviewCopiesHint) setReviewHint(d.reviewCopiesHint);
   }, [projectId]);
 
   useEffect(() => {
@@ -362,10 +367,25 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                 />
               )}
               {role === "narrator" && (
-                <p className="border border-line bg-paper-deep/40 px-3 py-2 text-xs text-muted">
-                  You&apos;re narrating this book for {authorName || "the author"}. Your recordings stay on your computer. Record each chapter, fix the lines they pin notes to, and send chapters for
-                  review in Review. Sending review copies to the author arrives in the next update.
-                </p>
+                <div className="border border-line bg-paper-deep/40 px-3 py-2 text-xs text-muted">
+                  <p>
+                    You&apos;re narrating this book for {authorName || "the author"}. Your recordings stay on your computer. Record each chapter, then open Review and send it: the author gets a small
+                    review copy, pins notes to lines, and you record just those pickups.
+                  </p>
+                  {narrator?.checkpoint?.required && (
+                    <p className="mt-1 text-ink">
+                      Checkpoint:{" "}
+                      {narrator.checkpoint.status === "approved"
+                        ? "✓ approved. Record the rest of the book."
+                        : narrator.checkpoint.status === "submitted"
+                          ? "sent. Wait for the author's go-ahead before recording the rest."
+                          : narrator.checkpoint.status === "changes"
+                            ? `the author asked for changes${narrator.checkpoint.note ? `: “${narrator.checkpoint.note}”` : ""}. Fix them and send the chapter again.`
+                            : "record about 15 minutes (usually the first chapter) and send it for review. The author approves it before full production."}
+                    </p>
+                  )}
+                  {!storageReady && <p className="mt-1 text-danger">Sending review copies isn&apos;t available yet on this site.</p>}
+                </div>
               )}
 
               {/* 1. Where recordings go */}
@@ -543,7 +563,8 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                 {!chapter ? (
                   <p className="mt-3 text-muted">Write a chapter first, then record it here.</p>
                 ) : mode === "review" && chapter.kind === "chapter" ? (
-                  store ? (
+                  // A narrator's review copy streams from storage, so listening to it doesn't need a recordings folder
+                  store || chapterTakes.some((t) => t.recordedBy && t.recordedBy !== userId) ? (
                     <AudioReview
                       key={chapter.id}
                       store={store}
@@ -557,9 +578,11 @@ export function AudioStudio({ projectId, chapters, bookTitle, coverPath }: { pro
                       post={post}
                       reload={load}
                       canManage={role === "owner"}
+                      remote={reviewCopies[chapter.id] || null}
+                      sendsCopies={role === "narrator" && storageReady}
                       listenBlocked={
                         chapterTakes.some((t) => t.chosen && !isPickup(t) && t.recordedBy && t.recordedBy !== userId)
-                          ? "Your narrator recorded this chapter on their computer. You'll be able to listen once they send a review copy (coming in the next update). You can already pin notes to the text."
+                          ? "Your narrator recorded this chapter on their computer. You can listen once they send a review copy; you can already pin notes to the text."
                           : null
                       }
                       onRecordPickup={(n) => {

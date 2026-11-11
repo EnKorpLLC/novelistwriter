@@ -20,6 +20,8 @@ export type NarratorJob = {
   message: string;
   declinedReason: string | null;
   createdAt: string;
+  checkpointStatus: "pending" | "submitted" | "approved" | "changes";
+  checkpointNote: string | null;
 };
 
 export function jobFromRow(r: Record<string, unknown>): NarratorJob {
@@ -38,6 +40,8 @@ export function jobFromRow(r: Record<string, unknown>): NarratorJob {
     message: (r.message as string) || "",
     declinedReason: (r.declined_reason as string) || null,
     createdAt: r.created_at as string,
+    checkpointStatus: (["submitted", "approved", "changes"].includes(r.checkpoint_status as string) ? r.checkpoint_status : "pending") as NarratorJob["checkpointStatus"],
+    checkpointNote: (r.checkpoint_note as string) || null,
   };
 }
 

@@ -8,6 +8,8 @@ import { findPauses, speechThreshold, type Pcm } from "@/lib/audio/assemble";
 
 export const OUT_RATE = 44100;
 export const KBPS = 192;
+/** Review copies the narrator sends the author: about 29 MB an hour */
+export const REVIEW_KBPS = 64;
 const TARGET_RMS = -20;
 const CEILING_DB = -3.5;
 const FLOOR_TARGET = -63;
@@ -17,6 +19,15 @@ const FRAME_S = 0.02;
 
 const toDb = (x: number) => (x > 0 ? 20 * Math.log10(x) : -120);
 const lin = (d: number) => Math.pow(10, d / 20);
+
+export function toPcm16(x: Float32Array, rate: number): Pcm {
+  const data = new Int16Array(x.length);
+  for (let i = 0; i < x.length; i++) {
+    const s = Math.max(-1, Math.min(1, x[i]));
+    data[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return { data, rate };
+}
 
 export function toFloat(pcm: Pcm): Float32Array {
   const out = new Float32Array(pcm.data.length);
@@ -273,10 +284,10 @@ export function storeChecks(m: Mastered, kind: "chapter" | "sample" = "chapter")
   return out;
 }
 
-/** 192 kbps constant bit rate MP3, encoded in slices so the page stays responsive. */
-export async function encodeMp3(x: Float32Array, onProgress?: (done: number) => void): Promise<Blob> {
+/** Constant bit rate MP3 (192 kbps for stores, less for review copies), encoded in slices so the page stays responsive. */
+export async function encodeMp3(x: Float32Array, onProgress?: (done: number) => void, kbps = KBPS): Promise<Blob> {
   const { Mp3Encoder } = await import("@breezystack/lamejs");
-  const enc = new Mp3Encoder(1, OUT_RATE, KBPS);
+  const enc = new Mp3Encoder(1, OUT_RATE, kbps);
   const chunks: Uint8Array[] = [];
   const block = 1152 * 40;
   const buf = new Int16Array(block);

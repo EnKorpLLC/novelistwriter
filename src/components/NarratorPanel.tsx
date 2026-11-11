@@ -13,6 +13,8 @@ type Job = {
   narratorAcceptedAt: string | null;
   declinedReason: string | null;
   createdAt: string;
+  checkpointStatus?: "pending" | "submitted" | "approved" | "changes";
+  checkpointNote?: string | null;
 };
 
 /** Audio tab, author side: invite a narrator with proposed terms, then follow the job. */
@@ -23,6 +25,25 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
   const [form, setForm] = useState<{ editing: string | null; email: string; name: string; message: string; terms: NarrationTerms } | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [checkNote, setCheckNote] = useState("");
+
+  async function checkpoint(decision: "approve" | "changes") {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/audio`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "checkpoint", decision, note: checkNote }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Couldn't save that");
+      setCheckNote("");
+      setMsg(decision === "approve" ? "Checkpoint approved. We've told your narrator to start full production." : "Sent. Your narrator will record it again.");
+      await load();
+      onChange();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Couldn't save that");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     const d = await fetch(`/api/projects/${projectId}/narrators`)
@@ -93,7 +114,8 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
               <>
                 <span className="text-accent">✓ </span>
                 <b>{open.narratorName || open.inviteEmail}</b> is narrating
-                {open.narratorAcceptedAt ? ` (accepted ${new Date(open.narratorAcceptedAt).toLocaleDateString()})` : ""}. Their takes stay on their computer; review copies arrive in the next update.
+                {open.narratorAcceptedAt ? ` (accepted ${new Date(open.narratorAcceptedAt).toLocaleDateString()})` : ""}. Their takes stay on their computer; they send you a review copy of each chapter
+                to hear in Review.
               </>
             ) : (
               <>
@@ -101,6 +123,38 @@ export function NarratorPanel({ projectId, bookTitle, authorName, words, onChang
               </>
             )}
           </p>
+          {open.status === "active" && open.terms.checkpoint && (
+            <div className={`mt-2 border px-3 py-2 text-xs ${open.checkpointStatus === "submitted" ? "border-accent" : "border-line"}`}>
+              {open.checkpointStatus === "approved" ? (
+                <p className="text-accent">✓ Checkpoint approved. Full production is under way.</p>
+              ) : open.checkpointStatus === "submitted" ? (
+                <>
+                  <p className="text-ink">
+                    <b>Checkpoint ready.</b> Your narrator sent their first recording: listen in Review below (it&apos;s the chapter marked &quot;Checkpoint copy&quot;), pin notes to any lines, then decide.
+                  </p>
+                  <textarea
+                    rows={2}
+                    value={checkNote}
+                    onChange={(e) => setCheckNote(e.target.value)}
+                    placeholder="If you're asking for changes: pace, tone, a voice, pronunciations…"
+                    className="mt-2 w-full border border-line bg-paper p-2"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" disabled={busy} className="bg-accent px-3 py-1.5 text-paper" onClick={() => void checkpoint("approve")}>
+                      Approve: start full production
+                    </button>
+                    <button type="button" disabled={busy || !checkNote.trim()} className="border border-line px-3 py-1.5 disabled:opacity-50" onClick={() => void checkpoint("changes")}>
+                      Ask for changes
+                    </button>
+                  </div>
+                </>
+              ) : open.checkpointStatus === "changes" ? (
+                <p className="text-muted">You asked for changes to the checkpoint{open.checkpointNote ? `: “${open.checkpointNote}”` : ""}. Waiting for a new recording.</p>
+              ) : (
+                <p className="text-muted">Checkpoint: waiting for your narrator&apos;s first ~15 minutes.</p>
+              )}
+            </div>
+          )}
           <details className="mt-2">
             <summary className="cursor-pointer text-xs text-accent">The agreement</summary>
             <div className="mt-2">

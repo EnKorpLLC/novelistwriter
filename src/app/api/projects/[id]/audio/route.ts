@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { audioAccess } from "@/lib/narration-access";
+import { deleteObject, objectSize, r2Configured, signedUploadUrl } from "@/lib/r2";
+import { REVIEW_MAX_BYTES, latestReviewCopies, removeChapterCopies, reviewKey } from "@/lib/review-copies";
+import { renderEmail, sendEmail } from "@/lib/email";
+import { appUrl } from "@/lib/stripe";
 
 const HINT = "Database needs an update. Run supabase/migration_audiobook.sql in the Supabase SQL editor.";
 const REVIEW_HINT = "Review and pickups need a database update. Run supabase/migration_audiobook_review.sql in the Supabase SQL editor.";
 const EXPORT_HINT = "Credits and export settings need a database update. Run supabase/migration_audiobook_export.sql in the Supabase SQL editor.";
+const COPIES_HINT = "Review copies need a database update. Run supabase/migration_review_copies.sql in the Supabase SQL editor.";
 const STATUSES = ["recording", "review", "approved"] as const;
 /** Opening and closing credits are recorded like chapters but aren't chapters. */
 const SEGMENTS = ["opening", "closing"] as const;
@@ -28,13 +33,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { studio, role, job, authorId } = access;
   const admin = createServiceClient();
-  const [takes, sessions, notes, chapters, settings, profile] = await Promise.all([
+  const [takes, sessions, notes, chapters, settings, profile, copies] = await Promise.all([
     admin.from("audio_takes").select("*").eq("project_id", id).order("take_no"),
     admin.from("narration_sessions").select("id, started_at, ended_at, recorded_ms, takes, noise_floor_db").eq("project_id", id).order("started_at"),
     admin.from("audio_notes").select("*").eq("project_id", id).order("sentence"),
     admin.from("audio_chapters").select("chapter_id, status, rounds, approved_at").eq("project_id", id),
     admin.from("projects").select("audio_settings").eq("id", id).maybeSingle(),
     admin.from("profiles").select("display_name").eq("id", authorId).maybeSingle(),
+    latestReviewCopies(admin, id).catch(() => null),
   ]);
   if (takes.error || sessions.error) return NextResponse.json({ studio, migrationNeeded: true, error: HINT, takes: [], record: null });
   const reviewReady = !notes.error && !chapters.error;
@@ -45,7 +51,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     studio,
     role,
     userId: access.user.id,
-    narrator: job ? { name: job.narratorName, jobId: job.id } : null,
+    narrator: job
+      ? { name: job.narratorName, jobId: job.id, checkpoint: { required: job.terms.checkpoint, status: job.checkpointStatus, note: job.checkpointNote } }
+      : null,
+    reviewCopies: copies || {},
+    reviewCopiesHint: job && copies === null ? COPIES_HINT : null,
+    storageReady: r2Configured(),
     exportHint: settings.error ? EXPORT_HINT : null,
     settings: normalizeSettings(settings.data?.audio_settings),
     authorName: (profile.data?.display_name as string) || "",
@@ -117,8 +128,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   // Narrators record, fix, and send chapters for review; notes, approval, and book settings are the author's
   if (role === "narrator") {
-    const authorOnly = ["add_note", "update_note", "delete_note", "settings"];
-    if (authorOnly.includes(String(b.action)) || (b.action === "chapter_status" && b.status === "approved")) {
+    const authorOnly = ["add_note", "update_note", "delete_note", "settings", "checkpoint"];
+    if (authorOnly.includes(String(b.action)) || (b.action === "chapter_status" && b.status !== "review")) {
       return NextResponse.json({ error: "Only the author can do that." }, { status: 403 });
     }
   }
@@ -246,6 +257,94 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true });
   }
 
+  const { job } = access;
+  // Tell the other side of a narrator job, by email
+  async function tell(to: "author" | "narrator", subject: string, paragraphs: string[], path: string) {
+    if (!job) return;
+    const uid = to === "author" ? job.authorId : job.narratorId;
+    if (!uid) return;
+    const { data: p } = await admin.from("profiles").select("email").eq("id", uid).maybeSingle();
+    if (!p?.email) return;
+    const mail = renderEmail({ heading: subject, paragraphs, button: { label: to === "author" ? "Open the Audio tab" : "Open the studio", url: appUrl(path) } });
+    await sendEmail({ to: p.email as string, subject, text: mail.text, html: mail.html }).catch(() => null);
+  }
+  const chapterTitle = async (chapterId: string) => {
+    const { data } = await admin.from("chapters").select("title, sort_order").eq("id", chapterId).maybeSingle();
+    return (data?.title as string)?.trim() || `Chapter ${(Number(data?.sort_order) || 0) + 1}`;
+  };
+
+  // Review copies go straight from the narrator's browser to R2; the link only allows this one file
+  if (b.action === "review_upload_url") {
+    if (!r2Configured()) return NextResponse.json({ error: "Audio storage isn't set up yet." }, { status: 503 });
+    const chapterId = await chapterOf(b.chapterId);
+    if (!chapterId) return NextResponse.json({ error: "Chapter not found" }, { status: 400 });
+    const key = reviewKey(id, chapterId);
+    return NextResponse.json({ key, url: await signedUploadUrl(key, 1800) });
+  }
+
+  if (b.action === "review_uploaded") {
+    const chapterId = await chapterOf(b.chapterId);
+    const key = String(b.key || "");
+    if (!chapterId || !key.startsWith(`review/${id}/${chapterId}/`)) return NextResponse.json({ error: "That upload doesn't belong to this chapter." }, { status: 400 });
+    const bytes = await objectSize(key).catch(() => null);
+    if (bytes == null) return NextResponse.json({ error: "The upload didn't arrive. Try sending it again." }, { status: 400 });
+    if (bytes > REVIEW_MAX_BYTES) {
+      await deleteObject(key).catch(() => null);
+      return NextResponse.json({ error: "That review copy is too large." }, { status: 400 });
+    }
+    const checkpoint = Boolean(role === "narrator" && job?.terms.checkpoint && (job.checkpointStatus === "pending" || job.checkpointStatus === "changes"));
+    const cuts = (Array.isArray(b.cuts) ? b.cuts : []).slice(0, 5000).map((c) => Math.max(0, Math.round(Number(c) || 0)));
+    const { data: copy, error } = await admin
+      .from("audio_review_copies")
+      .insert({ project_id: id, chapter_id: chapterId, user_id: user.id, r2_key: key, bytes, duration_ms: Math.max(0, Math.round(num(b.durationMs))), cuts, is_checkpoint: checkpoint })
+      .select("id")
+      .single();
+    if (error || !copy) {
+      await deleteObject(key).catch(() => null);
+      return NextResponse.json({ error: COPIES_HINT }, { status: 500 });
+    }
+    // One current copy per chapter
+    await removeChapterCopies(admin, chapterId, copy.id);
+    const { data: before } = await admin.from("audio_chapters").select("rounds").eq("chapter_id", chapterId).maybeSingle();
+    await admin.from("audio_chapters").upsert({ chapter_id: chapterId, project_id: id, status: "review", rounds: before?.rounds || 0, approved_at: null, updated_at: new Date().toISOString() });
+    if (checkpoint && job) {
+      await admin.from("narrator_jobs").update({ checkpoint_status: "submitted", checkpoint_copy_id: copy.id, checkpoint_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", job.id);
+    }
+    const title = await chapterTitle(chapterId);
+    await tell(
+      "author",
+      checkpoint ? `Checkpoint ready: ${job?.narratorName || "your narrator"} sent "${title}"` : `"${title}" is ready for review`,
+      [
+        checkpoint
+          ? `${job?.narratorName || "Your narrator"} recorded their checkpoint. Listen in the Audio tab (Review), pin notes to any lines, then approve it or ask for changes before full production.`
+          : `${job?.narratorName || "Your narrator"} sent "${title}" for review. Listen with the text alongside and pin notes to any lines that need another go.`,
+        "The review copy is kept for 30 days or until you approve the chapter.",
+      ],
+      `/project/${id}?tab=audio`
+    );
+    return NextResponse.json({ ok: true, id: copy.id, checkpoint });
+  }
+
+  if (b.action === "checkpoint") {
+    if (!job) return NextResponse.json({ error: "There's no narrator job on this book." }, { status: 400 });
+    const approve = b.decision === "approve";
+    const note = String(b.note || "").trim().slice(0, 1000);
+    const { error } = await admin
+      .from("narrator_jobs")
+      .update({ checkpoint_status: approve ? "approved" : "changes", checkpoint_note: approve ? null : note || null, checkpoint_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", job.id);
+    if (error) return NextResponse.json({ error: COPIES_HINT }, { status: 500 });
+    await tell(
+      "narrator",
+      approve ? "Checkpoint approved: start full production" : "Checkpoint: the author asked for changes",
+      approve
+        ? ["The author approved your checkpoint. You're clear to record the rest of the book.", "Payments: the held deposit is collected at this step once payments open in an upcoming update."]
+        : ["The author listened to your checkpoint and asked for some changes before full production.", note ? `Their note: "${note}"` : "See their notes in the studio's Review view."],
+      `/narrator/book/${job.id}`
+    );
+    return NextResponse.json({ ok: true });
+  }
+
   if (b.action === "chapter_status") {
     const chapterId = await chapterOf(b.chapterId);
     const status = STATUSES.find((s) => s === b.status);
@@ -262,6 +361,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       updated_at: new Date().toISOString(),
     });
     if (error) return NextResponse.json({ error: REVIEW_HINT }, { status: 500 });
+    // Approved chapters don't need their review copy any more
+    if (status === "approved") await removeChapterCopies(admin, chapterId).catch(() => 0);
+    if (job && role === "owner" && status === "approved") {
+      await tell("narrator", `"${await chapterTitle(chapterId)}" was approved`, ["The author approved this chapter."], `/narrator/book/${job.id}`);
+    }
+    if (job && role === "owner" && status === "recording" && before?.status === "review") {
+      await tell("narrator", `Pickups needed: "${await chapterTitle(chapterId)}"`, ["The author pinned notes to some lines in this chapter. Open Review in the studio to see them and record the pickups."], `/narrator/book/${job.id}`);
+    }
     return NextResponse.json({ ok: true, rounds });
   }
 

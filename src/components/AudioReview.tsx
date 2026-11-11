@@ -19,6 +19,7 @@ import {
   type Sentence,
 } from "@/lib/audio/assemble";
 import { readFile, type AudioStore } from "@/lib/audio/local-store";
+import { REVIEW_KBPS, encodeMp3, master, toPcm16 } from "@/lib/audio/master";
 
 export type StudioTake = PlacedTake & { takeNo: number; fileName: string; chosen: boolean; durationMs: number; noteId: string | null };
 export type AudioNote = {
@@ -34,6 +35,7 @@ export type AudioNote = {
   createdAt: string;
 };
 export type ChapterReview = { status: "recording" | "review" | "approved"; rounds: number; approvedAt: string | null };
+export type RemoteCopy = { id: string; url: string; cuts: number[]; durationMs: number; createdAt: string; expiresAt: string; isCheckpoint: boolean };
 type Post = (body: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
 const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
@@ -46,13 +48,13 @@ export function rangeLabel(from: number, to: number | null) {
 }
 
 /** Loads takes from the narrator's folder, keeping the last few in memory while they review. */
-function useTakeLoader(store: AudioStore, folder: string, takes: StudioTake[]) {
+function useTakeLoader(store: AudioStore | null, folder: string, takes: StudioTake[]) {
   const cache = useRef(new Map<string, Pcm>());
   return async (id: string) => {
     const hit = cache.current.get(id);
     if (hit) return hit;
     const t = takes.find((x) => x.id === id);
-    if (!t) return null;
+    if (!t || !store) return null;
     const f = await readFile(store, folder, t.fileName);
     if (!f) return null;
     const pcm = await readPcm(f);
@@ -98,12 +100,19 @@ export function AudioReview({
   onRecordPickup,
   canManage = true,
   listenBlocked = null,
+  remote = null,
+  sendsCopies = false,
 }: {
+  /** The newest review copy the narrator sent, played from storage when the takes aren't on this computer */
+  remote?: RemoteCopy | null;
+  /** Narrators send a review copy to the author instead of just marking the chapter ready */
+  sendsCopies?: boolean;
   /** The author approves chapters and writes notes; a narrator reads notes and records pickups */
   canManage?: boolean;
   /** Why this browser can't play the chapter (the takes are on someone else's computer) */
   listenBlocked?: string | null;
-  store: AudioStore;
+  /** Null when only listening to a narrator's review copy */
+  store: AudioStore | null;
   chapterId: string;
   folder: string;
   sentences: Sentence[];
@@ -118,7 +127,7 @@ export function AudioReview({
   const root = rootTake(takes);
   const chosen = useMemo(() => takes.filter((t) => t.chosen), [takes]);
   const load = useTakeLoader(store, folder, takes);
-  const [built, setBuilt] = useState<{ url: string; cuts: number[]; ms: number } | null>(null);
+  const [built, setBuilt] = useState<{ url: string; cuts: number[]; ms: number; remote?: boolean } | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [pos, setPos] = useState(0);
@@ -134,12 +143,43 @@ export function AudioReview({
   const signature = JSON.stringify(chosen.map((t) => [t.id, t.parentId, t.inMs, t.outMs]));
   useEffect(() => {
     setBuilt((b) => {
-      if (b) URL.revokeObjectURL(b.url);
+      if (b && !b.remote) URL.revokeObjectURL(b.url);
       return null;
     });
   }, [signature]);
-  useEffect(() => () => void (built && URL.revokeObjectURL(built.url)), [built]);
+  useEffect(() => () => void (built && !built.remote && URL.revokeObjectURL(built.url)), [built]);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
+  // The author reviews the narrator's copy straight from storage, with the sentence timings sent alongside it
+  const playsRemote = Boolean(remote && listenBlocked);
+  useEffect(() => {
+    if (remote && listenBlocked) setBuilt({ url: remote.url, cuts: remote.cuts.length ? remote.cuts : [0, remote.durationMs], ms: remote.durationMs, remote: true });
+  }, [remote, listenBlocked, signature]);
+
+  const [sending, setSending] = useState<string | null>(null);
+  async function sendReview() {
+    if (!root) return;
+    setMsg(null);
+    try {
+      setSending("Putting the chapter together…");
+      const r = await assemble(root.id, chosen, load);
+      if (!r) throw new Error(`Couldn't find ${root.fileName}. Was it moved or deleted?`);
+      setSending("Mastering…");
+      const m = await master(r.pcm);
+      const cuts = sentenceCuts(findPauses(frameDb(toPcm16(m.samples, m.rate))), sentences.map((s) => s.text.length)).map(Math.round);
+      const mp3 = await encodeMp3(m.samples, (p) => setSending(`Encoding… ${Math.round(p * 100)}%`), REVIEW_KBPS);
+      setSending("Uploading…");
+      const up = await post({ action: "review_upload_url", chapterId });
+      const put = await fetch(String(up.url), { method: "PUT", body: mp3, headers: { "Content-Type": "audio/mpeg" } });
+      if (!put.ok) throw new Error(`The upload didn't go through (${put.status}). Try again.`);
+      const done = await post({ action: "review_uploaded", chapterId, key: up.key, durationMs: Math.round((m.samples.length / m.rate) * 1000), cuts });
+      setMsg(done.checkpoint ? "Checkpoint sent. The author will listen and approve it before full production." : "Sent. The author has been told it's ready.");
+      await reload();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Couldn't send the review copy");
+    } finally {
+      setSending(null);
+    }
+  }
 
   async function build() {
     if (!root) return;
@@ -252,10 +292,21 @@ export function AudioReview({
             {status === "approved" ? "✓ Approved" : status === "review" ? "In review" : "Recording"}
             {review?.rounds ? ` · round ${review.rounds + 1}` : ""}
           </span>
-          {status === "recording" && (
-            <button type="button" className="border border-line px-2 py-1" onClick={() => void setStatus("review")}>
-              {canManage ? "Ready for review" : "Send for review"}
+          {sendsCopies ? (
+            <button type="button" disabled={Boolean(sending)} className="bg-accent px-2 py-1 text-paper disabled:opacity-60" onClick={() => void sendReview()}>
+              {sending || (remote ? "Send a new review copy" : "Send for review")}
             </button>
+          ) : (
+            status === "recording" && (
+              <button type="button" className="border border-line px-2 py-1" onClick={() => void setStatus("review")}>
+                Ready for review
+              </button>
+            )
+          )}
+          {remote && (
+            <span className="text-muted">
+              {remote.isCheckpoint ? "Checkpoint copy" : "Review copy"} sent {new Date(remote.createdAt).toLocaleDateString()}; kept until approved or {new Date(remote.expiresAt).toLocaleDateString()}
+            </span>
           )}
           {canManage && status !== "approved" && (
             <button type="button" className="bg-accent px-2 py-1 text-paper" onClick={() => void setStatus("approved")}>
@@ -277,7 +328,7 @@ export function AudioReview({
 
         {/* Player */}
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-paper py-2 text-xs">
-          {listenBlocked ? (
+          {listenBlocked && !playsRemote ? (
             <p className="text-muted">{listenBlocked}</p>
           ) : !built ? (
             <button type="button" disabled={building} className="bg-ink px-4 py-2 text-paper disabled:opacity-60" onClick={() => void build()}>
@@ -324,9 +375,11 @@ export function AudioReview({
               <span className="tabular-nums text-muted">
                 {mmss(pos * 1000)} / {mmss(built.ms)}
               </span>
-              <a href={built.url} download={`${folder}.wav`} className="underline">
-                Download (WAV)
-              </a>
+              {!playsRemote && (
+                <a href={built.url} download={`${folder}.wav`} className="underline">
+                  Download (WAV)
+                </a>
+              )}
             </>
           )}
           <span className="w-full text-muted">
