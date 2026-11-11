@@ -363,7 +363,7 @@ function Purchases() {
                   : `${p.priceCents ? "Bought" : "Free since"} ${new Date(p.boughtAt).toLocaleDateString()}`}
               </span>
               <a href={p.downloadUrl} className="border border-accent px-2 py-1 text-accent">
-                {p.preorderRelease ? "See pre-order" : p.format === "paperback" ? "See order" : p.format === "audiobook" || p.title.endsWith("(audiobook)") ? "Listen" : "Download"}
+                {p.preorderRelease ? "See pre-order" : p.format === "paperback" || p.format === "item" ? "See order" : p.format === "audiobook" || p.title.endsWith("(audiobook)") ? "Listen" : "Download"}
               </a>
             </span>
           </li>

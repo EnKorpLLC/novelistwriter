@@ -76,6 +76,10 @@ async function load(token: string) {
     return {
       readAlong,
       extras,
+      item:
+        p.format === "item"
+          ? { shipBy: (p.ship_by as string | null) || null, shippedAt: (p.shipped_at as string | null) || null, tracking: (p.tracking_url as string | null) || null, personalization: (p.personalization as string | null) || null }
+          : null,
       paperback: isPaperback
         ? { status: (p.print_status as string | null) || null, trackingUrl: (p.tracking_url as string | null) || null, shippedAt: (p.shipped_at as string | null) || null, cancellable, proof: Boolean(p.is_proof) }
         : null,
@@ -124,7 +128,7 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
           )}
           <div className="min-w-0 flex-1">
             <p className="font-ui text-xs uppercase tracking-wide text-muted">
-              {p.preorder ? "Your pre-order" : p.paperback ? (p.paperback.proof ? "Your proof copy" : "Your paperback") : p.isAudio ? "Your audiobook" : p.isExtra ? "Your extra" : p.isBoxSet ? "Your box set" : "Your ebook"}
+              {p.preorder ? "Your pre-order" : p.item ? "Your order" : p.paperback ? (p.paperback.proof ? "Your proof copy" : "Your paperback") : p.isAudio ? "Your audiobook" : p.isExtra ? "Your extra" : p.isBoxSet ? "Your box set" : "Your ebook"}
             </p>
             <h1 className="font-display mt-1 text-3xl">{p.title}</h1>
             {refunded ? (
@@ -145,6 +149,24 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
                   </p>
                 )}
                 <PreorderActions token={token} moved={p.preorder.moved} newDateLabel={p.preorder.newDate ? longDay(p.preorder.newDate) : null} />
+              </>
+            ) : p.item ? (
+              <>
+                <p className="font-ui mt-3 text-sm">
+                  {p.item.shippedAt
+                    ? `The author shipped it on ${new Date(p.item.shippedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })}.`
+                    : `The author ships it themselves${p.item.shipBy ? `, by ${longDay(p.item.shipBy)}` : ""}. You'll get an email with tracking when it's on its way.`}
+                </p>
+                {p.item.personalization && <p className="font-ui mt-2 text-sm">Dedication: “{p.item.personalization}”</p>}
+                {p.item.tracking &&
+                  (p.item.tracking.startsWith("http") ? (
+                    <a href={p.item.tracking} target="_blank" rel="noopener noreferrer" className="font-ui mt-3 inline-block bg-accent px-5 py-2.5 text-paper">
+                      Track your package
+                    </a>
+                  ) : (
+                    <p className="font-ui mt-2 text-sm">Tracking: {p.item.tracking}</p>
+                  ))}
+                <p className="font-ui mt-3 text-xs text-muted">If it arrives damaged or never arrives, reply to your order email and the author will replace or refund it.</p>
               </>
             ) : p.paperback ? (
               <>
@@ -246,7 +268,7 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
             </ul>
           </section>
         )}
-        {!refunded && !p.isAudio && !p.isExtra && !p.preorder && !p.paperback && (
+        {!refunded && !p.isAudio && !p.isExtra && !p.preorder && !p.paperback && !p.item && (
           <section className="font-ui mt-10 space-y-3 text-sm">
             <h2 className="font-display text-xl">Reading it</h2>
             <p>

@@ -48,6 +48,10 @@ export default function SellerTermsPage() {
       d: `Lulu prints and ships each paperback order for us. Your share is the price less Lulu's printing cost, our fee, and Stripe's fee (shipping is charged to the reader at cost), paid ${REFUND_WINDOW_DAYS} days after the book ships. Selling opens after you approve a proof copy, which you pay for at cost. If a printed order is refunded, its printing and shipping come out of your share as well as Stripe's fee; misprints that are the printer's fault are reprinted at no cost to you.`,
     },
     {
+      t: "Your shop",
+      d: `For things you ship yourself (signed books, bookmarks, prints), you're responsible for packing, mailing, and the item arriving: replace or refund anything damaged or lost. Mark each order shipped, with tracking on orders over $20. You get the price and the shipping you charged, less our fee and Stripe's, ${REFUND_WINDOW_DAYS} days after you ship. An order not shipped within 5 days of its ship-by date is refunded and your shop pauses until you reopen it. Buyers' addresses are only for shipping their order.`,
+    },
+    {
       t: "Your book and extras",
       d: "Only sell books and extras you have the right to sell. Art someone else made for your book often only covers using it in and around the book; selling it as an extra needs their permission. Anything that breaks our conduct rules or someone else's rights can be taken down, and its sales refunded. Readers keep extras they've bought, or got with the ebook, even if you turn them off later.",
     },

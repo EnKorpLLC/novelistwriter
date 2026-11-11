@@ -56,6 +56,7 @@ export const PLANS: PlanCopy[] = [
       "Sell your ebook direct from your launch page: readers pay once and it goes straight to their library. You keep about 78% (10% + 15¢ per sale), and we handle sales tax. Sale prices with dates, discount codes you can share as a link, and bundles like a whole series at one price",
       "Take pre-orders direct before release: readers pay now and get the ebook the moment it's out. Sell extras too, like character art, maps, and bonus stories, on their own or free with the ebook bought from you",
       "Sell your paperback direct: Lulu prints and ships each order, with no stock to keep. Readers pay shipping at cost and can get the ebook free, and you keep more than KDP's paperback royalty",
+      "Your own shop: signed and personalized books, bookmarks, and prints you ship yourself, with stock counts, packing slips, and tracking",
       "Sell your audiobook direct too, alone or as ebook + audiobook at one price, at the same fees. Readers stream it or download the MP3s to keep",
       "Readers add your book to their TBR from your launch page and the catalog, and you see how many TBRs, shelves, and reader lists each book is on (counts only, never who)",
       "Your public writing record and badges, like “Written in Novelist Writer”, “No AI used on this book”, and writing challenge wins",
@@ -208,6 +209,10 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "Can I sell paperbacks direct?",
     a: "Yes, on Pro and Studio, for US readers. Upload the interior PDF from your print layout and the full cover PDF; Lulu checks both and tells you the exact cover size. Order a proof copy at cost, confirm it, then turn on selling. Each order is printed on demand and shipped by Lulu, so you never hold stock or mail anything. Readers pay your price plus shipping at cost, and can get the ebook free. Your share is the price less printing, our usual fee, and Stripe's fee, paid 14 days after the book ships; on a $16.99, 300-page paperback that's about $8 on Pro, where KDP pays about $5.60. Printed-to-order books can't be returned, but misprints and lost packages are replaced.",
+  },
+  {
+    q: "Can I sell signed books or bookmarks?",
+    a: "Yes, from your shop on Pro and Studio. List signed copies (readers can ask for a dedication), bookmarks, prints, or stickers with how many you have, set flat US shipping, and say how many business days you take to ship. They show on your launch pages. You pack and mail each order, mark it shipped with tracking, and the reader is told. You get the price and the shipping you charged, less our usual fee and Stripe's, 14 days after you ship. An order not shipped within 5 days of its ship-by date is refunded and your shop pauses until you reopen it.",
   },
   {
     q: "Can I sell character art, maps, or bonus stories?",

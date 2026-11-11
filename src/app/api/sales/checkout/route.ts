@@ -9,6 +9,8 @@ import { audiobookReadiness } from "@/lib/audiobook-sales";
 import { EXTRA_TAX_CODES, extraReadiness } from "@/lib/digital-extras";
 import { paperbackReadiness, shippingQuotes } from "@/lib/print-sales";
 import { isShippingLevel } from "@/lib/print-rules";
+import { itemReadiness } from "@/lib/shop";
+import { MAX_QUANTITY, PERSONALIZE_MAX, itemTaxCode, shippingFor } from "@/lib/shop-rules";
 
 /** Stripe's tax category for downloaded ebooks the buyer keeps; overridable if Stripe changes it. */
 const EBOOK_TAX_CODE = process.env.STRIPE_EBOOK_TAX_CODE || "txcd_10302000";
@@ -19,7 +21,91 @@ const AUDIOBOOK_TAX_CODE = process.env.STRIPE_AUDIOBOOK_TAX_CODE || "txcd_103010
 const PRINTED_BOOK_TAX_CODE = process.env.STRIPE_PRINTED_BOOK_TAX_CODE || "txcd_35010000";
 const SHIPPING_TAX_CODE = "txcd_92010001";
 
-type Body = { projectId?: string; code?: string; bundleId?: string; fromProjectId?: string; format?: string; extraId?: string; state?: string; zip?: string; shippingLevel?: string; proof?: boolean };
+type Body = {
+  projectId?: string;
+  code?: string;
+  bundleId?: string;
+  fromProjectId?: string;
+  format?: string;
+  extraId?: string;
+  state?: string;
+  zip?: string;
+  shippingLevel?: string;
+  proof?: boolean;
+  itemId?: string;
+  quantity?: number;
+  personalization?: string;
+};
+
+/** Something from the author's shop, shipped by the author: their price times the quantity, plus their flat US shipping. */
+async function itemCheckout(admin: ReturnType<typeof createServiceClient>, body: Body, user: { id: string; email?: string } | null) {
+  const qty = Math.min(MAX_QUANTITY, Math.max(1, Math.round(Number(body.quantity) || 1)));
+  const ready = await itemReadiness(admin, String(body.itemId || ""), qty);
+  if (!ready.ok) return NextResponse.json({ error: ready.reason }, { status: 400 });
+  const { item, settings, tier } = ready;
+  if (user?.id === item.author_user_id) return NextResponse.json({ error: "That's your own shop." }, { status: 400 });
+  const personalization = item.personalize ? String(body.personalization || "").replace(/\s+/g, " ").trim().slice(0, PERSONALIZE_MAX) : "";
+  const shipping = shippingFor(settings, qty);
+  const { data: author } = await admin.from("profiles").select("display_name, handle").eq("id", item.author_user_id).maybeSingle();
+  const { data: book } = item.project_id ? await admin.from("projects").select("slug").eq("id", item.project_id).maybeSingle() : { data: null };
+  const back = author?.handle && book?.slug ? appUrl(bookPath(author.handle, book.slug)) : appUrl("/books");
+  const meta = {
+    kind: "book_purchase",
+    format: "item",
+    item_id: item.id,
+    author_user_id: item.author_user_id,
+    buyer_user_id: user?.id || "",
+    tier,
+    quantity: String(qty),
+    personalization,
+    ship_cents: String(shipping),
+    title: item.title.slice(0, 200),
+  };
+  const session = await getStripe()
+    .checkout.sessions.create({
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: item.price_cents,
+            tax_behavior: "exclusive",
+            product_data: {
+              name: item.title,
+              description: `${personalization ? `Personalized: “${personalization}”. ` : ""}Shipped by ${author?.display_name || "the author"} within ${settings.handlingDays} business days.`,
+              tax_code: itemTaxCode(item.kind),
+            },
+          },
+          quantity: qty,
+        },
+      ],
+      shipping_address_collection: { allowed_countries: ["US"] },
+      shipping_options: [
+        {
+          shipping_rate_data: {
+            type: "fixed_amount",
+            fixed_amount: { amount: shipping, currency: "usd" },
+            display_name: `Shipped by the author within ${settings.handlingDays} business days`,
+            tax_behavior: "exclusive",
+            tax_code: SHIPPING_TAX_CODE,
+          },
+        },
+      ],
+      automatic_tax: { enabled: true },
+      customer_creation: "if_required",
+      ...(user?.email ? { customer_email: user.email } : {}),
+      success_url: appUrl(`/purchase/thanks?session_id={CHECKOUT_SESSION_ID}`),
+      cancel_url: back,
+      metadata: meta,
+      payment_intent_data: { metadata: meta },
+    })
+    .catch((err: unknown) => {
+      console.error("shop checkout failed", item.id, err);
+      return null;
+    });
+  if (!session?.url) return NextResponse.json({ error: "Checkout isn't available right now. Try again in a little while." }, { status: 503 });
+  return NextResponse.json({ url: session.url });
+}
 type Line = { name: string; description: string; cents: number; taxCode: string };
 
 /**
@@ -116,7 +202,7 @@ type Item = { name: string; description: string; cents: number; meta: Record<str
  */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Body;
-  const format = body.format === "audiobook" || body.format === "both" || body.format === "extra" || body.format === "paperback" ? body.format : "ebook";
+  const format = body.format === "audiobook" || body.format === "both" || body.format === "extra" || body.format === "paperback" || body.format === "item" ? body.format : "ebook";
   if (!(await buyerCountryAllowed())) {
     return NextResponse.json({ error: "Buying direct is only open to readers in the US for now. The store links on this page work everywhere." }, { status: 403 });
   }
@@ -127,6 +213,7 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
 
   if (format === "paperback") return paperbackCheckout(admin, body, user);
+  if (format === "item") return itemCheckout(admin, body, user);
 
   let item: Item;
   if (body.bundleId) {

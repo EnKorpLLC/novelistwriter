@@ -487,7 +487,7 @@ export async function adjustBookPurchaseForCharge(admin: SupabaseClient, charge:
   const now = new Date().toISOString();
   for (const p of open) {
     // A pre-order refunded before delivery, or a paperback before it shipped, was never released; its costs join the next payout like any refund's
-    const release = (p.preorder_release && !p.delivered_at) || (p.format === "paperback" && !p.shipped_at) ? { available_at: now } : {};
+    const release = (p.preorder_release && !p.delivered_at) || ((p.format === "paperback" || p.format === "item") && !p.shipped_at) ? { available_at: now } : {};
     // A paperback that was printed has already been paid for at Lulu, so printing and shipping come off the author's share too
     const printed = p.format === "paperback" && p.print_job_id && p.print_status !== "CANCELED" && !p.is_proof ? (p.print_cost_cents || 0) + (p.shipping_cents || 0) : 0;
     await admin.from("book_purchases").update({ status: reason, author_cents: p.is_proof ? 0 : -(p.stripe_fee_cents + printed), platform_fee_cents: 0, refunded_at: now, ...release }).eq("id", p.id);
@@ -684,7 +684,7 @@ export async function purchasesFor(admin: SupabaseClient, userId: string, email:
       priceCents: p.price_cents as number,
       boughtAt: p.created_at as string,
       downloadUrl: `/purchase/${p.download_token}`,
-      format: ((p.format as string | undefined) || "ebook") as "ebook" | "audiobook" | "extra",
+      format: ((p.format as string | undefined) || "ebook") as "ebook" | "audiobook" | "extra" | "paperback" | "item",
       preorderRelease: p.preorder_release && !p.delivered_at ? (p.preorder_release as string) : null,
     }));
 }

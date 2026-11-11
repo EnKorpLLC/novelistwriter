@@ -18,6 +18,8 @@ const MENUS: { label: string; items: { href: string; label: string; hint: string
     label: "Sell",
     items: [
       { href: "/dashboard/sales", label: "Sales", hint: "Direct sales and payouts across all your books" },
+      { href: "/dashboard/shop", label: "Shop", hint: "Signed books, bookmarks, and prints you ship" },
+      { href: "/dashboard/orders", label: "Orders to ship", hint: "Packing slips and tracking for shop orders" },
       { href: "/dashboard/box-sets", label: "Box sets", hint: "Bundle books into one ebook or paperback" },
       { href: "/dashboard/affiliate", label: "Affiliate program", hint: "Earn cash for referrals" },
       { href: "/dashboard/share", label: "Share and earn", hint: "Free Studio days from your links" },

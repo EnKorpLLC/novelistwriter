@@ -20,6 +20,10 @@ const ITEMS = [
   },
   { t: "Extras", d: "Art, maps, and bonus stories you buy or get with an ebook are yours to download and keep, the same as your books." },
   {
+    t: "Signed books and things the author ships",
+    d: "The author ships these themselves by the date shown on your order. If it doesn't ship within 5 days of that date, you're refunded automatically. If it arrives damaged or never arrives, reply to your order email and it's replaced or refunded. Personalized items can't be returned otherwise.",
+  },
+  {
     t: "Paperbacks",
     d: "Paperbacks are printed for you when you order, so you can cancel within an hour of ordering (before printing starts) for a full refund, but they can't be returned after that. If yours arrives misprinted or damaged, or never arrives, reply to your receipt email with a photo within 30 days and we'll replace it.",
   },

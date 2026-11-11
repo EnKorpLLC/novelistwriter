@@ -21,6 +21,8 @@ import { currentPrice, longDay, normalizeDirectSale } from "@/lib/direct-sale-ru
 import { listExtras } from "@/lib/digital-extras";
 import { paperbackReadiness } from "@/lib/print-sales";
 import { BuyPaperbackButton } from "@/components/BuyPaperbackButton";
+import { itemsForBook } from "@/lib/shop";
+import { BuyItemButton } from "@/components/BuyItemButton";
 import { MagnetForm } from "@/components/MagnetForm";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { LaunchTeamCard } from "@/components/LaunchTeamCard";
@@ -117,6 +119,10 @@ export default async function LaunchPage({
   // The paperback, printed and shipped by Lulu for each order
   const paperbackReady = recordFlag && book.stage === "published" ? await paperbackReadiness(admin, recordFlag).catch(() => null) : null;
   const paperback = paperbackReady?.ok ? { priceCents: paperbackReady.edition.price_cents, freeEbook: paperbackReady.edition.free_ebook, canBuy: direct?.canBuy ?? (await buyerCountryAllowed()) } : null;
+  // The author's shop: signed copies of this book and their general merchandise, shipped by the author
+  const shop = recordFlag ? await itemsForBook(admin, author.userId, book.id).catch(() => null) : null;
+  const shopItems = shop?.items || [];
+  const shopCanBuy = shopItems.length ? (direct?.canBuy ?? (await buyerCountryAllowed())) : false;
   // Extras: art, maps, and bonus writing, sold on their own or free with the ebook bought here
   const extras = recordFlag ? ((await listExtras(admin, book.id).catch(() => null)) || []).filter((e) => e.active && e.files.length) : [];
   const sellerReady = extras.length ? await sellerStatus(admin, author.userId).catch(() => null) : null;
@@ -374,6 +380,28 @@ export default async function LaunchPage({
                 ))}
                 {(!isOwner || previewing) && <VisitorShareButton path={path} title={`${book.title} by ${author.name}`} />}
               </div>
+            )}
+            {shopItems.length > 0 && (
+              <section className="font-ui mt-6 border-t border-line pt-4">
+                <h2 className="font-display text-xl">From {author.name}&apos;s shop</h2>
+                <p className="text-xs text-muted">Shipped by the author within {shop?.settings?.handlingDays ?? 5} business days. US addresses.</p>
+                <ul className="mt-3 space-y-3 text-sm">
+                  {shopItems.map((it) => (
+                    <li key={it.id} className="flex flex-wrap items-start gap-3">
+                      {it.photoUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={it.photoUrl} alt="" className="h-20 w-20 border border-line object-cover" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-ink">{it.title}</p>
+                        {it.description && <p className="text-xs text-muted">{it.description}</p>}
+                        {it.personalize && <p className="text-[11px] text-muted">Can be signed to you</p>}
+                      </div>
+                      {!isOwner && <BuyItemButton itemId={it.id} priceCents={it.priceCents} stock={it.stock} personalize={it.personalize} canBuy={shopCanBuy} />}
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
             {shownExtras.length > 0 && (
               <section className="font-ui mt-6 border-t border-line pt-4">
