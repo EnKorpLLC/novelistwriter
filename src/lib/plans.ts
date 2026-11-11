@@ -53,6 +53,7 @@ export const PLANS: PlanCopy[] = [
       "Serial release schedule: a log of where every chapter is posted, how many chapters you have written ahead on each site, and a reminder on release days",
       "Buttons for your own website and newsletter (Get the book, Notify me on release, Join my beta, Request an ARC, Read a sample) and “Read on Royal Road / Wattpad / Substack” links for serials, with every click counted",
       "Sell your ebook direct from your launch page: readers pay once and it goes straight to their library. You keep about 78% (10% + 15¢ per sale), and we handle sales tax. Sale prices with dates, discount codes you can share as a link, and bundles like a whole series at one price",
+      "Take pre-orders direct before release: readers pay now and get the ebook the moment it's out. Sell extras too, like character art, maps, and bonus stories, on their own or free with the ebook bought from you",
       "Sell your audiobook direct too, alone or as ebook + audiobook at one price, at the same fees. Readers stream it or download the MP3s to keep",
       "Readers add your book to their TBR from your launch page and the catalog, and you see how many TBRs, shelves, and reader lists each book is on (counts only, never who)",
       "Your public writing record and badges, like “Written in Novelist Writer”, “No AI used on this book”, and writing challenge wins",
@@ -98,7 +99,7 @@ export const PLANS: PlanCopy[] = [
       "Newsletter swaps with real list sizes: find authors in your genre, agree on send days, and see how many readers each side's send brought",
       "Host group promos: gather books around a theme on a public page, approve who's in, and see whose share brought readers",
       "An ebook for each store: Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble builds whose review and “Also by” links point only to that store",
-      "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again",
+      "Box sets: bundle your books into one ebook or paperback, with a divider for each book and chapter numbers that start again, and sell the box set ebook direct from each book's launch page",
       "Audiobook studio (early access): record your own audiobook chapter by chapter with the script on screen, room and level checks, and retakes. Review with the text alongside, pin notes to sentences, and record pickups that are cut in for you. Then master and export files that meet ACX's specs, with credits, a retail sample, and a square cover, ready for ACX, Spotify for Authors, Google Play, and Kobo. Or invite a narrator with a plain-language agreement; they get a free narrator account that opens only your book. Recordings stay on the narrator's computer",
       "Series tools",
       `${SUB_ALLOWANCE.studio} AI credits every month, bring your own API key, priority AI`,
@@ -192,7 +193,15 @@ export const PRICING_FAQ: { q: string; a: string }[] = [
   },
   {
     q: "How does selling my ebook direct work?",
-    a: "On Pro and Studio, turn on selling in a book's Sell tab and set your price. Readers in the US buy from your launch page, and the book goes into their library to download anytime. We're the seller, so we collect and pay sales tax for you. Our fee is 10% + 15¢ per sale on Pro and 5% + 15¢ on Studio, plus Stripe's card fee; on a $4.99 ebook you keep about $3.90 on Pro or $4.15 on Studio. Each sale is held 14 days for refunds, then paid out on the 1st of the month once you have $50. Your store links stay on the page too. You can run sale prices, share discount codes, bundle a series at one price, and on Studio give a book free to readers who join your list. [Seller terms](/seller-terms)",
+    a: "On Pro and Studio, turn on selling in a book's Sell tab and set your price. Readers in the US buy from your launch page, and the book goes into their library to download anytime. We're the seller, so we collect and pay sales tax for you. Our fee is 10% + 15¢ per sale on Pro and 5% + 15¢ on Studio, plus Stripe's card fee; on a $4.99 ebook you keep about $3.90 on Pro or $4.15 on Studio. Each sale is held 14 days for refunds, then paid out on the 1st of the month once you have $50. Your store links stay on the page too. You can run sale prices, share discount codes, bundle a series at one price, and on Studio give a book free to readers who join your list or sell a box set as one ebook. [Seller terms](/seller-terms)",
+  },
+  {
+    q: "Can readers pre-order my ebook from me?",
+    a: "Yes, on Pro and Studio. Turn on pre-orders in a book's Sell tab once it has a release date; they open 90 days before. Readers pay at order and get the ebook in their library the moment you mark the book out now. They can cancel anytime before release, and if you move the date they're told and can keep or cancel. Anyone still waiting 30 days after their promised date is refunded automatically. Your share is paid after release, once the 14-day refund window passes.",
+  },
+  {
+    q: "Can I sell character art, maps, or bonus stories?",
+    a: "Yes, as extras on Pro and Studio. Upload images, PDFs, EPUBs, MP3s, or a zip in a book's Sell tab, then sell each extra on its own, include it free with the ebook bought from you, or both. They show on your launch page, and readers download them to keep. Only sell art you made or have permission to sell: art made for your book often only covers using it in and around the book.",
   },
   {
     q: "Can I prove my book is human-written on other sites?",

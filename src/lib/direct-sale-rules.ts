@@ -19,6 +19,8 @@ export type DirectSale = {
   on: boolean;
   /** Reader magnet (Studio): free for joining the author's list */
   magnet: boolean;
+  /** Before release: charge now, deliver when the book is marked out now */
+  preorder: boolean;
   priceCents: number;
   salePriceCents: number | null;
   saleStarts: string | null;
@@ -38,6 +40,7 @@ export function normalizeDirectSale(raw: unknown): DirectSale {
   return {
     on: o.on === true,
     magnet: o.magnet === true,
+    preorder: o.preorder === true,
     priceCents: price,
     salePriceCents: sale != null && sale < price ? sale : null,
     saleStarts: day(o.saleStarts),
@@ -64,6 +67,62 @@ export function estimateShare(priceCents: number, tier: SellerTier) {
 }
 
 export const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
+
+/** Pre-orders open this many days before release, which keeps every refund well inside what card networks allow. */
+export const PREORDER_MAX_DAYS = 90;
+/** A pre-order still waiting this many days after the date its buyer was promised is refunded automatically. */
+export const PREORDER_GRACE_DAYS = 30;
+
+const DAY = 86_400_000;
+export const addDays = (isoDay: string, days: number) => new Date(Date.parse(`${isoDay.slice(0, 10)}T12:00:00Z`) + days * DAY).toISOString().slice(0, 10);
+export const longDay = (isoDay: string) =>
+  new Date(`${isoDay.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+/** Why pre-orders can't open for this release date, or null when they can. */
+export function preorderProblem(releaseDate: string | null | undefined, today = new Date().toISOString().slice(0, 10)): string | null {
+  if (!releaseDate) return "Set a release date on the Launch page tab first.";
+  if (releaseDate.slice(0, 10) <= today) return "The release date has arrived. Mark the book out now to deliver pre-orders and start selling, or move the date.";
+  const opens = addDays(releaseDate, -PREORDER_MAX_DAYS);
+  if (opens > today) return `Pre-orders open ${PREORDER_MAX_DAYS} days before release, on ${longDay(opens)}.`;
+  return null;
+}
+
+/** Digital extras: character art, maps, bonus writing. */
+export type ExtraKind = "art" | "writing";
+export const EXTRA_KINDS: { id: ExtraKind; label: string }[] = [
+  { id: "art", label: "Art or maps (images)" },
+  { id: "writing", label: "Bonus writing (PDF or EPUB)" },
+];
+export const EXTRA_MAX_FILES = 10;
+export const EXTRA_MAX_BYTES = 200 * 1024 * 1024;
+export const EXTRAS_PER_BOOK = 20;
+const EXTRA_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  pdf: "application/pdf",
+  epub: "application/epub+zip",
+  mp3: "audio/mpeg",
+  zip: "application/zip",
+};
+export const EXTRA_ACCEPT = Object.keys(EXTRA_TYPES).map((e) => `.${e}`).join(",");
+/** The content type for an allowed extra file, or null if that kind of file can't be sold. */
+export const extraFileType = (name: string) => EXTRA_TYPES[name.split(".").pop()?.toLowerCase() || ""] || null;
+
+export type ExtraFile = { name: string; key: string; bytes: number };
+export type BookExtra = {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  kind: ExtraKind;
+  priceCents: number | null;
+  withEbook: boolean;
+  files: ExtraFile[];
+  active: boolean;
+};
 
 /** Per book: the audiobook for sale, and "ebook + audiobook" at one price. */
 export type AudiobookSale = { on: boolean; priceCents: number; bundlePriceCents: number | null; humanNarrated: boolean };

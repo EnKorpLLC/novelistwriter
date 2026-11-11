@@ -7,6 +7,7 @@ import { pingIndexNow } from "@/lib/seo";
 import { ensureHandle, ensureSlug } from "@/lib/public-site";
 import { authorSitePublic, userHasStudio } from "@/lib/credits";
 import { projectLockedMessage } from "@/lib/studio-access";
+import { deliverPreorders, notifyPreorderDateMoved } from "@/lib/preorders";
 
 const FIELDS =
   "id, user_id, title, slug, genre, blurb, tagline, release_date, launch_public, published, published_at, tropes, buy_links, beta_ready, arc_open, arc_deadline";
@@ -157,6 +158,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .select(FIELDS)
     .single();
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
+  // Direct pre-orders: delivered the moment the book is out; told when the date moves later
+  const admin = createServiceClient();
+  if (body.action === "publish") await deliverPreorders(admin, id).catch(() => 0);
+  else if (!data.published && typeof listing.release_date === "string" && listing.release_date > String(project.release_date || "")) {
+    await notifyPreorderDateMoved(admin, id, listing.release_date).catch(() => 0);
+  }
   const shaped = await shape(data as unknown as ProjectRow);
   if (shaped.launchVisible && shaped.launchPath && shaped.handle) {
     await pingIndexNow([shaped.launchPath, authorPath(shaped.handle)]);

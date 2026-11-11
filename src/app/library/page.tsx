@@ -334,7 +334,9 @@ export default function LibraryPage() {
 
 /** Ebooks bought direct: yours forever, download anytime. */
 function Purchases() {
-  const [items, setItems] = useState<{ id: string; title: string; priceCents: number; boughtAt: string; downloadUrl: string }[]>([]);
+  const [items, setItems] = useState<
+    { id: string; title: string; priceCents: number; boughtAt: string; downloadUrl: string; format?: string; preorderRelease?: string | null }[]
+  >([]);
   useEffect(() => {
     void fetch("/api/library/purchases")
       .then(async (r) => (r.ok ? setItems((await r.json()).purchases || []) : null))
@@ -356,10 +358,12 @@ function Purchases() {
             <span className="font-display text-base">{p.title}</span>
             <span className="flex items-center gap-3 text-xs">
               <span className="text-muted">
-                {p.priceCents ? "Bought" : "Free since"} {new Date(p.boughtAt).toLocaleDateString()}
+                {p.preorderRelease
+                  ? `Pre-ordered · arrives ${new Date(`${p.preorderRelease}T12:00:00Z`).toLocaleDateString(undefined, { timeZone: "UTC" })}`
+                  : `${p.priceCents ? "Bought" : "Free since"} ${new Date(p.boughtAt).toLocaleDateString()}`}
               </span>
               <a href={p.downloadUrl} className="border border-accent px-2 py-1 text-accent">
-                {p.title.endsWith("(audiobook)") ? "Listen" : "Download"}
+                {p.preorderRelease ? "See pre-order" : p.format === "audiobook" || p.title.endsWith("(audiobook)") ? "Listen" : "Download"}
               </a>
             </span>
           </li>

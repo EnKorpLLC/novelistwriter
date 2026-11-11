@@ -11,6 +11,7 @@ import { enqueueEmails, oneClickUnsubscribeUrl, processEmailQueue, unsubscribeUr
 import { normalizeLaunchPlan } from "@/lib/launch-plan";
 import { normalizeDetails } from "@/lib/book/format";
 import { pingIndexNow } from "@/lib/seo";
+import { deliverPreorders } from "@/lib/preorders";
 
 export const maxDuration = 60;
 
@@ -55,6 +56,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!project.published) {
     await admin.from("projects").update({ published: true, published_at: now, updated_at: now }).eq("id", id);
   }
+  await deliverPreorders(admin, id).catch(() => 0);
 
   const author = normalizeDetails(project.book_details).penName || profile?.display_name || "The author";
   const title = project.title || "the book";

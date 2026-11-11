@@ -10,9 +10,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   if (!/^[\w-]{20,64}$/.test(token)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const admin = createServiceClient();
   const { data: purchase } = await admin.from("book_purchases").select("*").eq("download_token", token).maybeSingle();
-  // An audiobook purchase is a different product; its link doesn't open the ebook
-  if (!purchase || purchase.format === "audiobook") return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // An audiobook or an extra is a different product; its link doesn't open the ebook
+  if (!purchase || (purchase.format && purchase.format !== "ebook")) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (purchase.status !== "paid") return NextResponse.json({ error: "This purchase was refunded." }, { status: 410 });
+  if (purchase.preorder_release && !purchase.delivered_at) {
+    return NextResponse.json({ error: "This is a pre-order. Your ebook arrives the day the book comes out, and we'll email you." }, { status: 409 });
+  }
   try {
     const { buf, fileName } = await buildPurchaseEpub(admin, purchase);
     await admin.from("book_purchases").update({ downloads: (purchase.downloads || 0) + 1 }).eq("id", purchase.id);

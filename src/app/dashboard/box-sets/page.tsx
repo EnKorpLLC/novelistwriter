@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { coverPublicUrl } from "@/lib/cover";
 import { BOOK_STYLES } from "@/lib/book/styles";
@@ -9,6 +9,75 @@ import { prepareCoverUpload } from "@/lib/book/cover-template";
 
 type BoxSet = { id: string; title: string; subtitle: string; project_ids: string[]; style: string; cover_path: string | null };
 type ProjectLite = { id: string; title: string; word_count: number | null };
+type SaleState = { sale: { priceCents: number; active: boolean } | null; regularCents: number; live: boolean; reason: string | null; migrationNeeded?: boolean; error?: string };
+
+/** Sell the box set as one ebook from each included book's launch page. */
+function BoxSetSale({ setId }: { setId: string }) {
+  const [s, setS] = useState<SaleState | null>(null);
+  const [price, setPrice] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/box-sets/${setId}/sale`).catch(() => null);
+    const d = r?.ok ? ((await r.json()) as SaleState) : null;
+    if (!d) return;
+    setS(d);
+    if (d.sale) setPrice((d.sale.priceCents / 100).toFixed(2));
+    else if (d.regularCents) setPrice(((d.regularCents * 0.7) / 100).toFixed(2));
+  }, [setId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function save(active: boolean) {
+    setBusy(true);
+    setMsg(null);
+    const r = await fetch(`/api/box-sets/${setId}/sale`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priceCents: Math.round(Number(price.replace(/[^0-9.]/g, "")) * 100), active }),
+    });
+    const d = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) setMsg(d.error || "Could not save");
+    await load();
+  }
+
+  if (!s) return null;
+  return (
+    <section className="border border-line p-4 text-sm">
+      <h2 className="font-display text-xl">Sell this box set</h2>
+      <p className="mt-1 text-xs text-muted">
+        Readers buy it as one ebook from each included book&apos;s launch page, and every book lands in their library. It uses your direct-sale setup and fees.
+      </p>
+      {s.migrationNeeded ? (
+        <p className="mt-2 text-xs text-danger">{s.error}</p>
+      ) : (
+        <>
+          <div className="mt-3 flex flex-wrap items-end gap-3 text-xs">
+            <label>
+              Price (USD)
+              <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" className="mt-1 block w-24 border border-line bg-paper px-2 py-1.5 text-sm" />
+            </label>
+            {s.regularCents > 0 && <span className="pb-2 text-muted">${(s.regularCents / 100).toFixed(2)} if bought one at a time</span>}
+            <button type="button" disabled={busy} onClick={() => void save(true)} className="bg-accent px-3 py-1.5 text-paper disabled:opacity-50">
+              {s.sale?.active ? "Save price" : "Put it on sale"}
+            </button>
+            {s.sale?.active && (
+              <button type="button" disabled={busy} onClick={() => void save(false)} className="border border-line px-3 py-1.5 disabled:opacity-50">
+                Take off sale
+              </button>
+            )}
+          </div>
+          {s.live && <p className="mt-2 text-xs text-accent">✓ On sale on each book&apos;s launch page</p>}
+          {s.reason && <p className="mt-2 text-xs text-danger">{s.sale?.active ? "Not on sale yet: " : ""}{s.reason}</p>}
+        </>
+      )}
+      {msg && <p className="mt-2 text-xs text-danger">{msg}</p>}
+    </section>
+  );
+}
 
 export default function BoxSetsPage() {
   const [studio, setStudio] = useState<boolean | null>(null);
@@ -59,9 +128,13 @@ export default function BoxSetsPage() {
 
   async function remove(set: BoxSet) {
     if (!window.confirm(`Delete "${set.title}"? Your books aren't touched.`)) return;
+    const res = await fetch(`/api/box-sets/${set.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setNote((await res.json().catch(() => ({}))).error || "Could not delete the box set");
+      return;
+    }
     setSets((list) => list.filter((s) => s.id !== set.id));
     setActiveId(null);
-    await fetch(`/api/box-sets/${set.id}`, { method: "DELETE" });
   }
 
   function moveBook(i: number, dir: -1 | 1) {
@@ -281,6 +354,8 @@ export default function BoxSetsPage() {
                   book&apos;s dedication and sample chapters are left out.
                 </p>
               </section>
+
+              <BoxSetSale key={`sale-${active.id}-${active.project_ids.join(",")}`} setId={active.id} />
 
               <section className="flex flex-wrap gap-3">
                 <button

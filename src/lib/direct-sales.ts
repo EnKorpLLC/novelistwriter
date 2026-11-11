@@ -13,21 +13,28 @@ import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { getStyle } from "@/lib/book/styles";
 import { buildStyledEpub } from "@/lib/book/epub";
 import { loadBookExtras, loadCover } from "@/lib/book/load";
+import { loadBoxSetInput, type BoxSetRow } from "@/lib/book/box-set";
 import { royaltyFor } from "@/lib/audiobook-sales";
 import {
   PAYOUT_MIN_CENTS,
   REFUND_WINDOW_DAYS,
   currentPrice,
   dollars,
+  longDay,
   normalizeCode,
   normalizeDirectSale,
   platformFeeCents,
+  preorderProblem,
+  PREORDER_GRACE_DAYS,
   type DiscountCode,
   type SellerTier,
 } from "@/lib/direct-sale-rules";
 
 export const SALES_MIGRATION_HINT = "Database needs an update. Run supabase/migration_direct_sales.sql in the Supabase SQL editor.";
 const DAY_MS = 86_400_000;
+/** available_at for a pre-order that hasn't been delivered: never paid out until delivery resets it */
+export const PREORDER_HOLD = "2999-12-31T00:00:00.000Z";
+export const PREORDER_MIGRATION_HINT = "Pre-orders, extras, and box set sales need a database update. Run supabase/migration_preorders_extras.sql in the Supabase SQL editor.";
 
 /** Buying direct is US-only for now; Vercel tells us the visitor's country. Unknown (local dev) is allowed. */
 export async function buyerCountryAllowed() {
@@ -89,34 +96,48 @@ export async function refreshSellerPayouts(admin: SupabaseClient, userId: string
   return enabled;
 }
 
-/** Can this book be bought right now? Reasons are written for the author's Sell tab. */
-export async function saleReadiness(admin: SupabaseClient, project: { user_id: string; published?: boolean | null; direct_sale?: unknown }) {
+/**
+ * Can this book be bought right now? Reasons are written for the author's Sell tab. With { preorder: true }, a book
+ * that isn't out yet can be pre-ordered when the author has turned that on and the release date is close enough.
+ */
+export async function saleReadiness(
+  admin: SupabaseClient,
+  project: { user_id: string; published?: boolean | null; direct_sale?: unknown; release_date?: string | null },
+  opts: { preorder?: boolean } = {}
+) {
   const s = normalizeDirectSale(project.direct_sale);
   const status = await sellerStatus(admin, project.user_id);
   if ("migrationNeeded" in status) return { ok: false as const, reason: SALES_MIGRATION_HINT };
   if (!status.tier) return { ok: false as const, reason: "Selling direct is part of Pro and Studio." };
   if (!s.on) return { ok: false as const, reason: "Selling is turned off for this book." };
-  if (!project.published) return { ok: false as const, reason: "Mark the book out now to start selling." };
+  if (!project.published) {
+    if (!s.preorder) return { ok: false as const, reason: "Mark the book out now to start selling." };
+    const problem = preorderProblem(project.release_date);
+    if (problem) return { ok: false as const, reason: problem };
+    if (!opts.preorder) return { ok: false as const, reason: "Mark the book out now to start selling." };
+  }
   if (!status.termsAccepted) return { ok: false as const, reason: "Accept the seller terms." };
   if (!status.payoutsEnabled) return { ok: false as const, reason: "Finish setting up payouts with Stripe." };
-  return { ok: true as const, tier: status.tier, sale: s };
+  return { ok: true as const, tier: status.tier, sale: s, preorder: !project.published };
 }
 
 /* ---------- Bundles ---------- */
 
-export type Bundle = { id: string; title: string; projectIds: string[]; priceCents: number; active: boolean };
+/** boxSetId: sold as one ebook built from that box set, instead of each book as its own ebook */
+export type Bundle = { id: string; title: string; projectIds: string[]; priceCents: number; active: boolean; boxSetId: string | null };
 
-const bundleFromRow = (r: { id: string; title: string; project_ids: string[]; price_cents: number; active: boolean }): Bundle => ({
+const bundleFromRow = (r: { id: string; title: string; project_ids: string[]; price_cents: number; active: boolean; box_set_id?: string | null }): Bundle => ({
   id: r.id,
   title: r.title,
   projectIds: r.project_ids || [],
   priceCents: r.price_cents,
   active: r.active,
+  boxSetId: r.box_set_id || null,
 });
 
 /**
  * Can this bundle be bought now? The author must be set up to sell, and every book in it must be out
- * (each book doesn't need its own single-copy sale turned on).
+ * (each book doesn't need its own single-copy sale turned on). A box set sold as one ebook is part of Studio.
  */
 export async function bundleReadiness(admin: SupabaseClient, bundleId: string) {
   const { data: row } = await admin.from("book_bundles").select("*").eq("id", bundleId).maybeSingle();
@@ -124,6 +145,13 @@ export async function bundleReadiness(admin: SupabaseClient, bundleId: string) {
   const bundle = bundleFromRow(row);
   const status = await sellerStatus(admin, row.author_user_id);
   if ("migrationNeeded" in status || !status.tier || !status.termsAccepted || !status.payoutsEnabled) return { ok: false as const, reason: "This bundle isn't for sale right now." };
+  if (bundle.boxSetId) {
+    const { data: set } = await admin.from("box_sets").select("title, project_ids").eq("id", bundle.boxSetId).maybeSingle();
+    if (!set || status.tier !== "studio") return { ok: false as const, reason: "This box set isn't for sale right now." };
+    bundle.projectIds = set.project_ids || [];
+    bundle.title = set.title || bundle.title;
+    if (bundle.projectIds.length < 2) return { ok: false as const, reason: "A box set needs at least two books." };
+  }
   const { data: books } = await admin.from("projects").select("id, title, published, direct_sale").in("id", bundle.projectIds).eq("user_id", row.author_user_id);
   if ((books || []).length !== bundle.projectIds.length || (books || []).some((b) => !b.published)) return { ok: false as const, reason: "Every book in a bundle has to be out." };
   const regularCents = (books || []).reduce((n, b) => n + currentPrice(normalizeDirectSale(b.direct_sale)).cents, 0);
@@ -134,10 +162,18 @@ export async function bundleReadiness(admin: SupabaseClient, bundleId: string) {
 export async function bundlesForBook(admin: SupabaseClient, projectId: string) {
   const { data, error } = await admin.from("book_bundles").select("id").contains("project_ids", [projectId]).eq("active", true).limit(5);
   if (error || !data?.length) return [];
-  const out: { id: string; title: string; count: number; priceCents: number; savingsCents: number }[] = [];
+  const out: { id: string; title: string; count: number; priceCents: number; savingsCents: number; oneFile: boolean }[] = [];
   for (const r of data) {
     const ready = await bundleReadiness(admin, r.id).catch(() => null);
-    if (ready?.ok) out.push({ id: ready.bundle.id, title: ready.bundle.title, count: ready.bundle.projectIds.length, priceCents: ready.bundle.priceCents, savingsCents: Math.max(0, ready.regularCents - ready.bundle.priceCents) });
+    if (ready?.ok)
+      out.push({
+        id: ready.bundle.id,
+        title: ready.bundle.title,
+        count: ready.bundle.projectIds.length,
+        priceCents: ready.bundle.priceCents,
+        savingsCents: Math.max(0, ready.regularCents - ready.bundle.priceCents),
+        oneFile: Boolean(ready.bundle.boxSetId),
+      });
   }
   return out;
 }
@@ -299,19 +335,25 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
   const byId = new Map((projects || []).map((p) => [p.id as string, p]));
   // An audiobook, or the ebook + audiobook set, is one row per format of the same book
   const formats = meta.formats ? String(meta.formats).split(",") : null;
-  const books: { id: string; title: string; weight: number; format?: string }[] = formats
-    ? formats.map((f) => {
-        const base = (byId.get(projectIds[0])?.title as string) || meta.title || "Your book";
-        const ebookCents = Number(meta.ebook_cents) || 0;
-        return { id: projectIds[0], title: f === "audiobook" ? `${base} (audiobook)` : base, weight: f === "ebook" ? ebookCents : Math.max(1, priceCents - ebookCents), format: f };
-      })
-    : projectIds.map((id) => ({ id, title: (byId.get(id)?.title as string) || meta.title || "Your ebook", weight: normalizeDirectSale(byId.get(id)?.direct_sale).priceCents }));
+  // A box set is one ebook (one row, filed under its first book); an extra is one row in the "extra" format
+  const oneRow = Boolean(meta.box_set_id || meta.extra_id);
+  const books: { id: string; title: string; weight: number; format?: string }[] = oneRow
+    ? [{ id: projectIds[0], title: meta.title || "Your purchase", weight: priceCents, ...(meta.extra_id ? { format: "extra" } : {}) }]
+    : formats
+      ? formats.map((f) => {
+          const base = (byId.get(projectIds[0])?.title as string) || meta.title || "Your book";
+          const ebookCents = Number(meta.ebook_cents) || 0;
+          return { id: projectIds[0], title: f === "audiobook" ? `${base} (audiobook)` : base, weight: f === "ebook" ? ebookCents : Math.max(1, priceCents - ebookCents), format: f };
+        })
+      : projectIds.map((id) => ({ id, title: (byId.get(id)?.title as string) || meta.title || "Your ebook", weight: normalizeDirectSale(byId.get(id)?.direct_sale).priceCents }));
+  const preorderRelease = /^\d{4}-\d{2}-\d{2}$/.test(String(meta.preorder_release || "")) ? String(meta.preorder_release) : null;
   const weights = books.map((b) => b.weight);
   const prices = allocate(priceCents, weights);
   const taxes = allocate(taxCents, weights);
   const stripeFees = allocate(stripeFee, weights);
   const fees = allocate(fee, weights);
-  const availableAt = new Date(Date.now() + REFUND_WINDOW_DAYS * DAY_MS).toISOString();
+  // A pre-order's money waits until it's delivered; delivery starts the refund window
+  const availableAt = preorderRelease ? PREORDER_HOLD : new Date(Date.now() + REFUND_WINDOW_DAYS * DAY_MS).toISOString();
   // A narrator on a royalty share gets their percent of the author's share of each audiobook sale
   const royalty = formats?.includes("audiobook") ? await royaltyFor(admin, projectIds[0]).catch(() => null) : null;
 
@@ -337,6 +379,9 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
     available_at: availableAt,
     download_token: token(),
     ...(b.format ? { format: b.format } : {}),
+    ...(preorderRelease ? { preorder_release: preorderRelease } : {}),
+    ...(meta.extra_id ? { extra_id: meta.extra_id } : {}),
+    ...(meta.box_set_id ? { box_set_id: meta.box_set_id } : {}),
   }));
   const royalties = rows.map((r, i) => (royalty && books[i].format === "audiobook" ? Math.max(0, Math.round((r.author_cents * royalty.pct) / 100)) : 0));
   rows.forEach((r, i) => {
@@ -378,35 +423,59 @@ export async function recordBookPurchase(admin: SupabaseClient, sessionId: strin
     await admin.from("book_purchases").update({ discount_code_id: meta.code_id, regular_price_cents: Number(meta.regular_cents) || null }).eq("id", inserted[0].id);
   }
 
-  if (buyerId) for (const r of inserted) await addToLibrary(admin, buyerId, r.project_id, r.title, "purchased").catch(() => null);
+  // A box set puts every book in it on the reader's shelf; an extra isn't a book, so it stays on its purchase page
+  if (buyerId && meta.box_set_id) for (const id of projectIds) await addToLibrary(admin, buyerId, id, (byId.get(id)?.title as string) || "Book", "purchased").catch(() => null);
+  else if (buyerId && !meta.extra_id) for (const r of inserted) await addToLibrary(admin, buyerId, r.project_id, r.title, "purchased").catch(() => null);
 
   const isAudio = Boolean(formats?.includes("audiobook"));
+  const many = meta.bundle_id && !meta.box_set_id;
   const what = meta.bundle_id ? meta.title || `${inserted.length} books` : formats && formats.length > 1 ? `${meta.title}: ebook + audiobook` : inserted[0].title;
+  const paid = `You paid ${dollars(session.amount_total ?? 0)}${taxCents ? ` including ${dollars(taxCents)} tax` : ""}.`;
   if (email) {
-    const mail = renderEmail({
-      heading: `Your copy of ${what}`,
-      paragraphs: [
-        meta.bundle_id
-          ? `Thank you for buying ${what} direct from the author. All ${inserted.length} ebooks are ready to download from the page below, and the link keeps working whenever you need them again.`
-          : isAudio
-            ? `Thank you for buying ${what} direct from the author. Listen in your browser or download the MP3 files from the page below; the link keeps working whenever you need it again.`
-            : `Thank you for buying ${what} direct from the author. Your ebook is ready to download, and this link keeps working whenever you need it again.`,
-        `You paid ${dollars(session.amount_total ?? 0)}${taxCents ? ` including ${dollars(taxCents)} tax` : ""}. Changed your mind? You can ask for a refund within ${REFUND_WINDOW_DAYS} days by replying to this email.`,
-        buyerId ? "It's also in your Novelist Writer library." : "Create a free reader account with this email to keep it in your library, along with any book you buy later.",
-      ],
-      button: { label: meta.bundle_id ? "Download your ebooks" : isAudio ? "Listen and download" : "Download your ebook", url: appUrl(`/purchase/${inserted[0].download_token}`) },
-    });
-    await sendEmail({ to: email, subject: `Your copy of ${what}`, text: mail.text, html: mail.html }).catch(() => null);
+    const mail = preorderRelease
+      ? renderEmail({
+          heading: `Your pre-order of ${what}`,
+          paragraphs: [
+            `Thank you for pre-ordering ${what} direct from the author. It comes out on ${longDay(preorderRelease)}, and we'll email you the moment your ebook is ready.`,
+            `${paid} Changed your mind? Cancel anytime before release from the page below for a full refund. If the book is ever more than ${PREORDER_GRACE_DAYS} days late, we refund you automatically.`,
+            buyerId ? "It's also waiting in your Novelist Writer library." : "Create a free reader account with this email to keep it in your library, along with any book you buy later.",
+          ],
+          button: { label: "See your pre-order", url: appUrl(`/purchase/${inserted[0].download_token}`) },
+        })
+      : renderEmail({
+          heading: `Your copy of ${what}`,
+          paragraphs: [
+            many
+              ? `Thank you for buying ${what} direct from the author. All ${inserted.length} ebooks are ready to download from the page below, and the link keeps working whenever you need them again.`
+              : meta.box_set_id
+                ? `Thank you for buying ${what} direct from the author. It's one ebook with every book in the set, ready to download, and this link keeps working whenever you need it again.`
+                : meta.extra_id
+                  ? `Thank you for buying ${what} direct from the author. Your files are ready to download from the page below, and the link keeps working whenever you need them again.`
+                  : isAudio
+                    ? `Thank you for buying ${what} direct from the author. Listen in your browser or download the MP3 files from the page below; the link keeps working whenever you need it again.`
+                    : `Thank you for buying ${what} direct from the author. Your ebook is ready to download, and this link keeps working whenever you need it again.`,
+            `${paid} Changed your mind? You can ask for a refund within ${REFUND_WINDOW_DAYS} days by replying to this email.`,
+            buyerId ? "It's also in your Novelist Writer library." : "Create a free reader account with this email to keep it in your library, along with any book you buy later.",
+          ],
+          button: {
+            label: many ? "Download your ebooks" : meta.extra_id ? "Download your files" : isAudio ? "Listen and download" : "Download your ebook",
+            url: appUrl(`/purchase/${inserted[0].download_token}`),
+          },
+        });
+    const subject = preorderRelease ? `Your pre-order of ${what}` : `Your copy of ${what}`;
+    await sendEmail({ to: email, subject, text: mail.text, html: mail.html }).catch(() => null);
   }
 
   const authorShare = rows.reduce((n, r) => n + r.author_cents, 0);
   await notifyUser(admin, authorId, {
     type: "book_sale",
-    title: meta.bundle_id ? `You sold ${what}` : `You sold a copy of ${what}`,
-    body: `${dollars(priceCents)} sale; ${dollars(authorShare)} is yours after fees. Payouts go out monthly.`,
+    title: preorderRelease ? `New pre-order: ${what}` : meta.bundle_id ? `You sold ${what}` : `You sold a copy of ${what}`,
+    body: preorderRelease
+      ? `${dollars(priceCents)} pre-order; ${dollars(authorShare)} is yours after fees, paid once the book is out and the refund window passes.`
+      : `${dollars(priceCents)} sale; ${dollars(authorShare)} is yours after fees. Payouts go out monthly.`,
     href: `/project/${projectIds[0]}?tab=sell`,
   }).catch(() => null);
-  return { ok: true, applied: meta.bundle_id ? "bundle_purchase" : "book_purchase" };
+  return { ok: true, applied: preorderRelease ? "preorder" : meta.extra_id ? "extra_purchase" : meta.bundle_id ? "bundle_purchase" : "book_purchase" };
 }
 
 /** Refunds: Stripe keeps its fee, so that comes off the author's share; our fee is given back. Covers every book in the order. */
@@ -417,7 +486,9 @@ export async function adjustBookPurchaseForCharge(admin: SupabaseClient, charge:
   if (reason === "refunded" && charge.amount_refunded < charge.amount) return true;
   const now = new Date().toISOString();
   for (const p of open) {
-    await admin.from("book_purchases").update({ status: reason, author_cents: -p.stripe_fee_cents, platform_fee_cents: 0, refunded_at: now }).eq("id", p.id);
+    // A pre-order refunded before delivery was never released; its Stripe fee joins the next payout like any refund's
+    const release = p.preorder_release && !p.delivered_at ? { available_at: now } : {};
+    await admin.from("book_purchases").update({ status: reason, author_cents: -p.stripe_fee_cents, platform_fee_cents: 0, refunded_at: now, ...release }).eq("id", p.id);
   }
   // A narrator's royalty on a refunded audiobook isn't owed (it hasn't been sent: royalties wait out the refund window)
   await admin
@@ -540,7 +611,25 @@ export async function sellerSummary(admin: SupabaseClient, userId: string): Prom
 /* ---------- Delivery ---------- */
 
 /** The buyer's own copy: the finished ebook with a page saying whose copy it is. No DRM. */
-export async function buildPurchaseEpub(admin: SupabaseClient, purchase: { id: string; project_id: string | null; buyer_name: string; buyer_email: string }) {
+export async function buildPurchaseEpub(admin: SupabaseClient, purchase: { id: string; project_id: string | null; buyer_name: string; buyer_email: string; box_set_id?: string | null }) {
+  const owner = purchase.buyer_name || purchase.buyer_email;
+  const notice = {
+    matter_type: "front_custom",
+    title: "Your copy",
+    content_html: `<p>This copy belongs to ${escapeXml(owner)}${purchase.buyer_name && purchase.buyer_email ? ` (${escapeXml(purchase.buyer_email)})` : ""}. Thank you for buying direct from the author.</p><p>Please don't share or resell it.</p>`,
+    enabled: true,
+    sort_order: -1,
+  };
+  if (purchase.box_set_id) {
+    const { data: set } = await admin.from("box_sets").select("*").eq("id", purchase.box_set_id).maybeSingle();
+    if (!set) throw new Error("This box set is no longer available. Reply to your receipt email and the author will sort it out.");
+    const input = await loadBoxSetInput(admin, set as BoxSetRow);
+    const style = getStyle(input.format.style);
+    const book = buildBook({ ...input, matter: [notice, ...input.matter], styleHeadingFormat: style.headingFormat });
+    const cover = await loadCover(admin, { cover_path: set.cover_path });
+    const buf = await buildStyledEpub({ book, style, identifier: `urn:uuid:${set.id}-sale-${purchase.id}`, cover, recordUrl: null });
+    return { buf, fileName: `${(set.title || "box set").replace(/[^\w\- ]+/g, "").trim() || "box set"}.epub` };
+  }
   if (!purchase.project_id) throw new Error("This book is no longer available.");
   const { data: project } = await admin.from("projects").select("*").eq("id", purchase.project_id).maybeSingle();
   if (!project) throw new Error("This book is no longer available.");
@@ -551,14 +640,6 @@ export async function buildPurchaseEpub(admin: SupabaseClient, purchase: { id: s
     loadCover(admin, project),
     loadBookExtras(admin, project, { store: "generic" }),
   ]);
-  const owner = purchase.buyer_name || purchase.buyer_email;
-  const notice = {
-    matter_type: "front_custom",
-    title: "Your copy",
-    content_html: `<p>This copy belongs to ${escapeXml(owner)}${purchase.buyer_name && purchase.buyer_email ? ` (${escapeXml(purchase.buyer_email)})` : ""}. Thank you for buying direct from the author.</p><p>Please don't share or resell it.</p>`,
-    enabled: true,
-    sort_order: -1,
-  };
   const format = normalizeFormat(project.format_settings);
   const style = getStyle(format.style);
   const book = buildBook({
@@ -580,15 +661,25 @@ export async function buildPurchaseEpub(admin: SupabaseClient, purchase: { id: s
 /** Purchases for a signed-in reader: bought while signed in, or with the same email before they had an account. */
 export async function purchasesFor(admin: SupabaseClient, userId: string, email: string | null) {
   const lower = String(email || "").toLowerCase();
+  // select("*") so this works before and after migration_preorders_extras.sql
   const [{ data: mine }, { data: byEmail }] = await Promise.all([
-    admin.from("book_purchases").select("id, project_id, title, price_cents, status, created_at, download_token, buyer_user_id").eq("buyer_user_id", userId),
-    lower ? admin.from("book_purchases").select("id, project_id, title, price_cents, status, created_at, download_token, buyer_user_id").ilike("buyer_email", lower).is("buyer_user_id", null) : Promise.resolve({ data: [] }),
+    admin.from("book_purchases").select("*").eq("buyer_user_id", userId),
+    lower ? admin.from("book_purchases").select("*").ilike("buyer_email", lower).is("buyer_user_id", null) : Promise.resolve({ data: [] as Record<string, never>[] }),
   ]);
   // Claim email-only purchases for this account now that we know who they are
-  const claim = (byEmail || []).map((p) => p.id);
+  const claim = (byEmail || []).map((p) => p.id as string);
   if (claim.length) await admin.from("book_purchases").update({ buyer_user_id: userId }).in("id", claim);
   return [...(mine || []), ...(byEmail || [])]
     .filter((p) => p.status === "paid")
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .map((p) => ({ id: p.id, projectId: p.project_id, title: p.title, priceCents: p.price_cents, boughtAt: p.created_at, downloadUrl: `/purchase/${p.download_token}` }));
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .map((p) => ({
+      id: p.id as string,
+      projectId: (p.project_id as string | null) || null,
+      title: p.title as string,
+      priceCents: p.price_cents as number,
+      boughtAt: p.created_at as string,
+      downloadUrl: `/purchase/${p.download_token}`,
+      format: ((p.format as string | undefined) || "ebook") as "ebook" | "audiobook" | "extra",
+      preorderRelease: p.preorder_release && !p.delivered_at ? (p.preorder_release as string) : null,
+    }));
 }

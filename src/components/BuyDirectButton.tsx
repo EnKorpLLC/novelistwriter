@@ -9,6 +9,7 @@ export function BuyDirectButton({
   price,
   canBuy,
   format = "ebook",
+  extraId,
   label,
   note,
   quiet = false,
@@ -16,7 +17,9 @@ export function BuyDirectButton({
   projectId: string;
   price: { cents: number; regularCents: number | null };
   canBuy: boolean;
-  format?: "ebook" | "audiobook" | "both";
+  format?: "ebook" | "audiobook" | "both" | "extra";
+  /** With format "extra": which extra */
+  extraId?: string;
   label?: string;
   note?: string;
   /** A secondary button next to the main one */
@@ -51,7 +54,7 @@ export function BuyDirectButton({
           const res = await fetch("/api/sales/checkout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ projectId, format, code: code.trim() || undefined }),
+            body: JSON.stringify({ projectId, format, extraId, code: format === "extra" ? undefined : code.trim() || undefined }),
           }).catch(() => null);
           const d = res ? await res.json().catch(() => ({})) : {};
           if (res?.ok && d.url) window.location.href = d.url;
@@ -67,8 +70,9 @@ export function BuyDirectButton({
         {price.regularCents != null && <s className="opacity-60">{dollars(price.regularCents)}</s>} {dollars(price.cents)}
       </button>
       <span className="font-ui mt-1 text-[11px] text-muted">
-        {note || "Direct from the author · EPUB for any e-reader"} ·{" "}
-        {showCode ? (
+        {note || "Direct from the author · EPUB for any e-reader"}
+        {format === "extra" ? null : " · "}
+        {format === "extra" ? null : showCode ? (
           <input
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}

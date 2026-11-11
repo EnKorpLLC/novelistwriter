@@ -14,6 +14,11 @@ const ITEMS = [
   { t: "Yours to keep", d: "An ebook you buy here never expires. Download it again anytime from your library or the link in your receipt. There's no copy protection: the file just notes whose copy it is." },
   { t: "Prices in dollars", d: "No coins, credits, or subscriptions to read a book you bought. Sales tax is shown at checkout before you pay, where it applies." },
   { t: "Refunds within 14 days", d: "Changed your mind, or the file didn't work for you? Reply to your receipt email within 14 days of buying and we'll refund you in full. After a refund, the download stops working." },
+  {
+    t: "Pre-orders",
+    d: "You pay when you pre-order, and the ebook arrives in your library the day the book comes out. Cancel anytime before then from your pre-order page for a full refund. If the author moves the date, we tell you and you can keep it or cancel. If it's ever more than 30 days late, we refund you automatically. The 14 days for a refund start when your ebook arrives.",
+  },
+  { t: "Extras", d: "Art, maps, and bonus stories you buy or get with an ebook are yours to download and keep, the same as your books." },
   { t: "No ads, ever", d: "We don't show ads to readers, and we don't sell your data. The author sees that a copy sold, not who bought it." },
 ];
 

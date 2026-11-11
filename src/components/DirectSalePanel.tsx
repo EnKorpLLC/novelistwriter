@@ -1,7 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PAYOUT_MIN_CENTS, SALE_FEES, dollars, estimateShare, normalizeDirectSale, type DirectSale, type DiscountCode, type SellerTier } from "@/lib/direct-sale-rules";
+import {
+  PAYOUT_MIN_CENTS,
+  PREORDER_GRACE_DAYS,
+  PREORDER_MAX_DAYS,
+  REFUND_WINDOW_DAYS,
+  SALE_FEES,
+  dollars,
+  estimateShare,
+  normalizeDirectSale,
+  type DirectSale,
+  type DiscountCode,
+  type SellerTier,
+} from "@/lib/direct-sale-rules";
+import { ExtrasPanel } from "@/components/ExtrasPanel";
+
+type PreorderStatus = { open: boolean; problem: string | null; releaseDate: string | null; waiting: number };
 
 type Seller = {
   tier: SellerTier | null;
@@ -13,7 +28,7 @@ type Seller = {
   summary: { sales: number; freeCopies: number; refunds: number; earnedCents: number; onHoldCents: number; readyCents: number; paidCents: number } | null;
 };
 
-type BundleRow = { id: string; title: string; projectIds: string[]; priceCents: number; active: boolean };
+type BundleRow = { id: string; title: string; projectIds: string[]; priceCents: number; active: boolean; boxSetId?: string | null };
 type BookRow = { id: string; title: string; published: boolean; priceCents: number };
 
 /** Several books at one price, like a series. Shown on each included book's launch page. */
@@ -51,7 +66,14 @@ function Bundles({ projectId }: { projectId: string }) {
   return (
     <div className="mt-5 border-t border-line pt-3">
       <p className="text-ink">Bundles</p>
-      <p className="text-xs text-muted">Sell several of your books together at one price, like a whole series. Readers get each book as its own ebook. Every book in a bundle has to be out.</p>
+      <p className="text-xs text-muted">
+        Sell several of your books together at one price, like a whole series. Readers get each book as its own ebook. Every book in a bundle has to be out. To sell
+        them as one combined ebook, sell a{" "}
+        <a href="/dashboard/box-sets" className="underline">
+          box set
+        </a>{" "}
+        (Studio).
+      </p>
       {mine.length > 0 && (
         <ul className="mt-2 space-y-1.5 text-xs">
           {mine.map((b) => {
@@ -60,6 +82,15 @@ function Bundles({ projectId }: { projectId: string }) {
               <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <strong className={b.active ? "" : "text-muted line-through"}>{b.title}</strong>
                 <span className="text-muted">
+                  {b.boxSetId ? (
+                    <>
+                      box set, one ebook ·{" "}
+                      <a href="/dashboard/box-sets" className="underline">
+                        edit
+                      </a>{" "}
+                      ·{" "}
+                    </>
+                  ) : null}
                   {b.projectIds.length} books · {dollars(b.priceCents)}
                   {regular > b.priceCents ? ` (saves ${dollars(regular - b.priceCents)})` : ""}
                   {b.projectIds.some((id) => !byId.get(id)?.published) ? " · waiting for every book to be out" : ""}
@@ -236,7 +267,7 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
   const [sale, setSale] = useState<DirectSale>(normalizeDirectSale(null));
   const [price, setPrice] = useState("4.99");
   const [salePrice, setSalePrice] = useState("");
-  const [status, setStatus] = useState<{ live: boolean; reason: string | null } | null>(null);
+  const [status, setStatus] = useState<{ live: boolean; reason: string | null; preorder?: PreorderStatus } | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -251,7 +282,7 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
       setSale(d.sale);
       setPrice(toDollars(d.sale.priceCents));
       setSalePrice(toDollars(d.sale.salePriceCents));
-      setStatus({ live: d.live, reason: d.reason });
+      setStatus({ live: d.live, reason: d.reason, preorder: d.preorder });
     }
   }, [projectId]);
   useEffect(() => {
@@ -269,7 +300,7 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
     setSale(d.sale);
     setPrice(toDollars(d.sale.priceCents));
     setSalePrice(toDollars(d.sale.salePriceCents));
-    setStatus({ live: d.live, reason: d.reason });
+    setStatus({ live: d.live, reason: d.reason, preorder: d.preorder });
     setNote("Saved.");
   }
 
@@ -297,7 +328,7 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
     <section className="border border-line p-4 text-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="font-display text-lg">Sell the ebook direct</h3>
-        {status?.live && <span className="text-xs text-accent">✓ On sale on your launch page</span>}
+        {status?.live && <span className="text-xs text-accent">{status.preorder?.open ? "✓ Open for pre-orders on your launch page" : "✓ On sale on your launch page"}</span>}
       </div>
       <p className="mt-1 text-muted">
         Readers buy right from your launch page, and the book goes straight into their library. You keep about{" "}
@@ -391,7 +422,29 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
                 Sell this book on my launch page
               </label>
               {sale.on && !status?.live && status?.reason && <p className="mt-1 text-xs text-danger">Not on sale yet: {status.reason}</p>}
-              {!published && <p className="mt-1 text-xs text-muted">Selling starts once the book is marked out now.</p>}
+              {!published && (
+                <div className="mt-3 border-t border-line pt-3">
+                  <label className="flex items-start gap-2">
+                    <input type="checkbox" className="mt-0.5" checked={sale.preorder} disabled={busy} onChange={(e) => void save({ preorder: e.target.checked })} />
+                    <span>
+                      Take pre-orders before release
+                      <span className="block text-xs text-muted">
+                        Readers pay now and get the ebook the moment you mark the book out now. They can cancel anytime before release, and anyone still
+                        waiting {PREORDER_GRACE_DAYS} days after your release date is refunded automatically. Pre-orders open {PREORDER_MAX_DAYS} days before release.
+                        Your share is paid after release, once the {REFUND_WINDOW_DAYS}-day refund window passes.
+                      </span>
+                    </span>
+                  </label>
+                  {sale.preorder && status?.preorder?.problem && <p className="mt-1 text-xs text-danger">{status.preorder.problem}</p>}
+                  {!sale.preorder && <p className="mt-1 text-xs text-muted">Without pre-orders, selling starts once the book is marked out now.</p>}
+                </div>
+              )}
+              {status?.preorder && status.preorder.waiting > 0 && (
+                <p className="mt-2 text-xs text-ink">
+                  {status.preorder.waiting} {status.preorder.waiting === 1 ? "reader has" : "readers have"} pre-ordered. Marking the book out now sends their ebooks;
+                  moving the release date later tells them, and they can keep or cancel.
+                </p>
+              )}
             </div>
           </li>
         </ol>
@@ -425,6 +478,7 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
       )}
       {tier && !seller.migrationNeeded && <DiscountCodes projectId={projectId} launchPath={launchPath} />}
       {tier && !seller.migrationNeeded && <Bundles projectId={projectId} />}
+      {tier && !seller.migrationNeeded && <ExtrasPanel projectId={projectId} />}
       {note && <p className={`mt-3 text-xs ${note === "Saved." ? "text-accent" : "text-danger"}`}>{note}</p>}
       {seller.summary && seller.summary.sales + seller.summary.refunds + seller.summary.freeCopies > 0 && (
         <div className="mt-5 border-t border-line pt-3">

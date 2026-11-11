@@ -20,8 +20,9 @@ export function SellPanel({ projectId }: { projectId: string }) {
           <div>
             <h2 className="font-display text-2xl">Sell</h2>
             <p className="mt-1 text-sm text-muted">
-              Sell this ebook straight from your launch page, run sales and discount codes, bundle it with your other books, or give it free to readers who
-              join your list. Store links (Amazon, Kobo, and others) live on the{" "}
+              Sell this ebook straight from your launch page (or take pre-orders before release), run sales and discount codes, bundle it with your other
+              books, sell extras like character art and maps, or give it free to readers who join your list. Store links (Amazon, Kobo, and others) live on
+              the{" "}
               <a href={`/project/${projectId}?tab=publish`} className="text-accent underline">
                 Launch page
               </a>{" "}

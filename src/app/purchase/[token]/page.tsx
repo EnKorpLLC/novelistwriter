@@ -5,6 +5,8 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { AudiobookPlayer } from "@/components/AudiobookPlayer";
+import { PreorderActions } from "@/components/PreorderActions";
+import { PREORDER_GRACE_DAYS, addDays, longDay } from "@/lib/direct-sale-rules";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Your book | Novelist Writer", robots: { index: false, follow: false } };
@@ -17,7 +19,9 @@ async function load(token: string) {
     // select("*") so the page works before and after the audiobook migration adds format
     const { data: p } = await admin.from("book_purchases").select("*").eq("download_token", token).maybeSingle();
     if (!p) return null;
-    const { data: project } = p.project_id ? await admin.from("projects").select("cover_path, metadata, updated_at, user_id").eq("id", p.project_id).maybeSingle() : { data: null };
+    const { data: project } = p.project_id ? await admin.from("projects").select("cover_path, metadata, updated_at, user_id, release_date, published").eq("id", p.project_id).maybeSingle() : { data: null };
+    // A box set's own cover, not its first book's
+    const { data: boxSet } = p.box_set_id ? await admin.from("box_sets").select("cover_path, updated_at").eq("id", p.box_set_id).maybeSingle() : { data: null };
     const { data: author } = project?.user_id ? await admin.from("profiles").select("display_name").eq("id", project.user_id).maybeSingle() : { data: null };
     // Listening position syncs to the account only when the buyer is the one signed in
     let viewerIsBuyer = false;
@@ -45,8 +49,23 @@ async function load(token: string) {
     }
     const { readAlongAccess } = await import("@/lib/read-along");
     const readAlong = p.status === "paid" ? Boolean(await readAlongAccess(admin, token).catch(() => null)) : false;
+    const { extrasForPurchase } = await import("@/lib/digital-extras");
+    const extras = (await extrasForPurchase(admin, p).catch(() => [])).map((e) => ({
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      files: e.files.map((f, i) => ({ name: f.name, bytes: f.bytes, url: `/purchase/${token}/extra/${e.id}/${i + 1}` })),
+    }));
+    const waiting = Boolean(p.status === "paid" && p.preorder_release && !p.delivered_at);
+    const releaseNow = (project?.release_date as string | null) || null;
     return {
       readAlong,
+      extras,
+      isExtra: p.format === "extra",
+      isBoxSet: Boolean(p.box_set_id),
+      preorder: waiting
+        ? { promised: String(p.preorder_release), moved: Boolean(releaseNow && !project?.published && releaseNow > String(p.preorder_release)), newDate: releaseNow }
+        : null,
       title: p.title as string,
       status: p.status as string,
       buyer_email: p.buyer_email as string,
@@ -58,7 +77,11 @@ async function load(token: string) {
       viewerIsBuyer,
       isAudio,
       audio,
-      coverUrl: project ? coverPublicUrl(projectCoverPath(project), project.updated_at ? Date.parse(project.updated_at) : undefined) : null,
+      coverUrl: boxSet?.cover_path
+        ? coverPublicUrl(boxSet.cover_path, boxSet.updated_at ? Date.parse(boxSet.updated_at) : undefined)
+        : project
+          ? coverPublicUrl(projectCoverPath(project), project.updated_at ? Date.parse(project.updated_at) : undefined)
+          : null,
       others: (others || []).map((o) => ({ title: o.title as string, download_token: o.download_token as string, isAudio: o.format === "audiobook" })),
     };
   } catch {
@@ -82,10 +105,31 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
             <img src={p.coverUrl} alt="" className="h-48 w-32 border border-line object-cover" />
           )}
           <div className="min-w-0 flex-1">
-            <p className="font-ui text-xs uppercase tracking-wide text-muted">{p.isAudio ? "Your audiobook" : "Your ebook"}</p>
+            <p className="font-ui text-xs uppercase tracking-wide text-muted">
+              {p.preorder ? "Your pre-order" : p.isAudio ? "Your audiobook" : p.isExtra ? "Your extra" : p.isBoxSet ? "Your box set" : "Your ebook"}
+            </p>
             <h1 className="font-display mt-1 text-3xl">{p.title}</h1>
             {refunded ? (
               <p className="font-ui mt-4 text-sm text-muted">This purchase was refunded, so the download is no longer available.</p>
+            ) : p.preorder ? (
+              <>
+                <p className="font-ui mt-3 text-sm">
+                  It comes out on <strong>{longDay(p.preorder.promised)}</strong>. The day it&apos;s out, your ebook appears here and we email you.
+                </p>
+                {p.preorder.moved && p.preorder.newDate ? (
+                  <p className="font-ui mt-2 border border-accent/40 bg-accent/5 px-3 py-2 text-sm">
+                    The author moved the release to <strong>{longDay(p.preorder.newDate)}</strong>. Keep your pre-order for the new date, or cancel for a full refund.
+                    If you do nothing and it isn&apos;t out by {longDay(addDays(p.preorder.promised, PREORDER_GRACE_DAYS))}, you&apos;re refunded automatically.
+                  </p>
+                ) : (
+                  <p className="font-ui mt-2 text-xs text-muted">
+                    Cancel anytime before release for a full refund. If it&apos;s ever more than {PREORDER_GRACE_DAYS} days late, you&apos;re refunded automatically.
+                  </p>
+                )}
+                <PreorderActions token={token} moved={p.preorder.moved} newDateLabel={p.preorder.newDate ? longDay(p.preorder.newDate) : null} />
+              </>
+            ) : p.isExtra ? (
+              <p className="font-ui mt-3 text-sm text-muted">Download your files below. They&apos;re yours to keep, and this page keeps working whenever you need them again.</p>
             ) : p.isAudio ? (
               <p className="font-ui mt-3 text-sm text-muted">
                 Listen here, or download the MP3 files to keep and play in any app. This copy belongs to {p.buyer_name || p.buyer_email}; please don&apos;t share or resell it.
@@ -133,6 +177,29 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
             </details>
           </section>
         )}
+        {!refunded && p.extras.length > 0 && (
+          <section className="font-ui mt-8 border-t border-line pt-4 text-sm">
+            <h2 className="font-display text-xl">{p.isExtra ? "Your files" : "Extras included with your ebook"}</h2>
+            <ul className="mt-3 space-y-4">
+              {p.extras.map((e) => (
+                <li key={e.id}>
+                  {!p.isExtra && <p className="text-ink">{e.title}</p>}
+                  {!p.isExtra && e.description && <p className="text-xs text-muted">{e.description}</p>}
+                  <ul className="mt-1 space-y-1 text-xs">
+                    {e.files.map((f) => (
+                      <li key={f.url}>
+                        <a href={f.url} className="text-accent underline">
+                          {f.name}
+                        </a>{" "}
+                        <span className="text-muted">({Math.max(1, Math.round(f.bytes / 1024 / 1024))} MB)</span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {!refunded && p.others.length > 0 && (
           <section className="font-ui mt-8 border-t border-line pt-4 text-sm">
             <h2 className="font-display text-xl">Also in this order</h2>
@@ -148,7 +215,7 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
             </ul>
           </section>
         )}
-        {!refunded && !p.isAudio && (
+        {!refunded && !p.isAudio && !p.isExtra && !p.preorder && (
           <section className="font-ui mt-10 space-y-3 text-sm">
             <h2 className="font-display text-xl">Reading it</h2>
             <p>

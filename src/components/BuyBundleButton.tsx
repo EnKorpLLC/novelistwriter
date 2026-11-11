@@ -3,8 +3,14 @@
 import { useState } from "react";
 import { dollars } from "@/lib/direct-sale-rules";
 
-/** "Get all 3 books" on a launch page: one checkout, each book delivered as its own ebook. */
-export function BuyBundleButton({ bundle, fromProjectId }: { bundle: { id: string; title: string; count: number; priceCents: number; savingsCents: number }; fromProjectId: string }) {
+/** "Get all 3 books" on a launch page: one checkout, each book as its own ebook, or a box set as one ebook. */
+export function BuyBundleButton({
+  bundle,
+  fromProjectId,
+}: {
+  bundle: { id: string; title: string; count: number; priceCents: number; savingsCents: number; oneFile?: boolean };
+  fromProjectId: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -32,7 +38,8 @@ export function BuyBundleButton({ bundle, fromProjectId }: { bundle: { id: strin
         {busy ? "Opening checkout…" : `Get ${bundle.title}: all ${bundle.count} books`} {dollars(bundle.priceCents)}
       </button>
       <span className="font-ui mt-1 text-[11px] text-muted">
-        {bundle.savingsCents > 0 ? `Save ${dollars(bundle.savingsCents)} · ` : ""}Each book as its own ebook
+        {bundle.savingsCents > 0 ? `Save ${dollars(bundle.savingsCents)} · ` : ""}
+        {bundle.oneFile ? `All ${bundle.count} books in one ebook` : "Each book as its own ebook"}
       </span>
       {error && <span className="font-ui mt-1 text-xs text-danger">{error}</span>}
     </span>

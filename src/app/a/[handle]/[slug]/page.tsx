@@ -14,10 +14,11 @@ import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ReportConcern } from "@/components/ReportConcern";
 import { LibraryButton } from "@/components/LibraryButton";
 import { BuyDirectButton } from "@/components/BuyDirectButton";
-import { buyerCountryAllowed, bundlesForBook, saleReadiness } from "@/lib/direct-sales";
+import { buyerCountryAllowed, bundlesForBook, saleReadiness, sellerStatus } from "@/lib/direct-sales";
 import { BuyBundleButton } from "@/components/BuyBundleButton";
 import { audiobookBadges, audiobookReadiness, signedFiles } from "@/lib/audiobook-sales";
-import { currentPrice, normalizeDirectSale } from "@/lib/direct-sale-rules";
+import { currentPrice, longDay, normalizeDirectSale } from "@/lib/direct-sale-rules";
+import { listExtras } from "@/lib/digital-extras";
 import { MagnetForm } from "@/components/MagnetForm";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { LaunchTeamCard } from "@/components/LaunchTeamCard";
@@ -106,9 +107,17 @@ export default async function LaunchPage({
   const isbn = normalizeDetails(recordFlag?.book_details).isbnEbook || null;
   const sampleOn = studio && normalizeLaunchPlan(recordFlag?.launch_plan).sample.on;
   const record = recordPublic ? await computeWritingRecord(admin, book.id) : null;
-  // Selling direct: only once it's out, set up, and for US visitors (others see the store links)
-  const saleReady = recordFlag && book.stage === "published" ? await saleReadiness(admin, recordFlag).catch(() => null) : null;
-  const direct = saleReady?.ok ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed() } : null;
+  // Selling direct: once it's out (or open for pre-orders), set up, and for US visitors (others see the store links)
+  const saleReady = recordFlag ? await saleReadiness(admin, recordFlag, { preorder: true }).catch(() => null) : null;
+  const direct = saleReady?.ok
+    ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed(), preorderRelease: saleReady.preorder ? String(recordFlag?.release_date || "").slice(0, 10) : null }
+    : null;
+  // Extras: art, maps, and bonus writing, sold on their own or free with the ebook bought here
+  const extras = recordFlag ? ((await listExtras(admin, book.id).catch(() => null)) || []).filter((e) => e.active && e.files.length) : [];
+  const sellerReady = extras.length ? await sellerStatus(admin, author.userId).catch(() => null) : null;
+  const canSellExtras = Boolean(sellerReady && !("migrationNeeded" in sellerReady) && sellerReady.tier && sellerReady.termsAccepted && sellerReady.payoutsEnabled);
+  const shownExtras = extras.filter((e) => (e.priceCents != null && canSellExtras) || (e.withEbook && direct));
+  const extrasCanBuy = shownExtras.length ? (direct?.canBuy ?? (await buyerCountryAllowed())) : false;
   // The audiobook, and the ebook + audiobook set, sold the same way
   const audioReady = recordFlag && book.stage === "published" ? await audiobookReadiness(admin, recordFlag).catch(() => null) : null;
   const audioBadge = audioReady?.ok && recordFlag ? (await audiobookBadges(admin, [recordFlag]).catch(() => new Map())).get(book.id) : null;
@@ -259,7 +268,18 @@ export default async function LaunchPage({
 
             {/* One main action for the book's stage; everything else is quieter, so readers know where to start */}
             <div className="font-ui mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap [&>*]:text-center">
-              {direct && !isOwner && <BuyDirectButton projectId={book.id} price={direct.price} canBuy={direct.canBuy} />}
+              {direct && !isOwner && (
+                <BuyDirectButton
+                  projectId={book.id}
+                  price={direct.price}
+                  canBuy={direct.canBuy}
+                  {...(direct.preorderRelease
+                    ? { label: "Pre-order the ebook", note: `Delivered ${longDay(direct.preorderRelease)} · cancel anytime before`, quiet: Boolean(mainStore) }
+                    : shownExtras.some((e) => e.withEbook)
+                      ? { note: "Direct from the author · EPUB for any e-reader · extras included" }
+                      : {})}
+                />
+              )}
               {audio && !isOwner && (
                 <BuyDirectButton
                   projectId={book.id}
@@ -346,6 +366,37 @@ export default async function LaunchPage({
                 ))}
                 {(!isOwner || previewing) && <VisitorShareButton path={path} title={`${book.title} by ${author.name}`} />}
               </div>
+            )}
+            {shownExtras.length > 0 && (
+              <section className="font-ui mt-6 border-t border-line pt-4">
+                <h2 className="font-display text-xl">Extras</h2>
+                <ul className="mt-2 space-y-3 text-sm">
+                  {shownExtras.map((e) => (
+                    <li key={e.id} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-ink">{e.title}</p>
+                        {e.description && <p className="text-xs text-muted">{e.description}</p>}
+                        <p className="text-[11px] text-muted">
+                          {e.kind === "writing" ? "Bonus writing" : "Art"} · {e.files.length} {e.files.length === 1 ? "file" : "files"} to keep
+                          {e.withEbook && direct ? " · free with the ebook bought here" : ""}
+                        </p>
+                      </div>
+                      {e.priceCents != null && canSellExtras && !isOwner && (
+                        <BuyDirectButton
+                          projectId={book.id}
+                          format="extra"
+                          extraId={e.id}
+                          quiet
+                          label="Buy"
+                          note="Direct from the author · download and keep"
+                          price={{ cents: e.priceCents, regularCents: null }}
+                          canBuy={extrasCanBuy}
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
             {magnet && (!isOwner || previewing) && (
               <div className="mt-5">

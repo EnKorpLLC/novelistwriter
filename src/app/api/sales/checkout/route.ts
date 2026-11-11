@@ -3,9 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { getStripe, appUrl } from "@/lib/stripe";
 import { bundleReadiness, buyerCountryAllowed, findCode, saleReadiness } from "@/lib/direct-sales";
-import { codeUsable, currentPrice, discountedPrice } from "@/lib/direct-sale-rules";
+import { codeUsable, currentPrice, discountedPrice, longDay } from "@/lib/direct-sale-rules";
 import { bookPath } from "@/lib/handles";
 import { audiobookReadiness } from "@/lib/audiobook-sales";
+import { EXTRA_TAX_CODES, extraReadiness } from "@/lib/digital-extras";
 
 /** Stripe's tax category for downloaded ebooks the buyer keeps; overridable if Stripe changes it. */
 const EBOOK_TAX_CODE = process.env.STRIPE_EBOOK_TAX_CODE || "txcd_10302000";
@@ -16,12 +17,13 @@ type Line = { name: string; description: string; cents: number; taxCode: string 
 type Item = { name: string; description: string; cents: number; meta: Record<string, string>; authorId: string; backProjectId: string; backSlug: string | null; lines?: Line[] };
 
 /**
- * Start checkout for one book ({ projectId, format?: "ebook" | "audiobook" | "both", code? }) or a bundle
- * ({ bundleId }). Guests can buy; Stripe collects their email.
+ * Start checkout for one book ({ projectId, format?: "ebook" | "audiobook" | "both", code? }), a bundle or box set
+ * ({ bundleId }), or an extra ({ format: "extra", extraId }). Before release, the ebook is a pre-order.
+ * Guests can buy; Stripe collects their email.
  */
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { projectId?: string; code?: string; bundleId?: string; fromProjectId?: string; format?: string };
-  const format = body.format === "audiobook" || body.format === "both" ? body.format : "ebook";
+  const body = (await req.json().catch(() => ({}))) as { projectId?: string; code?: string; bundleId?: string; fromProjectId?: string; format?: string; extraId?: string };
+  const format = body.format === "audiobook" || body.format === "both" || body.format === "extra" ? body.format : "ebook";
   if (!(await buyerCountryAllowed())) {
     return NextResponse.json({ error: "Buying direct is only open to readers in the US for now. The store links on this page work everywhere." }, { status: 403 });
   }
@@ -38,9 +40,13 @@ export async function POST(req: Request) {
     if (user?.id === ready.authorId) return NextResponse.json({ error: "You can't buy your own books." }, { status: 400 });
     const back = ready.books.find((b) => b.id === body.fromProjectId) || ready.books[0];
     const { data: slugRow } = await admin.from("projects").select("slug").eq("id", back.id).maybeSingle();
+    const titles = ready.bundle.projectIds.map((id) => ready.books.find((b) => b.id === id)?.title || "").filter(Boolean);
     item = {
       name: ready.bundle.title,
-      description: `${ready.bundle.projectIds.length} ebooks (EPUB): ${ready.books.map((b) => b.title).join(", ")}`.slice(0, 500),
+      description: (ready.bundle.boxSetId
+        ? `One ebook (EPUB) with all ${titles.length} books: ${titles.join(", ")}`
+        : `${titles.length} ebooks (EPUB): ${titles.join(", ")}`
+      ).slice(0, 500),
       cents: ready.bundle.priceCents,
       authorId: ready.authorId,
       backProjectId: back.id,
@@ -51,6 +57,32 @@ export async function POST(req: Request) {
         tier: ready.tier,
         title: ready.bundle.title.slice(0, 200),
         regular_cents: String(ready.regularCents),
+        ...(ready.bundle.boxSetId ? { box_set_id: ready.bundle.boxSetId } : {}),
+      },
+    };
+  } else if (format === "extra") {
+    const ready = await extraReadiness(admin, String(body.extraId || ""));
+    if (!ready.ok) return NextResponse.json({ error: ready.reason }, { status: 400 });
+    if (user?.id === ready.extra.authorId) return NextResponse.json({ error: "You can't buy your own extras." }, { status: 400 });
+    const { data: project } = await admin.from("projects").select("id, title, slug").eq("id", ready.extra.projectId).maybeSingle();
+    if (!project) return NextResponse.json({ error: "Book not found" }, { status: 404 });
+    const n = ready.extra.files.length;
+    const description = `${ready.extra.kind === "writing" ? "Bonus writing" : "Digital art"} for ${project.title || "the book"}: ${n} ${n === 1 ? "file" : "files"} to download and keep.`;
+    const cents = ready.extra.priceCents!;
+    item = {
+      name: ready.extra.title,
+      description,
+      cents,
+      authorId: ready.extra.authorId,
+      backProjectId: project.id,
+      backSlug: project.slug,
+      lines: [{ name: ready.extra.title, description, cents, taxCode: EXTRA_TAX_CODES[ready.extra.kind] }],
+      meta: {
+        project_id: project.id,
+        extra_id: ready.extra.id,
+        tier: ready.tier,
+        title: ready.extra.title.slice(0, 200),
+        regular_cents: String(cents),
       },
     };
   } else if (format !== "ebook") {
@@ -105,10 +137,11 @@ export async function POST(req: Request) {
       },
     };
   } else {
-    const { data: project } = await admin.from("projects").select("id, user_id, title, slug, published, direct_sale").eq("id", String(body.projectId || "")).maybeSingle();
+    const { data: project } = await admin.from("projects").select("id, user_id, title, slug, published, direct_sale, release_date").eq("id", String(body.projectId || "")).maybeSingle();
     if (!project) return NextResponse.json({ error: "Book not found" }, { status: 404 });
-    const ready = await saleReadiness(admin, project);
+    const ready = await saleReadiness(admin, project, { preorder: true });
     if (!ready.ok) return NextResponse.json({ error: "This book isn't for sale here right now." }, { status: 400 });
+    const preorder = ready.preorder && project.release_date ? String(project.release_date).slice(0, 10) : null;
     if (user?.id === project.user_id) return NextResponse.json({ error: "You can't buy your own book. Download it from the Format tab." }, { status: 400 });
     const base = currentPrice(ready.sale);
     let cents = base.cents;
@@ -122,8 +155,10 @@ export async function POST(req: Request) {
     }
     const { data: author } = await admin.from("profiles").select("display_name").eq("id", project.user_id).maybeSingle();
     item = {
-      name: project.title || "Ebook",
-      description: `Ebook (EPUB) by ${author?.display_name || "the author"}. Yours to keep, for any e-reader.`,
+      name: preorder ? `${project.title || "Ebook"} (pre-order)` : project.title || "Ebook",
+      description: preorder
+        ? `Ebook (EPUB) by ${author?.display_name || "the author"}, delivered on ${longDay(preorder)}. Cancel anytime before then for a full refund.`
+        : `Ebook (EPUB) by ${author?.display_name || "the author"}. Yours to keep, for any e-reader.`,
       cents,
       authorId: project.user_id,
       backProjectId: project.id,
@@ -134,6 +169,7 @@ export async function POST(req: Request) {
         title: String(project.title || "").slice(0, 200),
         code_id: codeId,
         regular_cents: String(base.regularCents ?? base.cents),
+        ...(preorder ? { preorder_release: preorder } : {}),
       },
     };
   }

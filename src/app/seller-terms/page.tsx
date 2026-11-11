@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { contentMetadata } from "@/lib/seo";
-import { PAYOUT_MIN_CENTS, REFUND_WINDOW_DAYS, SALE_FEES, dollars } from "@/lib/direct-sale-rules";
+import { PAYOUT_MIN_CENTS, PREORDER_GRACE_DAYS, REFUND_WINDOW_DAYS, SALE_FEES, dollars } from "@/lib/direct-sale-rules";
 
 export const metadata = contentMetadata({
   title: "Seller terms",
@@ -40,8 +40,12 @@ export default function SellerTermsPage() {
       d: `Each sale is held for ${REFUND_WINDOW_DAYS} days (the refund window), then added to your balance. We pay out monthly through Stripe once your balance reaches ${dollars(PAYOUT_MIN_CENTS)}. Smaller balances roll over and never expire.`,
     },
     {
-      t: "Your book",
-      d: "Only sell books you have the right to sell. Books that break our conduct rules or someone else's rights can be taken down, and their sales refunded.",
+      t: "Pre-orders",
+      d: `If you take pre-orders, readers pay at order and get the ebook when you mark the book out now. They can cancel anytime before release. If you move the date later, they're told and can keep or cancel, and anyone still waiting ${PREORDER_GRACE_DAYS} days after their promised date is refunded automatically. A cancelled pre-order is refunded like any other (Stripe's fee comes out of your share). Pre-order money is paid out after delivery, once the ${REFUND_WINDOW_DAYS}-day refund window passes.`,
+    },
+    {
+      t: "Your book and extras",
+      d: "Only sell books and extras you have the right to sell. Art someone else made for your book often only covers using it in and around the book; selling it as an extra needs their permission. Anything that breaks our conduct rules or someone else's rights can be taken down, and its sales refunded. Readers keep extras they've bought, or got with the ebook, even if you turn them off later.",
     },
     {
       t: "Changes",
