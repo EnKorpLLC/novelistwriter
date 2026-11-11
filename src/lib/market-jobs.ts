@@ -109,7 +109,18 @@ export async function milestonesOf(admin: SupabaseClient, jobId: string): Promis
 
 /* ---------- Requests ---------- */
 
-export type RequestInput = { type: string; projectId?: string | null; title: string; brief: string; deadline?: string | null; budgetNote?: string; proIds?: string[]; inviteEmail?: string | null };
+export type RequestInput = {
+  type: string;
+  projectId?: string | null;
+  title: string;
+  brief: string;
+  deadline?: string | null;
+  budgetNote?: string;
+  proIds?: string[];
+  inviteEmail?: string | null;
+  /** Editing only: a free sample edit (up to 1,000 words) before the quote */
+  wantsSample?: boolean;
+};
 
 /**
  * A request goes to up to five pros from the directory (their type must be open), or privately to the author's own
@@ -136,6 +147,7 @@ export async function createRequest(admin: SupabaseClient, author: { id: string;
     brief,
     deadline,
     budget_note: String(input.budgetNote || "").trim().slice(0, 200),
+    ...(input.wantsSample && marketType(input.type)?.group === "editing" ? { wants_sample: true } : {}),
   };
   const authorName = (await nameOf(admin, author.id)) || "An author";
   const t = marketType(input.type)!;
@@ -564,6 +576,8 @@ export async function jobView(admin: SupabaseClient, job: JobRow, role: "author"
     id: job.id,
     role,
     hasBook: Boolean(job.project_id),
+    otherUserId: role === "author" ? job.pro_id : job.author_id,
+    wantsSample: Boolean((job as JobRow & { wants_sample?: boolean }).wants_sample),
     review: review ? { stars: review.stars as number, body: (review.body as string) || "", reply: (review.reply as string | null) || null } : null,
     title: job.title,
     brief: job.brief,

@@ -25,6 +25,7 @@ import { appUrl } from "@/lib/stripe";
 import { normalizeQuote } from "@/lib/market-quotes";
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
+const fileKind = (v: unknown) => (v === "brief" || v === "process" || v === "sample" ? v : "delivery");
 
 async function load(id: string) {
   const supabase = await createClient();
@@ -142,9 +143,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
       case "upload_url": {
         if (!r2Configured()) throw new Error("File storage isn't set up yet.");
-        const kind = b.kind === "brief" ? "brief" : b.kind === "process" ? "process" : "delivery";
+        const kind = fileKind(b.kind);
         if (kind === "brief" && role !== "author") break;
         if (kind !== "brief" && role !== "pro") break;
+        if (kind === "sample" && !["requested", "quoted"].includes(job.status)) throw new Error("Samples go with the quote, before the job is agreed.");
         const name = String(b.name || "").replace(/[\\/:*?"<>|#%]+/g, "").trim().slice(0, 120);
         if (!name) throw new Error("That file needs a name.");
         const key = `market/${job.id}/${newCode()}-${name}`;
@@ -159,9 +161,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           await deleteObject(key).catch(() => null);
           throw new Error("Files can be up to 500 MB.");
         }
-        const kind = b.kind === "brief" ? "brief" : b.kind === "process" ? "process" : "delivery";
-        const milestoneId = kind === "brief" ? null : (await ms()).find((x) => x.id === b.milestoneId)?.id || null;
-        if (kind !== "brief" && !milestoneId) throw new Error("Pick the milestone this belongs to.");
+        const kind = fileKind(b.kind);
+        const milestoneId = kind === "brief" || kind === "sample" ? null : (await ms()).find((x) => x.id === b.milestoneId)?.id || null;
+        if (kind !== "brief" && kind !== "sample" && !milestoneId) throw new Error("Pick the milestone this belongs to.");
         await admin.from("market_files").insert({ job_id: job.id, milestone_id: milestoneId, uploader_id: user.id, kind, name: String(b.name || "file").slice(0, 120), r2_key: key, bytes });
         return NextResponse.json({ ok: true });
       }

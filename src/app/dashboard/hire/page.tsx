@@ -28,7 +28,7 @@ export default function HirePage() {
   const [types, setTypes] = useState<MarketTypeStatus[]>([]);
   const [books, setBooks] = useState<{ id: string; title: string }[]>([]);
   const [pros, setPros] = useState<Pro[]>([]);
-  const [form, setForm] = useState({ type: "line_copy", projectId: "", title: "", brief: "", deadline: "", budgetNote: "", who: "invite" as "invite" | "directory", inviteEmail: "", proIds: [] as string[] });
+  const [form, setForm] = useState({ type: "line_copy", projectId: "", title: "", brief: "", deadline: "", budgetNote: "", who: "invite" as "invite" | "directory", inviteEmail: "", proIds: [] as string[], wantsSample: false });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   // Arriving from a narrator's profile: pick the book, then invite them from its Audio tab
@@ -80,6 +80,7 @@ export default function HirePage() {
         brief: form.brief,
         deadline: form.deadline || null,
         budgetNote: form.budgetNote,
+        wantsSample: form.wantsSample,
         ...(form.who === "invite" ? { inviteEmail: form.inviteEmail } : { proIds: form.proIds }),
       }),
     });
@@ -187,6 +188,16 @@ export default function HirePage() {
             <input value={form.budgetNote} onChange={(e) => setForm({ ...form, budgetNote: e.target.value })} placeholder="Around $800" className={input} />
           </label>
         </div>
+
+        {MARKET_TYPES.find((t) => t.id === form.type)?.group === "editing" && (
+          <label className="mt-3 flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={form.wantsSample} onChange={(e) => setForm({ ...form, wantsSample: e.target.checked })} />
+            <span>
+              Ask for a free sample edit first
+              <span className="block text-xs text-muted">Up to 1,000 words, sent with their quote so you can compare. Paste the passage into the brief, or attach it as a reference file.</span>
+            </span>
+          </label>
+        )}
 
         <fieldset className="mt-4">
           <legend className="text-xs text-muted">Who to ask</legend>

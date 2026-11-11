@@ -73,6 +73,7 @@ export default async function HirePage() {
                             {p.headline}
                             {p.rateNote ? ` · ${p.rateNote}` : ""}
                             {p.rating ? ` · ★ ${p.rating.avg} (${p.rating.count})` : ""}
+                            {p.onTime ? ` · ${p.onTime.pct}% on time` : ""}
                             {p.completed ? ` · ${p.completed} done here` : ""}
                           </span>
                         </span>

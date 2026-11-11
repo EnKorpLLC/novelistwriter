@@ -261,6 +261,10 @@ export type DirectoryPro = {
   completed: number;
   /** From completed jobs only */
   rating: { avg: number; count: number } | null;
+  /** Milestones delivered by their due date, of those that had one */
+  onTime: { pct: number; count: number } | null;
+  /** Typical (median) hours from a request to their quote */
+  quoteHours: number | null;
   portfolio: (PortfolioItem & { imageUrl: string | null })[];
 };
 
@@ -271,11 +275,28 @@ export async function directoryPros(admin: SupabaseClient, type: MarketTypeId, o
   const { data, error } = await q.limit(200);
   if (error || !data?.length) return [];
   const ids = data.map((r) => r.user_id as string);
-  const [{ data: done }, { data: reviews }] = await Promise.all([
-    admin.from("market_jobs").select("pro_id").in("pro_id", ids).eq("status", "completed"),
+  const [{ data: jobs }, { data: reviews }] = await Promise.all([
+    admin.from("market_jobs").select("id, pro_id, status, created_at, quoted_at").in("pro_id", ids).limit(5000),
     admin.from("market_reviews").select("pro_id, stars").in("pro_id", ids),
   ]);
-  const count = (id: string) => (done || []).filter((d) => d.pro_id === id).length;
+  const done = (jobs || []).filter((j) => j.status === "completed");
+  const count = (id: string) => done.filter((d) => d.pro_id === id).length;
+  const jobIds = (jobs || []).map((j) => j.id as string);
+  const { data: dueMs } = jobIds.length ? await admin.from("market_milestones").select("job_id, due_on, delivered_at").in("job_id", jobIds).not("due_on", "is", null).not("delivered_at", "is", null) : { data: [] };
+  const proOfJob = new Map((jobs || []).map((j) => [j.id as string, j.pro_id as string]));
+  const onTime = (id: string) => {
+    const mine = (dueMs || []).filter((m) => proOfJob.get(m.job_id as string) === id);
+    if (mine.length < 3) return null;
+    const ok = mine.filter((m) => String(m.delivered_at).slice(0, 10) <= String(m.due_on)).length;
+    return { pct: Math.round((ok / mine.length) * 100), count: mine.length };
+  };
+  const quoteHours = (id: string) => {
+    const hours = (jobs || [])
+      .filter((j) => j.pro_id === id && j.quoted_at)
+      .map((j) => (Date.parse(j.quoted_at as string) - Date.parse(j.created_at as string)) / 3_600_000)
+      .sort((a, b) => a - b);
+    return hours.length >= 3 ? Math.round(hours[Math.floor(hours.length / 2)]) : null;
+  };
   const rating = (id: string) => {
     const mine = (reviews || []).filter((r) => r.pro_id === id);
     return mine.length ? { avg: Math.round((mine.reduce((n, r) => n + r.stars, 0) / mine.length) * 10) / 10, count: mine.length } : null;
@@ -295,6 +316,8 @@ export async function directoryPros(admin: SupabaseClient, type: MarketTypeId, o
       specialties: r.specialties,
       completed,
       rating: rating(r.user_id),
+      onTime: onTime(r.user_id),
+      quoteHours: quoteHours(r.user_id),
       portfolio: opts.withPortfolio ? await signPortfolio(r.portfolio, r.user_id) : [],
     }))
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { ReportPerson } from "@/components/ReportPerson";
 import {
   AGREEMENT_NOTE,
   MIN_JOB_CENTS,
@@ -34,6 +35,8 @@ type Job = {
   id: string;
   role: "author" | "pro";
   hasBook: boolean;
+  otherUserId: string | null;
+  wantsSample: boolean;
   review: { stars: number; body: string; reply: string | null } | null;
   title: string;
   brief: string;
@@ -123,7 +126,7 @@ export function MarketJob({ jobId }: { jobId: string }) {
     }
   }
 
-  async function upload(files: File[], kind: "brief" | "delivery" | "process", milestoneId?: string) {
+  async function upload(files: File[], kind: "brief" | "delivery" | "process" | "sample", milestoneId?: string) {
     await run("upload", async () => {
       for (const [i, f] of files.entries()) {
         setBusy(`Uploading ${i + 1} of ${files.length}: ${f.name}`);
@@ -171,6 +174,19 @@ export function MarketJob({ jobId }: { jobId: string }) {
           <FilePicker label="Add reference files" disabled={Boolean(busy)} onPick={(fs) => void upload(fs, "brief")} />
         )}
       </section>
+
+      {job.wantsSample && !job.agreement && (
+        <section className="border border-line p-4">
+          <h2 className="font-display text-xl">Sample edit</h2>
+          <p className="mt-1 text-muted">
+            {job.role === "pro"
+              ? "The author asked for a free sample edit of up to 1,000 words, from the passage in the brief or its reference files. Attach it here with your quote."
+              : "You asked for a free sample edit (up to 1,000 words). It'll appear here with the quote."}
+          </p>
+          <FileList files={job.files.filter((f) => f.kind === "sample")} canRemove={job.role === "pro" && !closed} onRemove={(id) => void run("remove", async () => void (await post({ action: "remove_file", fileId: id })))} />
+          {job.role === "pro" && !closed && <FilePicker label="Attach the sample" disabled={Boolean(busy)} onPick={(fs) => void upload(fs, "sample")} />}
+        </section>
+      )}
 
       {!job.agreement && !closed && (
         <section className="border border-line p-4">
@@ -222,6 +238,13 @@ export function MarketJob({ jobId }: { jobId: string }) {
                 Download the manuscript (Word)
               </a>{" "}
               <span className="text-muted">Edit with Track Changes on, keep each chapter&apos;s heading, and deliver the file here. The author reviews each change.</span>
+            </p>
+          )}
+          {job.type.group === "editing" && job.hasBook && !job.adminView && (
+            <p className="mt-3 text-xs">
+              <a href={`/hire/job/${job.id}/notes`} className="text-accent underline">
+                {job.role === "pro" ? "Read the book and leave notes on passages" : "Your editor's notes on passages"}
+              </a>
             </p>
           )}
           <details className="mt-4">
@@ -293,6 +316,11 @@ export function MarketJob({ jobId }: { jobId: string }) {
             </button>
           )}
         </section>
+      )}
+      {job.otherUserId && !job.adminView && (
+        <div className="border-t border-line pt-3">
+          <ReportPerson userId={job.otherUserId} label={author ? "this pro" : "this author"} context={`Job: ${job.title} (/hire/job/${job.id})`} />
+        </div>
       )}
       {busy?.startsWith("Uploading") && <p className="text-xs text-muted">{busy}</p>}
       {msg && <p className={`text-sm ${msg.ok ? "text-accent" : "text-danger"}`}>{msg.text}</p>}

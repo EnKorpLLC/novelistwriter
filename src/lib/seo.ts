@@ -143,6 +143,14 @@ export async function publicSitemapEntries(admin: SupabaseClient): Promise<Sitem
     entries.push({ url: appUrl(`/verify/${v.verify_code}`), lastModified: v.updated_at || undefined, priority: 0.4, changeFrequency: "weekly" });
   }
 
+  // Pros in the marketplace, once their type is open (only after migration_marketplace.sql)
+  const { typeStatuses } = await import("@/lib/marketplace");
+  const open = ((await typeStatuses(admin).catch(() => null)) || []).filter((t) => t.state === "open").map((t) => t.id);
+  if (open.length) {
+    const { data: pros } = await admin.from("pro_profiles").select("user_id, updated_at").eq("status", "approved").overlaps("specialties", open).limit(5000);
+    for (const p of pros || []) entries.push({ url: appUrl(`/hire/pro/${p.user_id}`), lastModified: p.updated_at || undefined, priority: 0.5, changeFrequency: "weekly" });
+  }
+
   // Genre pages, only once a genre has enough real books and reader calls
   for (const g of await loadGenreHubs(admin).catch(() => [])) {
     if (g.total >= GENRE_MIN_ITEMS) entries.push({ url: appUrl(`/genres/${g.key}`), priority: 0.6, changeFrequency: "daily" });

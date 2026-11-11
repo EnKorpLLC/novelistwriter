@@ -30,6 +30,7 @@ export const PLANS: PlanCopy[] = [
       "Post it as a serial: copy any chapter ready to paste into Royal Road, Wattpad, Substack, AO3, Scribble Hub, forums, or Reddit, with italics and scene breaks kept",
       "Set up book styles, preview your ebook on Kindle, phone, and tablet screens, and see the first chapters as printed pages",
       "“Where readers are”: promotion sites, ads, reader communities, and ARC services, with costs and self-promotion rules",
+      "Hire human editors, proofreaders, cover designers, and artists, with a written agreement and each milestone held until you approve it (10% fee, shown on the quote)",
       "AI critique pay as you go, with credit packs from $5",
     ],
   },

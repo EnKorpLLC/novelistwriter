@@ -6,9 +6,22 @@ import { PublicFooter } from "@/components/PublicFooter";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { directoryPros, typeStatuses } from "@/lib/marketplace";
 import { MARKET_TYPES, isMarketType, marketType } from "@/lib/market-types";
+import { ReportPerson } from "@/components/ReportPerson";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Pro profile | Novelist Writer", robots: { index: false, follow: true } };
+/** Profiles only render once a type is open, so they're safe to index; the title names the pro and what they do. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { title: "Pro profile" };
+  const { data } = await createServiceClient().from("pro_profiles").select("name, headline, specialties").eq("user_id", id).eq("status", "approved").maybeSingle();
+  if (!data) return { title: "Pro profile", robots: { index: false } };
+  const what = ((data.specialties || []) as string[]).map((s) => marketType(s)?.label).filter(Boolean).join(", ");
+  return {
+    title: `${data.name}: ${what} for authors`,
+    description: String(data.headline || `${what} on Novelist Writer. Human-made work, with payments held until the author approves.`).slice(0, 200),
+    alternates: { canonical: `/hire/pro/${id}` },
+  };
+}
 
 /** A pro's profile: shown once one of their types is open to authors. */
 export default async function ProProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ type?: string }> }) {
@@ -36,6 +49,8 @@ export default async function ProProfilePage({ params, searchParams }: { params:
           {pro.founding ? "Founding pro · " : ""}
           {pro.rating ? `★ ${pro.rating.avg} from ${pro.rating.count} ${pro.rating.count === 1 ? "review" : "reviews"} · ` : ""}
           {pro.completed ? `${pro.completed} ${pro.completed === 1 ? "job" : "jobs"} completed here · ` : ""}
+          {pro.onTime ? `${pro.onTime.pct}% of milestones on time · ` : ""}
+          {pro.quoteHours != null ? `usually quotes within ${pro.quoteHours < 24 ? `${Math.max(1, pro.quoteHours)} ${pro.quoteHours <= 1 ? "hour" : "hours"}` : `${Math.round(pro.quoteHours / 24)} ${Math.round(pro.quoteHours / 24) === 1 ? "day" : "days"}`} · ` : ""}
           Promises human-made work
           {pro.genres.length ? ` · ${pro.genres.join(", ")}` : ""}
         </p>
@@ -111,6 +126,9 @@ export default async function ProProfilePage({ params, searchParams }: { params:
             </ul>
           </section>
         )}
+        <div className="mt-12 border-t border-line pt-4">
+          <ReportPerson userId={pro.userId} label="this pro" context={`Profile: /hire/pro/${pro.userId}`} />
+        </div>
       </main>
       <PublicFooter />
     </div>

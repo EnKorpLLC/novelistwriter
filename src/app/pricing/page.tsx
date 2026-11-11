@@ -132,6 +132,13 @@ export default async function PricingPage() {
               How it works for narrators
             </Link>
           </p>
+          <p className="font-ui mt-3 text-sm text-ink">
+            <strong>Hiring an editor, proofreader, cover designer, or artist</strong> (every plan): the same 10%, paid by you and shown on the quote, so the pro gets their
+            full price. Each milestone is held until you approve it.{" "}
+            <Link href="/hire" className="text-accent underline">
+              Hire help
+            </Link>
+          </p>
         </section>
 
         <section className="mt-16">
