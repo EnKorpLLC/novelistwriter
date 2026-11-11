@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { renderEmail, sendEmail } from "@/lib/email";
 import { platformAdminEmail } from "@/lib/platform-admin";
 import { appUrl } from "@/lib/stripe";
+import { CONTACT_REASONS } from "@/lib/site-feedback";
 
 const MAX_PER_HOUR = 5;
 
@@ -14,7 +15,9 @@ export async function POST(req: Request) {
     subject?: string;
     message?: string;
     company?: string;
+    reason?: string;
   };
+  const reason = CONTACT_REASONS.find((r) => r.id === body.reason) || null;
 
   // Honeypot field: real visitors never see it
   if (body.company) return NextResponse.json({ ok: true });
@@ -55,13 +58,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const { error } = await admin.from("platform_messages").insert({
-    name,
-    email,
-    subject,
-    body: message,
-    user_id: userId,
-  });
+  const row = { name, email, subject, body: message, user_id: userId };
+  let { error } = await admin.from("platform_messages").insert({ ...row, kind: reason?.id || null, page: "/contact" });
+  // Before migration_site_feedback.sql there's no kind column; the message still arrives
+  if (error && /kind|page/.test(error.message)) ({ error } = await admin.from("platform_messages").insert(row));
   if (error) {
     const hint = error.message.includes("platform_messages")
       ? "Database needs an update. Run supabase/migration_platform_admin.sql in the Supabase SQL editor."
@@ -71,12 +71,12 @@ export async function POST(req: Request) {
 
   const mail = renderEmail({
     heading: subject || "New Contact us message",
-    paragraphs: [`From ${name || "(no name)"} <${email}>`, message],
-    button: { label: "Open admin inbox", url: appUrl("/admin") },
+    paragraphs: [`From ${name || "(no name)"} <${email}>${reason ? ` · ${reason.label}` : ""}`, message],
+    button: { label: "Open admin inbox", url: appUrl("/admin?tab=messages") },
   });
   await sendEmail({
     to: platformAdminEmail(),
-    subject: `Contact us: ${subject || name || email}`,
+    subject: `Contact us${reason ? ` (${reason.label})` : ""}: ${subject || name || email}`,
     text: mail.text,
     html: mail.html,
     replyTo: email,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { CONTACT_REASONS } from "@/lib/site-feedback";
 
 export function ContactForm() {
   const search = useSearchParams();
@@ -11,6 +12,7 @@ export function ContactForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState(passwordHelp ? "Password help" : "");
+  const [reason, setReason] = useState<string>(passwordHelp ? "account" : "question");
   const [message, setMessage] = useState("");
   const [company, setCompany] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,7 +35,7 @@ export function ContactForm() {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, subject, message, company }),
+        body: JSON.stringify({ name, email, subject, message, company, reason }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not send");
@@ -86,6 +88,16 @@ export function ContactForm() {
           onChange={(e) => setEmail(e.target.value)}
           className="mt-1 w-full border border-line bg-paper px-3 py-2"
         />
+      </label>
+      <label className="block text-sm">
+        What&apos;s this about?
+        <select value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full border border-line bg-paper px-3 py-2">
+          {CONTACT_REASONS.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.label}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="block text-sm">
         Subject

@@ -15,6 +15,7 @@ import { AdminMarketplace } from "./AdminMarketplace";
 import { AdminSocial } from "./AdminSocial";
 import { AdminContent } from "./AdminContent";
 import { AdminSiteText } from "./AdminSiteText";
+import { MESSAGE_TYPES } from "@/lib/site-feedback";
 
 type Message = {
   id: string;
@@ -89,6 +90,9 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   }, []);
 
   const [filter, setFilter] = useState<"open" | "archived">("open");
+  // Bug reports, feature requests, and the rest, listed by type
+  const [kindFilter, setKindFilter] = useState<string>("all");
+  const [kindCounts, setKindCounts] = useState<Record<string, number> | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [unread, setUnread] = useState(0);
   const [openMessageId, setOpenMessageId] = useState<string | null>(null);
@@ -106,7 +110,7 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
   const [usersLoading, setUsersLoading] = useState(false);
 
   const loadMessages = useCallback(async () => {
-    const res = await fetch(`/api/admin/messages?status=${filter}`);
+    const res = await fetch(`/api/admin/messages?status=${filter}${kindFilter !== "all" ? `&kind=${kindFilter}` : ""}`);
     const data = await res.json();
     if (!res.ok) {
       setNote(data.error || "Could not load messages");
@@ -114,7 +118,8 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
     }
     setMessages(data.messages || []);
     setUnread(data.unread || 0);
-  }, [filter]);
+    setKindCounts(data.counts || null);
+  }, [filter, kindFilter]);
 
   useEffect(() => {
     void loadMessages();
@@ -263,6 +268,24 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                 </button>
               ))}
             </div>
+            {kindCounts && (
+              <div className="mt-3 flex flex-wrap gap-2 text-xs" role="group" aria-label="Message type">
+                {[{ id: "all", label: "All types" }, ...MESSAGE_TYPES, { id: "none", label: "No type" }].map((t) => {
+                  const n = t.id === "all" ? Object.values(kindCounts).reduce((a, b) => a + b, 0) : kindCounts[t.id] || 0;
+                  if (t.id !== "all" && !n && kindFilter !== t.id) return null;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`border px-2 py-1 ${kindFilter === t.id ? "border-accent text-accent" : "border-line text-muted hover:text-ink"}`}
+                      onClick={() => setKindFilter(t.id)}
+                    >
+                      {t.label} ({n})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {messages.length === 0 ? (
               <p className="mt-4 text-sm text-muted">No messages.</p>
             ) : (
@@ -278,7 +301,7 @@ export default function AdminClient({ emailReady }: { emailReady: boolean }) {
                         aria-expanded={open}
                       >
                         <span className={m.status === "new" ? "font-medium text-ink" : "text-ink"}>
-                          {m.kind && <span className="mr-2 border border-accent px-1.5 py-0.5 text-[11px] text-accent">Feedback</span>}
+                          {m.kind && <span className="mr-2 border border-accent px-1.5 py-0.5 text-[11px] text-accent">{m.kind}</span>}
                           {m.subject || "(no subject)"}
                           {m.screenshots?.length ? <span className="ml-2 text-xs text-muted">· {m.screenshots.length} screenshot{m.screenshots.length === 1 ? "" : "s"}</span> : null}
                           <span className="ml-2 text-xs text-muted">
