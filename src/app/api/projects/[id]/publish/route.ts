@@ -102,7 +102,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = (await req.json()) as {
     action?: string;
     tropes?: unknown;
-    contentWarnings?: unknown;
     buyLinks?: unknown;
     tagline?: string;
     releaseDate?: string | null;
@@ -135,14 +134,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .maybeSingle();
     if (taken) return NextResponse.json({ error: "You already use that link for another book." }, { status: 400 });
     listing.slug = next;
-  }
-
-  // Saved on its own so the rest of the page still saves before migration_book_warnings.sql has run
-  if ("contentWarnings" in body) {
-    const { error } = await supabase.from("projects").update({ content_warnings: normalizeWarningIds(body.contentWarnings) }).eq("id", id).eq("user_id", user.id);
-    if (error && normalizeWarningIds(body.contentWarnings).length) {
-      return NextResponse.json({ error: "Database needs an update. Run supabase/migration_book_warnings.sql in the Supabase SQL editor." }, { status: 500 });
-    }
   }
 
   let patch: Record<string, unknown>;

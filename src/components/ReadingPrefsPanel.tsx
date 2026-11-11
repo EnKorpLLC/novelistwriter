@@ -99,20 +99,20 @@ export function ReadingPrefsPanel({ hidden, onSaved }: { hidden?: { betas: numbe
       ]
         .filter(Boolean)
         .join(" · ")
-    : "Nothing set: you see every genre";
+    : "Choose the genres you want to read and the content warnings you'd rather not see";
   const hiddenTotal = (hidden?.betas || 0) + (hidden?.arcs || 0);
 
   return (
-    <section id="reading-prefs" className="font-ui mb-10 scroll-mt-24 border border-line p-4">
+    <section id="reading-prefs" className="font-ui scroll-mt-24 border border-line p-4">
       <button type="button" className="flex w-full items-baseline justify-between gap-3 text-left" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span>
           <span className="font-display block text-lg text-ink">Reading preferences</span>
           <span className="mt-0.5 block text-xs text-muted">
             {summary}
-            {hiddenTotal > 0 ? ` · ${hiddenTotal} hidden here` : ""}
+            {hiddenTotal > 0 ? ` · ${hiddenTotal} beta and ARC book${hiddenTotal === 1 ? "" : "s"} hidden` : ""}
           </span>
         </span>
-        <span className="shrink-0 text-xs text-accent">{open ? "Close" : "Change"}</span>
+        <span className="shrink-0 border border-accent px-3 py-1 text-xs text-accent">{open ? "Close" : hasPrefs(saved) ? "Change" : "Choose"}</span>
       </button>
 
       {open && (

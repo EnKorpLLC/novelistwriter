@@ -12,6 +12,8 @@ import {
   normalizeKeywordIds,
 } from "@/lib/book-keywords";
 import { saveAs } from "file-saver";
+import { MAX_TROPES, normalizeTropes } from "@/lib/arc";
+import { TROPE_CHOICES, TROPE_GROUPS, WARNING_CHOICES, normalizeWarningIds } from "@/lib/reading-prefs";
 
 type Matter = {
   id: string;
@@ -43,6 +45,14 @@ export function ProjectTools({
     )
   );
   const categories = bisacFromKeywordIds(keywordIds);
+  const [tropes, setTropes] = useState<string[]>(() => normalizeTropes((project as { tropes?: unknown }).tropes));
+  const [warnings, setWarnings] = useState<string[]>(() => normalizeWarningIds((project as { content_warnings?: unknown }).content_warnings));
+  const [metaNote, setMetaNote] = useState<string | null>(null);
+  // Tropes from before the list existed stay selectable so they can be removed
+  const tropeGroups = (() => {
+    const custom = tropes.filter((t) => !TROPE_CHOICES.some((c) => c.toLowerCase() === t.toLowerCase()));
+    return custom.length ? [...TROPE_GROUPS, { group: "Added earlier", tropes: custom }] : TROPE_GROUPS;
+  })();
   const [validation, setValidation] = useState<string[]>([]);
   const [versions, setVersions] = useState<
     { id: string; label: string; created_at: string; word_count: number }[]
@@ -58,13 +68,16 @@ export function ProjectTools({
     const bisac = bisacFromKeywordIds(ids);
     const prevMeta =
       project.metadata && typeof project.metadata === "object" ? { ...project.metadata } : {};
-    await fetch(`/api/projects/${project.id}`, {
+    setMetaNote(null);
+    const res = await fetch(`/api/projects/${project.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
         blurb,
         genre: labels[0] || "",
+        tropes,
+        content_warnings: warnings,
         metadata: {
           ...prevMeta,
           categories: bisac,
@@ -72,6 +85,16 @@ export function ProjectTools({
           keywordIds: ids,
         },
       }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setMetaNote(res.ok ? "Saved." : data.error || "Couldn't save");
+  }
+
+  function toggleTrope(t: string) {
+    setTropes((prev) => {
+      if (prev.some((x) => x.toLowerCase() === t.toLowerCase())) return prev.filter((x) => x.toLowerCase() !== t.toLowerCase());
+      if (prev.length >= MAX_TROPES) return prev;
+      return [...prev, t];
     });
   }
 
@@ -249,9 +272,65 @@ export function ProjectTools({
               placeholder="Select keywords above"
             />
           </label>
-          <button type="button" onClick={saveMeta} className="bg-accent px-4 py-2 text-paper">
-            Save metadata
-          </button>
+          <div className="space-y-2">
+            <p className="text-xs text-muted">
+              Tropes (choose up to {MAX_TROPES}). Shown on your launch page and listings, and used in readers&apos; recommendations.
+            </p>
+            {tropeGroups.map((g) => (
+              <div key={g.group}>
+                <p className="text-[11px] uppercase tracking-wide text-muted">{g.group}</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {g.tropes.map((t) => {
+                    const on = tropes.some((x) => x.toLowerCase() === t.toLowerCase());
+                    const disabled = !on && tropes.length >= MAX_TROPES;
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        aria-pressed={on}
+                        disabled={disabled}
+                        onClick={() => toggleTrope(t)}
+                        className={`border px-2.5 py-1 text-xs ${on ? "border-accent bg-accent/15 text-ink" : "border-line text-muted hover:border-accent disabled:opacity-40"}`}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-muted">
+              {tropes.length}/{MAX_TROPES} selected{tropes.length ? ` · ${tropes.join(" · ")}` : ""}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs text-muted">
+              Content warnings. Tick what the book contains. Readers see them on your launch page and beta and ARC listings, and readers
+              who chose to skip one won&apos;t see the book.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {WARNING_CHOICES.map((c) => {
+                const on = warnings.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setWarnings((w) => (on ? w.filter((x) => x !== c.id) : [...w, c.id]))}
+                    className={`border px-2.5 py-1 text-xs ${on ? "border-ink bg-ink text-paper" : "border-line text-muted hover:border-accent"}`}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={() => void saveMeta()} className="bg-accent px-4 py-2 text-paper">
+              Save metadata
+            </button>
+            {metaNote && <span className="text-xs text-muted">{metaNote}</span>}
+          </div>
         </div>
       </section>
 

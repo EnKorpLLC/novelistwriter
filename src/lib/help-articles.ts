@@ -183,6 +183,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     plan: "Every plan",
     steps: [
       "Open a book and choose Tools.",
+      "Project & KDP: your title, blurb, genre keywords, tropes, and content warnings, each picked from a list. Readers see the tropes and warnings on your launch page and listings, and readers who chose to skip a warning won't see the book.",
       "KDP checklist: see what Amazon needs before you upload.",
       "Front / back matter: add a dedication, acknowledgments, about the author, and similar pages.",
       "Manuscript build: export a DOCX or EPUB of the whole book.",
@@ -390,7 +391,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     plan: "Pro and Studio",
     steps: [
       "Open the book and choose Launch → Launch page.",
-      "Add a tagline, release date, tropes, and the page's address, and tick any content warnings. Readers see the warnings on your launch page and beta and ARC listings, and readers who chose to skip one won't see the book.",
+      "Add a tagline, release date, and the page's address. Tropes and content warnings are picked in Tools → Project & KDP and show here too.",
       "Add store links (Amazon, Kobo, and others). To sell direct as well, set that up in the Sell tab.",
       "Make the page public when you're ready. It starts as a cover reveal and changes to buy buttons on release day.",
       "Under Share and embed, copy ready-to-post text, a newsletter block, and buttons for your own website.",

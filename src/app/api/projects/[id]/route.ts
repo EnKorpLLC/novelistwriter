@@ -5,6 +5,8 @@ import { normalizeDetails, normalizeFormat } from "@/lib/book/format";
 import { normalizeCoverDesign } from "@/lib/book/cover-design";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { removeAllChapterImages } from "@/lib/chapter-image-sweep";
+import { normalizeTropes } from "@/lib/arc";
+import { normalizeWarningIds } from "@/lib/reading-prefs";
 
 export async function PATCH(
   req: Request,
@@ -43,6 +45,15 @@ export async function PATCH(
   }
   if ("book_details" in body) patch.book_details = normalizeDetails(body.book_details);
   if ("cover_design" in body) patch.cover_design = normalizeCoverDesign(body.cover_design);
+  if ("tropes" in body) patch.tropes = normalizeTropes(body.tropes);
+  // Saved on its own so the rest still saves before migration_book_warnings.sql has run
+  if ("content_warnings" in body) {
+    const ids = normalizeWarningIds(body.content_warnings);
+    const { error } = await supabase.from("projects").update({ content_warnings: ids }).eq("id", id).eq("user_id", user.id);
+    if (error && ids.length) {
+      return NextResponse.json({ error: "Database needs an update. Run supabase/migration_book_warnings.sql in the Supabase SQL editor." }, { status: 500 });
+    }
+  }
 
   const { data, error } = await supabase
     .from("projects")

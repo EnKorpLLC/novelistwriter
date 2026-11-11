@@ -60,6 +60,42 @@ export const WARNING_CHOICES: Choice[] = [
   { id: "profanity", label: "Strong language", terms: ["profanity", "strong language", "swearing", "cursing"] },
 ];
 
+/** Tropes an author picks for a book (stored by label, so older books' tropes still read the same). */
+export const TROPE_GROUPS: { group: string; tropes: string[] }[] = [
+  {
+    group: "Romance",
+    tropes: [
+      "Enemies to lovers", "Friends to lovers", "Second chance romance", "Fake dating", "Forced proximity", "Slow burn",
+      "Grumpy and sunshine", "Forbidden love", "Marriage of convenience", "Workplace romance", "Small-town romance",
+      "Love triangle", "Insta-love", "Opposites attract", "Secret identity", "Age gap", "Single parent", "Why choose",
+    ],
+  },
+  {
+    group: "Fantasy and science fiction",
+    tropes: [
+      "Chosen one", "Magic school", "Portal fantasy", "Quest", "Dragons", "Fae", "Vampires", "Shifters", "Witches",
+      "Hidden royalty", "Dark lord", "Heist", "Time travel", "Space opera", "First contact", "AI and robots",
+      "Post-apocalyptic survival", "Rebellion against an empire", "Cursed", "Prophecy",
+    ],
+  },
+  {
+    group: "Mystery and thriller",
+    tropes: [
+      "Amateur sleuth", "Locked room", "Whodunit", "Unreliable narrator", "Serial killer", "Cold case", "Small-town secrets",
+      "Missing person", "Revenge", "Conspiracy", "Cat and mouse", "Twist ending",
+    ],
+  },
+  {
+    group: "Characters and story",
+    tropes: [
+      "Found family", "Morally grey", "Villain origin", "Antihero", "Redemption arc", "Coming of age", "Mentor and student",
+      "Rivals", "Underdog", "Fish out of water", "Secret baby", "Dual timeline", "Multiple POV", "Road trip", "Sports",
+      "Pets and animals", "Holiday", "Haunted house", "Epistolary",
+    ],
+  },
+];
+export const TROPE_CHOICES = TROPE_GROUPS.flatMap((g) => g.tropes);
+
 export type ReadingPrefs = { likeGenres: string[]; avoidGenres: string[]; avoidWarnings: string[] };
 export const NO_PREFS: ReadingPrefs = { likeGenres: [], avoidGenres: [], avoidWarnings: [] };
 

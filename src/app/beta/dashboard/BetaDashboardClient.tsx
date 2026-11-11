@@ -662,6 +662,10 @@ export default function BetaDashboardClient() {
 
             <ReaderBadgesBox />
 
+            <div className="mt-8">
+              <ReadingPrefsPanel hidden={hiddenByPrefs} onSaved={() => void load()} />
+            </div>
+
             <nav
               className="font-ui mt-8 flex flex-wrap gap-1 border-b border-line"
               aria-label="Dashboard sections"
@@ -810,7 +814,6 @@ export default function BetaDashboardClient() {
               {tab === "catalog" && (
                 <section>
                   <h2 className="sr-only">Available by keyword</h2>
-                  <ReadingPrefsPanel hidden={hiddenByPrefs} onSaved={() => void load()} />
                   {arcCatalog.length > 0 && (
                     <div className="mb-12">
                       <h3 className="font-display text-xl">Advance reader copies</h3>
