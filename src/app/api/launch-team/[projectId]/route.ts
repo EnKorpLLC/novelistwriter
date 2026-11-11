@@ -3,9 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { userHasStudio } from "@/lib/credits";
 import { followAuthor } from "@/lib/audience";
-import { isTeamTask } from "@/lib/launch-team";
-
-const OPEN_AFTER_RELEASE_DAYS = 14;
+import { isTeamTask, TEAM_OPEN_AFTER_RELEASE_DAYS } from "@/lib/launch-team";
 
 async function context(projectId: string) {
   const supabase = await createClient();
@@ -17,7 +15,7 @@ async function context(projectId: string) {
   if (!project) return null;
   const studio = await userHasStudio(project.user_id);
   const anchor = project.release_date ? Date.parse(`${project.release_date}T00:00:00Z`) : project.published_at ? Date.parse(project.published_at) : null;
-  const open = studio && (project.launch_public || project.published) && (anchor == null || Date.now() < anchor + OPEN_AFTER_RELEASE_DAYS * 86400000);
+  const open = studio && (project.launch_public || project.published) && (anchor == null || Date.now() < anchor + TEAM_OPEN_AFTER_RELEASE_DAYS * 86400000);
   return { user, admin, project, open };
 }
 

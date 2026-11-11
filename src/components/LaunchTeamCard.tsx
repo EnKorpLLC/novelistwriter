@@ -47,7 +47,7 @@ export function LaunchTeamCard({
   if (!state || state.isAuthor || (!state.open && !state.member)) return null;
 
   return (
-    <div className="font-ui border border-line p-4">
+    <div id="launch-team" className="font-ui scroll-mt-24 border border-line p-4">
       <p className="font-display text-lg">{state.member ? "You're on the launch team" : `Help launch ${title}`}</p>
       {!state.member ? (
         <>

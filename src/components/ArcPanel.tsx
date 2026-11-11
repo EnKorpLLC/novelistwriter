@@ -9,6 +9,8 @@ import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
 import { ReaderBadgeList } from "@/components/TrustBadges";
 import { FeedbackExport } from "@/components/FeedbackExport";
 import { TraceLeak } from "@/components/TraceLeak";
+import { ReaderActions, ReaderStatsLine } from "@/components/ReaderRoster";
+import type { TeamState } from "@/lib/reader-roster";
 import type { ReaderBadge } from "@/lib/beta-social";
 
 type ArcInvite = {
@@ -29,6 +31,8 @@ type ArcInvite = {
   mailingAddress: MailingAddress | null;
   readerBadges?: ReaderBadge[];
   readerProfileUrl?: string | null;
+  bookPercent?: number;
+  team?: TeamState;
 };
 
 function ReaderBadgeRow({ invite }: { invite: ArcInvite }) {
@@ -579,7 +583,28 @@ export function ArcPanel({ projectId }: { projectId: string }) {
                               Says they posted on: {posted.map((p) => p.label).join(", ")}
                             </p>
                           )}
+                          <span className="mt-1 block">
+                            <ReaderStatsLine
+                              stats={{
+                                finished: Boolean(r.finishedAt),
+                                percent: r.bookPercent ?? 0,
+                                review: Boolean(r.reviewBody?.trim()) || posted.length > 0,
+                                team: r.team,
+                              }}
+                            />
+                          </span>
                           <ReaderBadgeRow invite={r} />
+                          <span className="mt-1.5 block">
+                            <ReaderActions
+                              projectId={projectId}
+                              kind="arc"
+                              email={r.email}
+                              displayName={r.displayName}
+                              team={r.team}
+                              onDone={() => void load()}
+                              onNote={setNote}
+                            />
+                          </span>
                         </div>
                         <span className="flex flex-wrap gap-3 text-xs">
                           {!r.finishedAt && state?.windowOpen &&
@@ -639,18 +664,6 @@ export function ArcPanel({ projectId }: { projectId: string }) {
                               {open ? "Hide details" : "Details"}
                             </button>
                           )}
-                          <button
-                            type="button"
-                            disabled={!!busy}
-                            className="text-danger hover:underline"
-                            onClick={() => {
-                              if (window.confirm(`Remove ${r.email} from this ARC?`)) {
-                                void act("remove", { inviteId: r.id }, "Reader removed.");
-                              }
-                            }}
-                          >
-                            Remove
-                          </button>
                         </span>
                       </div>
                       {open && (

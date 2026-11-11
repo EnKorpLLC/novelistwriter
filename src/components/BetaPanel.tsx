@@ -23,6 +23,8 @@ import { ReaderBadgeSettings } from "@/components/ReaderBadgeSettings";
 import { ReaderBadgeList } from "@/components/TrustBadges";
 import { FeedbackExport } from "@/components/FeedbackExport";
 import { TraceLeak } from "@/components/TraceLeak";
+import { ReaderActions, ReaderStatsLine } from "@/components/ReaderRoster";
+import type { TeamState } from "@/lib/reader-roster";
 import type { ReaderBadge } from "@/lib/beta-social";
 
 type ChapterProgress = {
@@ -53,6 +55,8 @@ type Invite = {
   statusReason?: string | null;
   lastReadAt?: string | null;
   commentCount?: number;
+  bookPercent?: number;
+  team?: TeamState;
   furthestSortOrder?: number;
   furthestPercent?: number;
   readerStats?: { finished: number; dnf: number; reading: number };
@@ -663,28 +667,6 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
     } finally {
       setSavingEndDate(false);
     }
-  }
-
-  async function deleteContact(contactId: string) {
-    const contact = contacts.find((c) => c.id === contactId);
-    const label = contact
-      ? contact.displayName
-        ? `${contact.displayName} (${contact.email})`
-        : contact.email
-      : "this contact";
-    if (!window.confirm(`Delete ${label} from contacts?`)) return;
-    const res = await fetch(`/api/projects/${projectId}/beta`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "deleteContact", contactId }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setNote(data.error || "Could not delete contact");
-      return;
-    }
-    setContacts((prev) => prev.filter((c) => c.id !== contactId));
-    setNote("Contact deleted.");
   }
 
   async function restoreAccess(opts: { contactId?: string; inviteId?: string }) {
@@ -2352,12 +2334,14 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                   <p className="mt-2 text-sm text-muted">No contacts yet.</p>
                 ) : (
                   <ul className="mt-3 space-y-2">
-                    {contacts.map((c) => (
+                    {contacts.map((c) => {
+                      const inv = c.inviteId ? invites.find((i) => i.id === c.inviteId) : undefined;
+                      return (
                       <li
                         key={c.id}
                         className="flex flex-wrap items-center justify-between gap-2 border border-line px-3 py-2"
                       >
-                        <span className="text-sm">
+                        <span className="min-w-0 text-sm">
                           {c.displayName ? (
                             <>
                               <span className="font-medium">{c.displayName}</span>
@@ -2371,6 +2355,31 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                               {c.inviteStatus}
                             </span>
                           )}
+                          {inv && (
+                            <span className="mt-1 block">
+                              <ReaderStatsLine
+                                stats={{
+                                  finished: Boolean(inv.finishedAt),
+                                  dnf: inv.status === "dnf",
+                                  percent: inv.finishedAt ? 100 : inv.bookPercent ?? 0,
+                                  comments: inv.commentCount ?? 0,
+                                  review: Boolean(inv.bookReview),
+                                  team: inv.team,
+                                }}
+                              />
+                            </span>
+                          )}
+                          <span className="mt-1.5 block">
+                            <ReaderActions
+                              projectId={projectId}
+                              kind="beta"
+                              email={c.email}
+                              displayName={c.displayName}
+                              team={inv?.team}
+                              onDone={() => void load()}
+                              onNote={setNote}
+                            />
+                          </span>
                         </span>
                         <span className="flex flex-wrap items-center gap-2">
                           {/* Active readers → backup or remove */}
@@ -2463,16 +2472,10 @@ export function BetaPanel({ projectId, chapters, onOpenComment }: Props) {
                               </button>
                             </>
                           )}
-                          <button
-                            type="button"
-                            className="text-xs text-danger hover:underline"
-                            onClick={() => void deleteContact(c.id)}
-                          >
-                            Delete
-                          </button>
                         </span>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </div>

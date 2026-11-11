@@ -268,6 +268,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "Readers sign up on your author site and launch pages and confirm by email, so your list stays real.",
       "Beta and ARC readers join the same list across all your books.",
       "Open Grow → Audience to see everyone and where they came from.",
+      "The Beta readers and ARC readers tabs show, for every book each person read, whether they finished, how far they got, their comments, and whether they left a review. Invite a beta reader to your ARC, invite anyone to a launch team, or delete them from that book's list.",
+      "The Launch team tab lists everyone on a launch team for any of your books, with the tasks they've done.",
       "Export a CSV anytime to use with MailerLite, Kit, Mailchimp, or any newsletter tool.",
     ],
     related: ["author-site", "launch-page", "marketing"],
@@ -409,7 +411,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     steps: [
       "Set a release date on the book's launch page. The launch plan counts down to it, with a date and a one-click action for each step.",
       "Work through the steps. A readiness score shows what's left.",
-      "Invite readers to your launch team (Launch page → Launch team). They share, review, and ask their library on launch day.",
+      "Invite readers to your launch team with Invite to launch team beside any beta or ARC reader (or in Grow → Audience). They join from your launch page, which must be public, and share, review, and ask their library on launch day.",
       "On launch day, one click emails readers who asked to hear, tells your followers, and asks every ARC reader to post their review.",
       "Your book shows in “Launching this week” on the catalog and home page.",
       "Watch the launch week dashboard for visitors, buy clicks by store, new signups, and reviews.",

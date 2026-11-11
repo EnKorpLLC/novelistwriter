@@ -6,6 +6,9 @@ export const TEAM_TASKS = [
   { id: "library", label: "Ask your library to stock it", detail: "Libraries buy what patrons ask for. Use the note below." },
 ] as const;
 
+/** Teams take new members until two weeks after release */
+export const TEAM_OPEN_AFTER_RELEASE_DAYS = 14;
+
 export type TeamTaskId = (typeof TEAM_TASKS)[number]["id"];
 
 export function isTeamTask(v: unknown): v is TeamTaskId {

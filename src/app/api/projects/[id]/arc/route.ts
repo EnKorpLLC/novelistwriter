@@ -22,6 +22,7 @@ import { emailConfigured, renderEmail, sendEmail } from "@/lib/email";
 import { emailConsentByEmail, emailConsentFor } from "@/lib/notifications";
 import { projectLockedMessage } from "@/lib/studio-access";
 import { rewardAcceptedElsewhere } from "@/lib/pass-rewards";
+import { bookPercent, chapterPercents, removedInviteIds, teamFor, teamStates } from "@/lib/reader-roster";
 
 const ARC_PROJECT_FIELDS =
   "id, title, user_id, arc_open, arc_deadline, arc_collect_address, arc_review_links";
@@ -165,7 +166,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   ]);
   if (error) return NextResponse.json({ error: migrationHint(error.message) }, { status: 500 });
   const chapterTitle = new Map((chapters || []).map((c) => [c.id, c.title]));
-  const { data: settings } = await admin.from("projects").select("*").eq("id", projectId).maybeSingle();
+  const [{ data: settings }, removedIds, teams, percents] = await Promise.all([
+    admin.from("projects").select("*").eq("id", projectId).maybeSingle(),
+    removedInviteIds(admin, "arc", [projectId]),
+    teamStates(admin, [projectId]),
+    chapterPercents(admin, "arc", [projectId]),
+  ]);
   const consentByEmail = await emailConsentByEmail(
     admin,
     (invites || []).map((i) => ({ email: i.email, userId: i.reader_user_id }))
@@ -188,11 +194,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     collectAddress: Boolean(project.arc_collect_address),
     reviewLinks: normalizeReviewLinks(project.arc_review_links),
     downloads: settings?.arc_downloads !== false,
-    invites: (invites || []).map((i) => ({
+    invites: (invites || []).filter((i) => !removedIds.has(i.id)).map((i) => ({
       id: i.id,
       email: i.email,
       displayName: i.display_name,
       status: i.status,
+      bookPercent: i.finished_at ? 100 : bookPercent(percents.get(i.id) || [], (chapters || []).length),
+      team: teamFor(teams, projectId, i.email),
       hasAccount: consentByEmail.get(i.email.toLowerCase())?.hasAccount ?? Boolean(i.reader_user_id),
       emailOptIn: consentByEmail.get(i.email.toLowerCase())?.optedIn ?? false,
       lastReadAt: i.last_read_at,

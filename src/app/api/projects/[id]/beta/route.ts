@@ -32,6 +32,7 @@ import { pauseForLostStudio, projectLockedMessage } from "@/lib/studio-access";
 import { rewardAcceptedElsewhere } from "@/lib/pass-rewards";
 import { emailConfigured, renderEmail, sendEmail } from "@/lib/email";
 import { emailConsentByEmail, emailConsentFor } from "@/lib/notifications";
+import { bookPercent, removedInviteIds, teamFor, teamStates } from "@/lib/reader-roster";
 
 async function requireProject(projectId: string) {
   const supabase = await createClient();
@@ -456,6 +457,10 @@ export async function GET(
     }
   }
 
+  const [removedIds, teams] = await Promise.all([removedInviteIds(admin, "beta", [projectId]), teamStates(admin, [projectId])]);
+  const shownInvites = (invites || []).filter((i) => !removedIds.has(i.id));
+  const chapterCount = (chapters || []).length;
+
   const badgeAdmin = createServiceClient();
   const readerIdents = (invites || []).map((i) => ({ userId: i.reader_user_id, email: i.email }));
   const [badgesByReader, profileUrlByUser] = await Promise.all([
@@ -506,7 +511,7 @@ export async function GET(
         canRestore,
       };
     }),
-    invites: (invites || []).map((i) => {
+    invites: shownInvites.map((i) => {
       const chapterProgress = progressByInvite.get(i.id) || [];
       const furthest = chapterProgress.reduce<{
         sortOrder: number;
@@ -537,6 +542,8 @@ export async function GET(
         lastReadAt: i.last_read_at,
         readerUserId: (i as { reader_user_id?: string | null }).reader_user_id ?? null,
         commentCount: commentCountByInvite.get(i.id) || 0,
+        bookPercent: bookPercent(chapterProgress.map((p) => p.percent), chapterCount),
+        team: teamFor(teams, projectId, i.email),
         furthestSortOrder: furthest?.sortOrder ?? -1,
         furthestPercent: furthest?.percent ?? 0,
         link: canShare ? shareLink : null,
