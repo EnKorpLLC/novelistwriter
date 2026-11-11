@@ -29,7 +29,9 @@ export async function GET() {
 - Weekly reader digest: readers can opt in to one email every Thursday with new books from authors they follow, launches, new releases, free advance copies, and promotions
 - [Book promotions](${appUrl("/promos")}): themed collections of books from independent authors, often on sale, put together by the authors themselves
 - [Where readers are](${appUrl("/tools/where-readers-are")}): book promotion sites, ads, reader communities, ARC services, and newsletter swaps, with costs and self-promotion rules
-- [Comparisons and switching guides](${appUrl("/compare")}): fair comparisons with Scrivener, Vellum, Atticus, BetaBooks, and NetGalley, and how to bring a book over
+- [Comparisons and switching guides](${appUrl("/compare")}): fair comparisons with Scrivener, Vellum, Atticus, Reedsy Studio, Sudowrite, Novelcrafter, Dabble, Plottr, Google Docs, BetaBooks, NetGalley, and AI writing tools, and how to bring a book over
+- [For narrators](${appUrl("/narrators")}): free narrator accounts, plain-language agreements, a 15-minute checkpoint, a held deposit, full rate paid through Stripe, human narration only
+- [Thinking about leaving Amazon?](${appUrl("/leaving-amazon")}): what changed at Kindle+ and Audible in late 2026 (with sources), KDP Select exclusivity, and options for selling wide or direct
 - [Works with](${appUrl("/works-with")}): import from Word, Google Docs, Scrivener, Vellum, and Atticus; per-store ebooks for Kindle, Apple Books, Kobo, Google Play, and Barnes & Noble; paperbacks for KDP Print and IngramSpark; serial sites; newsletter tools; Goodreads and StoryGraph
 - [Your data, your exit](${appUrl("/your-data")}): export manuscripts and reader lists anytime, on every plan
 - [Verify a book](${appUrl("/verify")}): enter a verification code (NW-XXXX-XXXX) to see a book's writing record summary; authors on every plan can post a "verified human-written" badge on any site. Free JSON API for platforms, no key: ${appUrl("/api/verify/CODE")}

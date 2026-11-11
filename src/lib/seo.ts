@@ -37,6 +37,8 @@ export const STATIC_PAGES = [
   ...SWITCH_GUIDES.map((g) => ({ path: `/switch/${g.slug}`, priority: 0.6, changeFrequency: "monthly" as const })),
   { path: "/your-data", priority: 0.4, changeFrequency: "yearly" as const },
   { path: "/works-with", priority: 0.6, changeFrequency: "monthly" as const },
+  { path: "/narrators", priority: 0.7, changeFrequency: "monthly" as const },
+  { path: "/leaving-amazon", priority: 0.8, changeFrequency: "weekly" as const },
   { path: "/refunds", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/seller-terms", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/contact", priority: 0.3, changeFrequency: "yearly" as const },

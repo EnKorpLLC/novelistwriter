@@ -125,6 +125,13 @@ export default async function PricingPage() {
               Seller terms
             </Link>
           </p>
+          <p className="font-ui mt-3 text-sm text-ink">
+            <strong>Audiobooks</strong> sell direct at the same fees, alone or as ebook + audiobook at one price. <strong>Hiring a narrator</strong> (Studio): our fee is 10% of the
+            narration fee, paid by you on top, so the narrator gets their full rate; narrators never pay.{" "}
+            <Link href="/narrators" className="text-accent underline">
+              How it works for narrators
+            </Link>
+          </p>
         </section>
 
         <section className="mt-16">

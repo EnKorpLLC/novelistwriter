@@ -39,8 +39,9 @@ async function load(token: string) {
     if (isAudio && p.status === "paid" && p.project_id) {
       const { audiobookFiles, signedFiles } = await import("@/lib/audiobook-sales");
       const files = ((await audiobookFiles(admin, p.project_id)) || []).filter((f) => !f.isSample);
-      const [listen, download] = await Promise.all([signedFiles(files, p.project_id), signedFiles(files, p.project_id, { download: true })]);
-      audio = listen.map((f, i) => ({ title: f.title, durationMs: f.durationMs, url: f.url, download: download[i].url, fileName: f.fileName }));
+      // Streaming plays straight from storage; downloads go through us to stamp the buyer's name into each file
+      const listen = await signedFiles(files, p.project_id);
+      audio = listen.map((f, i) => ({ title: f.title, durationMs: f.durationMs, url: f.url, download: `/purchase/${token}/mp3/${i + 1}`, fileName: f.fileName }));
     }
     return {
       title: p.title as string,
@@ -119,7 +120,7 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
                   </li>
                 ))}
               </ol>
-              <p className="mt-2 text-xs text-muted">No copy protection: they play in any app. The links refresh each time you open this page.</p>
+              <p className="mt-2 text-xs text-muted">No copy protection: they play in any app. Each file carries the book&apos;s details and a note that it&apos;s your copy.</p>
             </details>
           </section>
         )}

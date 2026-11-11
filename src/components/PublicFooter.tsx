@@ -20,6 +20,8 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/guides", label: "Guides" },
       { href: "/compare", label: "Compare" },
       { href: "/works-with", label: "Works with" },
+      { href: "/narrators", label: "For narrators" },
+      { href: "/leaving-amazon", label: "Leaving Amazon?" },
       { href: "/affiliates", label: "Affiliates" },
     ],
   },
