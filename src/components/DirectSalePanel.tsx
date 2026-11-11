@@ -15,6 +15,7 @@ import {
   type SellerTier,
 } from "@/lib/direct-sale-rules";
 import { ExtrasPanel } from "@/components/ExtrasPanel";
+import { PaperbackPanel } from "@/components/PaperbackPanel";
 
 type PreorderStatus = { open: boolean; problem: string | null; releaseDate: string | null; waiting: number };
 
@@ -479,6 +480,7 @@ export function DirectSalePanel({ projectId, published, launchPath }: { projectI
       {tier && !seller.migrationNeeded && <DiscountCodes projectId={projectId} launchPath={launchPath} />}
       {tier && !seller.migrationNeeded && <Bundles projectId={projectId} />}
       {tier && !seller.migrationNeeded && <ExtrasPanel projectId={projectId} />}
+      {tier && !seller.migrationNeeded && <PaperbackPanel projectId={projectId} />}
       {note && <p className={`mt-3 text-xs ${note === "Saved." ? "text-accent" : "text-danger"}`}>{note}</p>}
       {seller.summary && seller.summary.sales + seller.summary.refunds + seller.summary.freeCopies > 0 && (
         <div className="mt-5 border-t border-line pt-3">

@@ -19,6 +19,8 @@ import { BuyBundleButton } from "@/components/BuyBundleButton";
 import { audiobookBadges, audiobookReadiness, signedFiles } from "@/lib/audiobook-sales";
 import { currentPrice, longDay, normalizeDirectSale } from "@/lib/direct-sale-rules";
 import { listExtras } from "@/lib/digital-extras";
+import { paperbackReadiness } from "@/lib/print-sales";
+import { BuyPaperbackButton } from "@/components/BuyPaperbackButton";
 import { MagnetForm } from "@/components/MagnetForm";
 import { GuestListSignup } from "@/components/GuestListSignup";
 import { LaunchTeamCard } from "@/components/LaunchTeamCard";
@@ -112,6 +114,9 @@ export default async function LaunchPage({
   const direct = saleReady?.ok
     ? { price: currentPrice(saleReady.sale), canBuy: await buyerCountryAllowed(), preorderRelease: saleReady.preorder ? String(recordFlag?.release_date || "").slice(0, 10) : null }
     : null;
+  // The paperback, printed and shipped by Lulu for each order
+  const paperbackReady = recordFlag && book.stage === "published" ? await paperbackReadiness(admin, recordFlag).catch(() => null) : null;
+  const paperback = paperbackReady?.ok ? { priceCents: paperbackReady.edition.price_cents, freeEbook: paperbackReady.edition.free_ebook, canBuy: direct?.canBuy ?? (await buyerCountryAllowed()) } : null;
   // Extras: art, maps, and bonus writing, sold on their own or free with the ebook bought here
   const extras = recordFlag ? ((await listExtras(admin, book.id).catch(() => null)) || []).filter((e) => e.active && e.files.length) : [];
   const sellerReady = extras.length ? await sellerStatus(admin, author.userId).catch(() => null) : null;
@@ -279,6 +284,9 @@ export default async function LaunchPage({
                       ? { note: "Direct from the author · EPUB for any e-reader · extras included" }
                       : {})}
                 />
+              )}
+              {paperback && !isOwner && (
+                <BuyPaperbackButton projectId={book.id} priceCents={paperback.priceCents} freeEbook={paperback.freeEbook} canBuy={paperback.canBuy} quiet={Boolean(direct)} />
               )}
               {audio && !isOwner && (
                 <BuyDirectButton

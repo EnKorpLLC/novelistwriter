@@ -486,9 +486,11 @@ export async function adjustBookPurchaseForCharge(admin: SupabaseClient, charge:
   if (reason === "refunded" && charge.amount_refunded < charge.amount) return true;
   const now = new Date().toISOString();
   for (const p of open) {
-    // A pre-order refunded before delivery was never released; its Stripe fee joins the next payout like any refund's
-    const release = p.preorder_release && !p.delivered_at ? { available_at: now } : {};
-    await admin.from("book_purchases").update({ status: reason, author_cents: -p.stripe_fee_cents, platform_fee_cents: 0, refunded_at: now, ...release }).eq("id", p.id);
+    // A pre-order refunded before delivery, or a paperback before it shipped, was never released; its costs join the next payout like any refund's
+    const release = (p.preorder_release && !p.delivered_at) || (p.format === "paperback" && !p.shipped_at) ? { available_at: now } : {};
+    // A paperback that was printed has already been paid for at Lulu, so printing and shipping come off the author's share too
+    const printed = p.format === "paperback" && p.print_job_id && p.print_status !== "CANCELED" && !p.is_proof ? (p.print_cost_cents || 0) + (p.shipping_cents || 0) : 0;
+    await admin.from("book_purchases").update({ status: reason, author_cents: p.is_proof ? 0 : -(p.stripe_fee_cents + printed), platform_fee_cents: 0, refunded_at: now, ...release }).eq("id", p.id);
   }
   // A narrator's royalty on a refunded audiobook isn't owed (it hasn't been sent: royalties wait out the refund window)
   await admin
@@ -579,11 +581,14 @@ export type SellerSummary = {
 export async function sellerSummary(admin: SupabaseClient, userId: string): Promise<SellerSummary> {
   const now = Date.now();
   const [{ data: rows }, { data: payouts }] = await Promise.all([
-    admin.from("book_purchases").select("project_id, title, price_cents, stripe_fee_cents, platform_fee_cents, author_cents, status, available_at, payout_id").eq("author_user_id", userId).limit(20000),
+    // select("*") so this works before and after the paperback columns (is_proof) exist
+    admin.from("book_purchases").select("*").eq("author_user_id", userId).limit(20000),
     admin.from("seller_payouts").select("amount_cents, status, created_at").eq("author_user_id", userId).order("created_at", { ascending: false }).limit(24),
   ]);
-  const free = (rows || []).filter((r) => r.price_cents === 0);
-  const all = (rows || []).filter((r) => r.price_cents > 0);
+  // The author's own proof copies aren't sales
+  const own = (rows || []).filter((r) => !r.is_proof);
+  const free = own.filter((r) => r.price_cents === 0);
+  const all = own.filter((r) => r.price_cents > 0);
   const unpaid = all.filter((r) => !r.payout_id);
   const books = new Map<string, { projectId: string | null; title: string; sales: number; earnedCents: number }>();
   for (const r of all) {

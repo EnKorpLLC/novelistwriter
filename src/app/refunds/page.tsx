@@ -19,6 +19,10 @@ const ITEMS = [
     d: "You pay when you pre-order, and the ebook arrives in your library the day the book comes out. Cancel anytime before then from your pre-order page for a full refund. If the author moves the date, we tell you and you can keep it or cancel. If it's ever more than 30 days late, we refund you automatically. The 14 days for a refund start when your ebook arrives.",
   },
   { t: "Extras", d: "Art, maps, and bonus stories you buy or get with an ebook are yours to download and keep, the same as your books." },
+  {
+    t: "Paperbacks",
+    d: "Paperbacks are printed for you when you order, so you can cancel within an hour of ordering (before printing starts) for a full refund, but they can't be returned after that. If yours arrives misprinted or damaged, or never arrives, reply to your receipt email with a photo within 30 days and we'll replace it.",
+  },
   { t: "No ads, ever", d: "We don't show ads to readers, and we don't sell your data. The author sees that a copy sold, not who bought it." },
 ];
 

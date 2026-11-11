@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { getSetting, moneySummary, setSetting, snapshotMrr, syncFromStripe, usageNow } from "@/lib/money";
 import { deleteObject, objectSize, signedUploadUrl, storageStatus } from "@/lib/r2";
+import { connectWebhook, luluStatus } from "@/lib/lulu";
+import { appUrl } from "@/lib/stripe";
 
 export const maxDuration = 300;
 
@@ -17,8 +19,20 @@ export async function GET() {
   if (!mrr.at || Date.now() - Date.parse(mrr.at) > DAY_MS) {
     await snapshotMrr(auth.admin).catch(() => null);
   }
-  const [summary, usage, storage] = await Promise.all([moneySummary(auth.admin), usageNow(auth.admin), storageStatus()]);
-  return NextResponse.json({ ...summary, usage, storage });
+  const [summary, usage, storage, lulu, printOrders] = await Promise.all([
+    moneySummary(auth.admin),
+    usageNow(auth.admin),
+    storageStatus(),
+    luluStatus(appUrl("/api/lulu/webhook")),
+    auth.admin.from("book_purchases").select("print_status").eq("format", "paperback").eq("status", "paid").is("shipped_at", null).limit(500),
+  ]);
+  const inFlight = printOrders.error ? null : printOrders.data || [];
+  return NextResponse.json({
+    ...summary,
+    usage,
+    storage,
+    lulu: { ...lulu, inFlight: inFlight?.length ?? null, problems: inFlight?.filter((o) => ["failed", "REJECTED", "ERROR"].includes(o.print_status || "")).length ?? null },
+  });
 }
 
 type Body =
@@ -30,7 +44,8 @@ type Body =
   | { action: "setEgress"; gb: number }
   | { action: "vercelUpgraded" }
   | { action: "storageBrowserTest" }
-  | { action: "storageBrowserTestDone"; key: string };
+  | { action: "storageBrowserTestDone"; key: string }
+  | { action: "luluWebhook" };
 
 export async function POST(req: Request) {
   const auth = await requirePlatformAdmin();
@@ -97,6 +112,10 @@ export async function POST(req: Request) {
       const size = await objectSize(key);
       await deleteObject(key).catch(() => null);
       return NextResponse.json({ ok: size != null });
+    }
+    if (body.action === "luluWebhook") {
+      await connectWebhook(appUrl("/api/lulu/webhook"));
+      return NextResponse.json({ ok: true });
     }
     if (body.action === "vercelUpgraded") {
       const flags = await getSetting<Record<string, string>>(admin, "first_sale", {});

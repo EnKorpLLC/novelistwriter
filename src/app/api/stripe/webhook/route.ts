@@ -11,6 +11,7 @@ import { revokeLifetimeForCharge } from "@/lib/offers";
 import { adjustBookPurchaseForCharge, recordBookPurchase } from "@/lib/direct-sales";
 import { disputeNarrationCharge, recordNarrationPayment } from "@/lib/narration-money";
 import { disputeMarketCharge, recordMarketPayment } from "@/lib/market-jobs";
+import { recordPaperbackPurchase } from "@/lib/print-sales";
 import { isPlatformAdminId } from "@/lib/platform-admin";
 import Stripe from "stripe";
 
@@ -45,8 +46,8 @@ export async function POST(req: Request) {
       const result = await recordNarrationPayment(admin, completed.id);
       if (!result.ok) console.error("stripe webhook: narration payment not recorded", event.id, result.skipped);
     } else if (completed?.metadata?.kind === "book_purchase") {
-      // Guest buyers have no account yet, so book sales skip the account-based handler
-      const result = await recordBookPurchase(admin, completed.id);
+      // Guest buyers have no account yet, so book sales skip the account-based handler. Paperbacks also go to the printer.
+      const result = completed.metadata.format === "paperback" ? await recordPaperbackPurchase(admin, completed.id) : await recordBookPurchase(admin, completed.id);
       if (!result.ok) console.error("stripe webhook: book purchase not recorded", event.id, result.skipped);
     } else if (event.type === "checkout.session.completed") {
       const result = await handleCheckoutCompleted(

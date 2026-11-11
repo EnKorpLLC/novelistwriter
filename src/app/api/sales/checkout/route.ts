@@ -7,13 +7,106 @@ import { codeUsable, currentPrice, discountedPrice, longDay } from "@/lib/direct
 import { bookPath } from "@/lib/handles";
 import { audiobookReadiness } from "@/lib/audiobook-sales";
 import { EXTRA_TAX_CODES, extraReadiness } from "@/lib/digital-extras";
+import { paperbackReadiness, shippingQuotes } from "@/lib/print-sales";
+import { isShippingLevel } from "@/lib/print-rules";
 
 /** Stripe's tax category for downloaded ebooks the buyer keeps; overridable if Stripe changes it. */
 const EBOOK_TAX_CODE = process.env.STRIPE_EBOOK_TAX_CODE || "txcd_10302000";
 /** Stripe's "Audiobook" category: a recording of a book read aloud, sold to keep. */
 const AUDIOBOOK_TAX_CODE = process.env.STRIPE_AUDIOBOOK_TAX_CODE || "txcd_10301000";
 
+/** Stripe's categories for printed books and for shipping them (shipping is taxed where states require it). */
+const PRINTED_BOOK_TAX_CODE = process.env.STRIPE_PRINTED_BOOK_TAX_CODE || "txcd_35010000";
+const SHIPPING_TAX_CODE = "txcd_92010001";
+
+type Body = { projectId?: string; code?: string; bundleId?: string; fromProjectId?: string; format?: string; extraId?: string; state?: string; zip?: string; shippingLevel?: string; proof?: boolean };
 type Line = { name: string; description: string; cents: number; taxCode: string };
+
+/**
+ * A paperback printed and shipped by Lulu: the price set by the author (or, for the author's proof, Lulu's cost), plus
+ * shipping at cost for the level the buyer picked. Stripe collects the US address and phone the printer needs.
+ */
+async function paperbackCheckout(admin: ReturnType<typeof createServiceClient>, body: Body, user: { id: string; email?: string } | null) {
+  const { data: project } = await admin.from("projects").select("id, user_id, title, slug, published").eq("id", String(body.projectId || "")).maybeSingle();
+  if (!project) return NextResponse.json({ error: "Book not found" }, { status: 404 });
+  const proof = body.proof === true;
+  if (proof && user?.id !== project.user_id) return NextResponse.json({ error: "Only the author can order a proof." }, { status: 403 });
+  if (!proof && user?.id === project.user_id) return NextResponse.json({ error: "You can't buy your own book. Order a proof copy from the Sell tab." }, { status: 400 });
+  const ready = await paperbackReadiness(admin, project, { proof });
+  if (!ready.ok) return NextResponse.json({ error: ready.reason }, { status: 400 });
+  if (!isShippingLevel(body.shippingLevel)) return NextResponse.json({ error: "Pick a shipping option." }, { status: 400 });
+  const state = String(body.state || "").toUpperCase();
+  const zip = String(body.zip || "").trim();
+  // Shipping is priced again here, so the amount always comes from Lulu, never from the browser
+  const quote = (await shippingQuotes(ready.edition, ready.pod, state, zip)).find((l) => l.id === body.shippingLevel);
+  if (!quote) return NextResponse.json({ error: "Shipping prices aren't available right now. Try again in a moment." }, { status: 503 });
+  const e = ready.edition;
+  const price = proof ? quote.printCents : e.price_cents;
+  const { data: author } = await admin.from("profiles").select("display_name, handle").eq("id", project.user_id).maybeSingle();
+  const title = String(project.title || "Paperback");
+  const meta = {
+    kind: "book_purchase",
+    format: "paperback",
+    project_id: project.id,
+    author_user_id: project.user_id,
+    buyer_user_id: user?.id || "",
+    tier: ready.tier,
+    title: title.slice(0, 200),
+    print_cents: String(quote.printCents),
+    ship_cents: String(quote.cents),
+    ship_level: quote.id,
+    free_ebook: !proof && e.free_ebook ? "1" : "0",
+    proof: proof ? "1" : "0",
+  };
+  const back = author?.handle && project.slug && !proof ? appUrl(bookPath(author.handle, project.slug)) : appUrl(`/project/${project.id}?tab=sell`);
+  const session = await getStripe()
+    .checkout.sessions.create({
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: price,
+            tax_behavior: "exclusive",
+            product_data: {
+              name: proof ? `${title} (proof copy)` : `${title} (paperback)`,
+              description: proof
+                ? "Your proof copy, at Lulu's printing cost."
+                : `Paperback by ${author?.display_name || "the author"}, printed on demand and shipped to you${e.free_ebook ? ", with the ebook free" : ""}.`,
+              tax_code: PRINTED_BOOK_TAX_CODE,
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      shipping_address_collection: { allowed_countries: ["US"] },
+      phone_number_collection: { enabled: true },
+      shipping_options: [
+        {
+          shipping_rate_data: {
+            type: "fixed_amount",
+            fixed_amount: { amount: quote.cents, currency: "usd" },
+            display_name: `${quote.label} (${quote.note})`,
+            tax_behavior: "exclusive",
+            tax_code: SHIPPING_TAX_CODE,
+          },
+        },
+      ],
+      automatic_tax: { enabled: true },
+      customer_creation: "if_required",
+      ...(user?.email ? { customer_email: user.email } : {}),
+      success_url: appUrl(`/purchase/thanks?session_id={CHECKOUT_SESSION_ID}`),
+      cancel_url: back,
+      metadata: meta,
+      payment_intent_data: { metadata: meta },
+    })
+    .catch((err: unknown) => {
+      console.error("paperback checkout failed", project.id, err);
+      return null;
+    });
+  if (!session?.url) return NextResponse.json({ error: "Checkout isn't available right now. Try again in a little while." }, { status: 503 });
+  return NextResponse.json({ url: session.url });
+}
 type Item = { name: string; description: string; cents: number; meta: Record<string, string>; authorId: string; backProjectId: string; backSlug: string | null; lines?: Line[] };
 
 /**
@@ -22,8 +115,8 @@ type Item = { name: string; description: string; cents: number; meta: Record<str
  * Guests can buy; Stripe collects their email.
  */
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { projectId?: string; code?: string; bundleId?: string; fromProjectId?: string; format?: string; extraId?: string };
-  const format = body.format === "audiobook" || body.format === "both" || body.format === "extra" ? body.format : "ebook";
+  const body = (await req.json().catch(() => ({}))) as Body;
+  const format = body.format === "audiobook" || body.format === "both" || body.format === "extra" || body.format === "paperback" ? body.format : "ebook";
   if (!(await buyerCountryAllowed())) {
     return NextResponse.json({ error: "Buying direct is only open to readers in the US for now. The store links on this page work everywhere." }, { status: 403 });
   }
@@ -32,6 +125,8 @@ export async function POST(req: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (format === "paperback") return paperbackCheckout(admin, body, user);
 
   let item: Item;
   if (body.bundleId) {

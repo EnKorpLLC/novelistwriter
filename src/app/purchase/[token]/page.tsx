@@ -7,6 +7,18 @@ import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { AudiobookPlayer } from "@/components/AudiobookPlayer";
 import { PreorderActions } from "@/components/PreorderActions";
 import { PREORDER_GRACE_DAYS, addDays, longDay } from "@/lib/direct-sale-rules";
+import { CANCEL_MINUTES, PRINT_DAYS } from "@/lib/print-rules";
+import { PaperbackCancel } from "@/components/PaperbackCancel";
+
+/** Where a printed order is, in plain words. */
+function printLine(status: string | null, shippedAt: string | null) {
+  if (status === "SHIPPED" || shippedAt) return `Shipped${shippedAt ? ` on ${new Date(shippedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })}` : ""}.`;
+  if (status === "DELIVERED") return "Delivered.";
+  if (status === "IN_PRODUCTION" || status === "PRODUCTION_READY") return `Being printed now. It ships in about ${PRINT_DAYS}.`;
+  if (status === "CANCELED") return "This order was cancelled.";
+  if (status === "REJECTED" || status === "ERROR" || status === "failed") return "There's a problem with the printing. We're on it, and if it can't be printed you'll be refunded in full.";
+  return `Ordered. Printing starts within the hour and takes about ${PRINT_DAYS}, then it ships; you'll get tracking by email.`;
+}
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Your book | Novelist Writer", robots: { index: false, follow: false } };
@@ -58,9 +70,15 @@ async function load(token: string) {
     }));
     const waiting = Boolean(p.status === "paid" && p.preorder_release && !p.delivered_at);
     const releaseNow = (project?.release_date as string | null) || null;
+    const isPaperback = p.format === "paperback";
+    const cancellable =
+      isPaperback && p.status === "paid" && Date.now() - Date.parse(p.created_at) < CANCEL_MINUTES * 60_000 && ["CREATED", "UNPAID", "PRODUCTION_DELAYED", "failed", null].includes(p.print_status ?? null);
     return {
       readAlong,
       extras,
+      paperback: isPaperback
+        ? { status: (p.print_status as string | null) || null, trackingUrl: (p.tracking_url as string | null) || null, shippedAt: (p.shipped_at as string | null) || null, cancellable, proof: Boolean(p.is_proof) }
+        : null,
       isExtra: p.format === "extra",
       isBoxSet: Boolean(p.box_set_id),
       preorder: waiting
@@ -106,7 +124,7 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
           )}
           <div className="min-w-0 flex-1">
             <p className="font-ui text-xs uppercase tracking-wide text-muted">
-              {p.preorder ? "Your pre-order" : p.isAudio ? "Your audiobook" : p.isExtra ? "Your extra" : p.isBoxSet ? "Your box set" : "Your ebook"}
+              {p.preorder ? "Your pre-order" : p.paperback ? (p.paperback.proof ? "Your proof copy" : "Your paperback") : p.isAudio ? "Your audiobook" : p.isExtra ? "Your extra" : p.isBoxSet ? "Your box set" : "Your ebook"}
             </p>
             <h1 className="font-display mt-1 text-3xl">{p.title}</h1>
             {refunded ? (
@@ -127,6 +145,19 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
                   </p>
                 )}
                 <PreorderActions token={token} moved={p.preorder.moved} newDateLabel={p.preorder.newDate ? longDay(p.preorder.newDate) : null} />
+              </>
+            ) : p.paperback ? (
+              <>
+                <p className="font-ui mt-3 text-sm">{printLine(p.paperback.status, p.paperback.shippedAt)}</p>
+                {p.paperback.trackingUrl && (
+                  <a href={p.paperback.trackingUrl} target="_blank" rel="noopener noreferrer" className="font-ui mt-3 inline-block bg-accent px-5 py-2.5 text-paper">
+                    Track your package
+                  </a>
+                )}
+                {p.paperback.cancellable && <PaperbackCancel token={token} />}
+                <p className="font-ui mt-3 text-xs text-muted">
+                  Printed on demand by Lulu, so it can&apos;t be returned, but a misprinted, damaged, or lost book is replaced: reply to your receipt email with a photo within 30 days.
+                </p>
               </>
             ) : p.isExtra ? (
               <p className="font-ui mt-3 text-sm text-muted">Download your files below. They&apos;re yours to keep, and this page keeps working whenever you need them again.</p>
@@ -215,7 +246,7 @@ export default async function PurchasePage({ params }: { params: Promise<{ token
             </ul>
           </section>
         )}
-        {!refunded && !p.isAudio && !p.isExtra && !p.preorder && (
+        {!refunded && !p.isAudio && !p.isExtra && !p.preorder && !p.paperback && (
           <section className="font-ui mt-10 space-y-3 text-sm">
             <h2 className="font-display text-xl">Reading it</h2>
             <p>

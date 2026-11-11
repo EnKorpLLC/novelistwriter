@@ -44,6 +44,10 @@ export default function SellerTermsPage() {
       d: `If you take pre-orders, readers pay at order and get the ebook when you mark the book out now. They can cancel anytime before release. If you move the date later, they're told and can keep or cancel, and anyone still waiting ${PREORDER_GRACE_DAYS} days after their promised date is refunded automatically. A cancelled pre-order is refunded like any other (Stripe's fee comes out of your share). Pre-order money is paid out after delivery, once the ${REFUND_WINDOW_DAYS}-day refund window passes.`,
     },
     {
+      t: "Paperbacks",
+      d: `Lulu prints and ships each paperback order for us. Your share is the price less Lulu's printing cost, our fee, and Stripe's fee (shipping is charged to the reader at cost), paid ${REFUND_WINDOW_DAYS} days after the book ships. Selling opens after you approve a proof copy, which you pay for at cost. If a printed order is refunded, its printing and shipping come out of your share as well as Stripe's fee; misprints that are the printer's fault are reprinted at no cost to you.`,
+    },
+    {
       t: "Your book and extras",
       d: "Only sell books and extras you have the right to sell. Art someone else made for your book often only covers using it in and around the book; selling it as an extra needs their permission. Anything that breaks our conduct rules or someone else's rights can be taken down, and its sales refunded. Readers keep extras they've bought, or got with the ebook, even if you turn them off later.",
     },

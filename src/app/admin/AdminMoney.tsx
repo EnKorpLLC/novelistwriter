@@ -41,6 +41,10 @@ type Money = {
   sales?: { sales: number; grossCents: number; taxCents: number; feeCents: number; owedCents: number } | null;
   stripeTax?: "active" | "pending" | "unknown";
   storage?: { state: "not_set_up" } | { state: "connected"; bytes: number; files: number; partial: boolean } | { state: "error"; error: string };
+  lulu?: ({ state: "not_set_up" } | { state: "connected"; sandbox: boolean; webhook: "active" | "inactive" | "missing" } | { state: "error"; error: string }) & {
+    inFlight: number | null;
+    problems: number | null;
+  };
 };
 
 const R2_FREE_BYTES = 10 * 1024 ** 3;
@@ -158,6 +162,40 @@ export function AdminMoney({ onNote }: { onNote: (msg: string | null) => void })
           >
             I&apos;ve upgraded Vercel
           </button>
+        </div>
+      )}
+
+      {data.lulu && (
+        <div>
+          <h2 className="font-display text-xl">Paperback printing (Lulu)</h2>
+          {data.lulu.state === "not_set_up" ? (
+            <p className="mt-1 text-sm text-muted">
+              Not connected. Make a Lulu developer account (and a sandbox one for testing), put a card on file, then add LULU_CLIENT_KEY and LULU_CLIENT_SECRET in Vercel
+              (and LULU_SANDBOX=true while testing). Authors can&apos;t sell paperbacks until then.
+            </p>
+          ) : data.lulu.state === "error" ? (
+            <p className="mt-1 text-sm text-danger">Lulu: {data.lulu.error}</p>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-accent">✓ Lulu: connected{data.lulu.sandbox ? " (sandbox: test orders, never printed)" : ""}</p>
+              {data.lulu.webhook === "active" ? (
+                <p className="mt-1 text-xs text-muted">Status updates (printing, shipping, tracking) come in automatically.</p>
+              ) : (
+                <div className="mt-2 text-xs">
+                  <p className="text-danger">{data.lulu.webhook === "inactive" ? "Lulu switched off status updates after failed deliveries." : "Status updates from Lulu aren't connected yet."}</p>
+                  <button type="button" disabled={busy === "luluWebhook"} className="mt-1 border border-line px-3 py-1.5 disabled:opacity-50" onClick={() => void act("luluWebhook", {}, "Connected.")}>
+                    Connect status updates
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          {data.lulu.inFlight != null && data.lulu.inFlight > 0 && (
+            <p className="mt-1 text-xs text-muted">
+              {data.lulu.inFlight} paperback {data.lulu.inFlight === 1 ? "order" : "orders"} not shipped yet
+              {data.lulu.problems ? <span className="text-danger"> · {data.lulu.problems} with a problem (retried daily, refunded after 3 days)</span> : ""}.
+            </p>
+          )}
         </div>
       )}
 
