@@ -96,7 +96,8 @@ function WritingRecordSection({
           onChange={(e) => void toggle(e.target.checked)}
         />
         <span>
-          Show the writing record on the launch page
+          Show my writing record to readers
+          <span className="block text-xs text-muted">On the launch page, beta and ARC listings, and reader pages. Numbers only, never your text.</span>
           {!sitePublic && <span className="block text-xs text-muted">Visitors see it once your launch page is public on Pro.</span>}
           {launchPath && isPublic && sitePublic && (
             <a href={`${launchPath}/record`} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs text-accent underline">

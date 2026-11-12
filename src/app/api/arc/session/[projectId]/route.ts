@@ -15,7 +15,7 @@ import { recordBookDay } from "@/lib/reader-insights";
 import { createNotification } from "@/lib/beta-social";
 import { thanksReaders } from "@/lib/author-thanks";
 import { traceCode } from "@/lib/copy-guard";
-import { normalizeWarningIds, warningLabels } from "@/lib/reading-prefs";
+import { bookFactsFor } from "@/lib/book-facts";
 import {
   isArcDeadlinePassed,
   isArcWindowOpen,
@@ -110,7 +110,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
     title: project.title,
     genre: genreLabel(project.genre),
     blurb: String(project.blurb || "").trim(),
-    contentWarnings: warningLabels(normalizeWarningIds(project.content_warnings)),
+    facts: bookFactsFor(project),
     coverUrl: coverPublicUrl(
       projectCoverPath(project),
       project.updated_at ? Date.parse(project.updated_at) : undefined

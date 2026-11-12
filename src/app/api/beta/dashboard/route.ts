@@ -18,6 +18,7 @@ import { isBetaClosedToNew } from "@/lib/beta-access";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { hiddenAuthorsFor } from "@/lib/reader-safety";
 import { normalizeTropes } from "@/lib/arc";
+import { bookFactsFor } from "@/lib/book-facts";
 import { normalizeFilters, readerFilterHit } from "@/lib/reader-recs";
 import { normalizePrefs, normalizeWarningIds, tropeScore } from "@/lib/reading-prefs";
 
@@ -192,6 +193,7 @@ export async function GET() {
           onShelf: shelfIds.has(p.id),
           endsAt: p.beta_expires_at || null,
           brief: normalizeBetaApplicationForm(p.beta_application_form).brief || null,
+          facts: bookFactsFor(p),
         })),
     }));
 
@@ -256,6 +258,7 @@ export async function GET() {
         p.updated_at ? Date.parse(p.updated_at) : undefined
       ),
       deadline: p.arc_deadline as string | null,
+      facts: bookFactsFor(p),
       myStatus:
         p.user_id === user.id
           ? ("author" as const)

@@ -89,10 +89,11 @@ export function ReaderBadgeToggles({
           onChange={(e) => void save({ readerShowRecord: e.target.checked })}
         />
         <span>
-          <span className="text-ink">Show my writing record to Beta and ARC readers</span>
+          <span className="text-ink">Show my writing record to readers</span>
           <span className="block text-muted">
-            The share typed in the editor, writing sessions, days written, and the &ldquo;Written in Novelist
-            Writer&rdquo; badge once earned. Never any of your text.
+            The share typed in the editor, writing sessions, days written, and your record badge (&ldquo;Written in
+            Novelist Writer&rdquo; or &ldquo;Written before records&rdquo;). Shown on your launch page, beta and ARC listings,
+            and reader pages. Never any of your text. This is the same switch as on the Launch page tab.
           </span>
         </span>
       </label>
@@ -100,7 +101,7 @@ export function ReaderBadgeToggles({
       {showPreview && (
         <div className="border border-line bg-paper-deep/40 px-3 py-2">
           <p className="text-[10px] uppercase tracking-wide text-muted">
-            Readers see this on the Available tab and the book page
+            Readers see this on the Available tab, the book&apos;s reader pages, and the launch page
           </p>
           {trust || record ? (
             <div className="mt-2 space-y-2">

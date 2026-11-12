@@ -417,7 +417,7 @@ function BadgeOverview() {
                       <div className="flex flex-wrap items-center gap-2">
                         <RecordBadge badge={b.recordBadge} />
                         <span className="text-xs text-muted">
-                          {b.recordPublic ? "Shown on the launch page" : "Hidden until you publish the record (Launch tab)"}
+                          {b.readerShowRecord ? "Shown to readers" : "Hidden: turn on “Show my writing record to readers” below"}
                         </span>
                       </div>
                     ) : (

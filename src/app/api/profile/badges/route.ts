@@ -63,8 +63,8 @@ export async function GET(req: Request) {
   const recordPublic = new Map((recordFlags || []).map((r) => [r.id, Boolean(r.record_public)]));
   // Separate query so the overview still loads before migration_reader_badges.sql is applied
   const { data: readerFlags } = ids.length
-    ? await admin.from("projects").select("id, reader_show_badges, reader_show_record").in("id", ids)
-    : { data: [] as { id: string; reader_show_badges: boolean; reader_show_record: boolean }[] };
+    ? await admin.from("projects").select("id, reader_show_badges").in("id", ids)
+    : { data: [] as { id: string; reader_show_badges: boolean }[] };
   const readerFlagById = new Map((readerFlags || []).map((r) => [r.id, r]));
 
   return NextResponse.json({
@@ -98,7 +98,8 @@ export async function GET(req: Request) {
           activeDays: records[index].activeDays,
         },
         readerShowBadges: readerFlagById.get(p.id)?.reader_show_badges !== false,
-        readerShowRecord: readerFlagById.get(p.id)?.reader_show_record === true,
+        // The writing record has one switch for every reader-facing page
+        readerShowRecord: recordPublic.get(p.id) || false,
         shownOn,
       };
     }),
@@ -125,7 +126,7 @@ export async function PATCH(req: Request) {
   const update: Record<string, boolean> = {};
   if (typeof body.disclose === "boolean") update.ai_disclosure_public = body.disclose;
   if (typeof body.readerShowBadges === "boolean") update.reader_show_badges = body.readerShowBadges;
-  if (typeof body.readerShowRecord === "boolean") update.reader_show_record = body.readerShowRecord;
+  if (typeof body.readerShowRecord === "boolean") update.record_public = body.readerShowRecord;
   if (!body.projectId || !Object.keys(update).length) {
     return NextResponse.json({ error: "projectId and a setting required" }, { status: 400 });
   }

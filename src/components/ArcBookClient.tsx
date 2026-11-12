@@ -9,6 +9,8 @@ import { RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
 import { ReportConcern } from "@/components/ReportConcern";
 import { ReviewForm } from "@/components/ReviewForm";
 import { GuardedText, type ReaderMark } from "@/components/GuardedText";
+import { BookFacts, BookFactsToggle } from "@/components/BookFacts";
+import type { BookFacts as BookFactsData } from "@/lib/book-facts";
 import type { RecordSummary, TrustBadges as TrustBadgeData } from "@/lib/trust-badges";
 
 type ReviewLink = LabeledLink & { key: string };
@@ -18,7 +20,7 @@ type ArcData = {
   title: string;
   genre: string;
   blurb: string;
-  contentWarnings?: string[];
+  facts?: BookFactsData;
   coverUrl: string | null;
   authorUserId: string;
   authorName: string;
@@ -430,6 +432,7 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
               {data.deadlinePassed ? `ARC window ended ${due}` : `Read by ${due}`}
             </p>
           )}
+          {data.access !== "active" && <BookFacts facts={data.facts} className="mt-3" />}
           <TrustBadges {...(data.trust || {})} className="mt-2" />
           {data.thanksReaders && (
             <p className="font-ui mt-2 inline-block border border-line px-2 py-0.5 text-xs text-muted" title="This author regularly thanks their readers">
@@ -490,12 +493,6 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
         <form onSubmit={(e) => void requestCopy(e)} className="font-ui mt-8 space-y-3 border border-line p-5">
           <h2 className="font-display text-xl">Request an advance copy</h2>
           {data.blurb && <p className="whitespace-pre-wrap text-sm text-ink">{data.blurb}</p>}
-          {data.contentWarnings && data.contentWarnings.length > 0 && (
-            <details className="font-ui text-xs">
-              <summary className="cursor-pointer text-muted">Content warnings</summary>
-              <p className="mt-1 text-ink">{data.contentWarnings.join(" · ")}</p>
-            </details>
-          )}
           <p className="text-sm text-muted">
             The author reviews requests. If approved, you can read until {due || "the deadline"}.
           </p>
@@ -579,6 +576,9 @@ export function ArcBookClient({ projectId }: { projectId: string }) {
               </div>
             </div>
           </details>
+          <div className="mt-4">
+            <BookFactsToggle facts={data.facts} />
+          </div>
           {chapters.length > 0 && (
             <label className="font-ui mt-8 block text-[10px] uppercase tracking-wide text-muted">
               Chapter

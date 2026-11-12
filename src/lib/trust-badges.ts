@@ -104,8 +104,8 @@ type ReaderFlags = {
 };
 
 /**
- * What readers see on Beta and ARC listings and book pages, following each book's
- * reader_show_badges / reader_show_record choices.
+ * What readers see on Beta and ARC listings and book pages, following each book's reader_show_badges choice and
+ * its one writing record switch (record_public).
  */
 export async function readerTrustForBooks(
   admin: SupabaseClient,
@@ -122,13 +122,14 @@ export async function readerTrustForBooks(
     .in("id", ids);
   if (!full.error) flags = (full.data || []) as ReaderFlags[];
   else {
-    // Before migration_reader_badges.sql: badges on, record off
-    const legacy = await admin.from("projects").select("id, ai_disclosure_public, ai_deleted_job_counts").in("id", ids);
+    // Before migration_reader_badges.sql: badges on
+    const legacy = await admin.from("projects").select("id, slug, record_public, ai_disclosure_public, ai_deleted_job_counts").in("id", ids);
     flags = (legacy.data || []) as ReaderFlags[];
   }
   const flagById = new Map(flags.map((f) => [f.id, f]));
   const showBadges = (id: string) => flagById.get(id)?.reader_show_badges !== false;
-  const showRecord = (id: string) => flagById.get(id)?.reader_show_record === true;
+  // One switch for the writing record everywhere readers look: "Show my writing record to readers"
+  const showRecord = (id: string) => flagById.get(id)?.record_public === true;
 
   const byAuthor = new Map<string, string[]>();
   for (const b of books) byAuthor.set(b.user_id, [...(byAuthor.get(b.user_id) || []), b.id]);

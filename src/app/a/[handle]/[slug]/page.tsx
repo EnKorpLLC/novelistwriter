@@ -267,7 +267,8 @@ export default async function LaunchPage({
             )}
             {!isOwner && <LibraryButton projectId={book.id} className="mt-3" />}
             <TrustBadges {...trust} pace={readerTrust?.trust.pace} className="mt-3" />
-            <RecordSummaryLine record={readerTrust?.record} className="mt-2" />
+            {/* The badge already shows above with the record link */}
+            <RecordSummaryLine record={readerTrust?.record ? { ...readerTrust.record, badge: null } : null} className="mt-2" />
             {thanks && (
               <p className="font-ui mt-2 inline-block border border-line px-2 py-0.5 text-xs text-muted" title="This author regularly thanks their beta, ARC, and launch team readers">
                 Thanks readers

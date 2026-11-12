@@ -115,6 +115,8 @@ export function CompactTrust({ trust, record }: { trust?: TrustData | null; reco
       label: "Written here",
       title: `Typed in the Novelist Writer editor: ${record.typedPercent}% typed, ${record.sessions} sessions.`,
     });
+  } else if (record?.badge === "before_records") {
+    chips.push({ label: "Before records", title: "Most of this book was written before Novelist Writer kept writing records." });
   }
   if (!chips.length) return null;
   return (

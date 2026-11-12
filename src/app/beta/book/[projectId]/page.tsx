@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { BetaFormFields } from "@/components/BetaFormFields";
+import { BookFacts } from "@/components/BookFacts";
+import type { BookFacts as BookFactsData } from "@/lib/book-facts";
 import type { BetaApplicationForm } from "@/lib/beta-form";
 import { betaEndLabel } from "@/lib/beta-access";
 import type { LabeledLink } from "@/lib/public-profile";
@@ -31,6 +33,7 @@ type GateData = {
   subscribed?: boolean;
   coverUrl: string | null;
   applicationForm: BetaApplicationForm;
+  facts?: BookFactsData;
   reviews: { id: string; body: string; createdAt: string; readerName: string }[];
   loggedIn: boolean;
   access: string;
@@ -157,7 +160,8 @@ export default function BetaBookGatePage() {
       {betaEndLabel(data.endsAt) && (
         <p className="font-ui mt-1 text-xs text-ink">{betaEndLabel(data.endsAt)}</p>
       )}
-      <TrustBadges {...(data.trust || {})} className="mt-2" />
+      <BookFacts facts={data.facts} className="mt-3" />
+      <TrustBadges {...(data.trust || {})} className="mt-3" />
       <RecordSummaryLine record={data.record} className="mt-2" />
       <FeedbackBriefCard brief={data.brief} className="mt-3" />
       <AuthorLinks links={data.authorLinks || []} className="mt-2" />
@@ -231,7 +235,7 @@ export default function BetaBookGatePage() {
             <p className="text-sm text-muted">{data.message}</p>
           )}
           <BetaFormFields
-            form={data.applicationForm}
+            form={{ ...data.applicationForm, contentWarnings: "" }}
             displayName={displayName}
             onDisplayNameChange={setDisplayName}
             email={data.email || ""}

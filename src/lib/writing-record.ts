@@ -105,10 +105,11 @@ export async function computeWritingRecord(admin: SupabaseClient, projectId: str
     needed.push(`${Math.round(RECORD_BADGE.minTypedShare * 100)}% typed rather than pasted (${Math.round(typedShare * 100)}% now)`);
   }
 
+  // A book mostly written before records began keeps its "before records" badge through later revisions
   const badge =
     needed.length === 0
       ? ("written_here" as const)
-      : recordedWords === 0 && beforeRecordsWords > 0
+      : beforeRecordsWords > 0 && beforeRecordsWords * 2 >= currentWords
         ? ("before_records" as const)
         : null;
 

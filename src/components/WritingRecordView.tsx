@@ -24,11 +24,11 @@ function shortDate(iso: string | null) {
 
 export function RecordBadge({ badge, href }: { badge: WritingRecordData["badge"]; href?: string }) {
   if (!badge) return null;
-  const label = badge === "written_here" ? "Written in Novelist Writer" : "Before records";
+  const label = badge === "written_here" ? "Written in Novelist Writer" : "Written before records";
   const title =
     badge === "written_here"
       ? "Typed in the Novelist Writer editor across many sessions and weeks."
-      : "Written before Novelist Writer kept records.";
+      : "Most of this book was written before Novelist Writer kept writing records; later work is recorded.";
   const cls = "border border-accent px-2 py-0.5 text-[11px] text-accent";
   // Without a public record page, the badge explains itself through the standard it follows
   return (

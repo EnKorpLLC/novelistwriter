@@ -10,6 +10,8 @@ import { EmailOptInPrompt } from "@/components/EmailOptInPrompt";
 import { ClaimReferral } from "@/components/ClaimReferral";
 import { GettingStarted } from "@/components/GettingStarted";
 import { ReadingPrefsPanel } from "@/components/ReadingPrefsPanel";
+import { BookFacts } from "@/components/BookFacts";
+import type { BookFacts as BookFactsData } from "@/lib/book-facts";
 import { rememberSide, reactionGlyph, type ProfileRoles } from "@/lib/beta-platform";
 import { betaEndLabel, betaEndState, formatBetaEndDate } from "@/lib/beta-access";
 import { CompactTrust, ReaderBadgeList, RecordSummaryLine, TrustBadges } from "@/components/TrustBadges";
@@ -57,6 +59,7 @@ type CatalogBook = {
   trust?: TrustBadgeData | null;
   record?: RecordSummary | null;
   brief?: FeedbackBrief | null;
+  facts?: BookFactsData;
 };
 
 type ArcCatalogBook = {
@@ -71,6 +74,7 @@ type ArcCatalogBook = {
   myStatus: "active" | "requested" | "author" | null;
   trust?: TrustBadgeData | null;
   record?: RecordSummary | null;
+  facts?: BookFactsData;
 };
 
 type BlurbPopup = CatalogBook & { arcAction?: { href: string; label: string } };
@@ -851,25 +855,21 @@ export default function BetaDashboardClient() {
                             <div className="font-ui flex flex-1 flex-col gap-1.5 p-2.5 text-[11px]">
                               <span className="text-muted">{b.genre}</span>
                               <CompactTrust trust={b.trust} record={b.record} />
-                              {b.blurb ? (
-                                <button
-                                  type="button"
-                                  className="self-start text-accent underline"
-                                  onClick={() =>
-                                    setBlurbPopup({
-                                      ...b,
-                                      arcAction: {
-                                        href: `/arc/book/${b.projectId}`,
-                                        label: arcActionLabel(b.myStatus),
-                                      },
-                                    })
-                                  }
-                                >
-                                  Read blurb
-                                </button>
-                              ) : (
-                                <span className="text-muted">No blurb yet.</span>
-                              )}
+                              <button
+                                type="button"
+                                className="self-start text-accent underline"
+                                onClick={() =>
+                                  setBlurbPopup({
+                                    ...b,
+                                    arcAction: {
+                                      href: `/arc/book/${b.projectId}`,
+                                      label: arcActionLabel(b.myStatus),
+                                    },
+                                  })
+                                }
+                              >
+                                Blurb, tropes, and warnings
+                              </button>
                               {b.deadline && (
                                 <span className="text-ink">
                                   Read by{" "}
@@ -965,17 +965,13 @@ export default function BetaDashboardClient() {
                                         On your shelf · Continue
                                       </Link>
                                     )}
-                                    {b.blurb ? (
-                                      <button
-                                        type="button"
-                                        className="font-ui self-start text-[11px] text-accent underline"
-                                        onClick={() => setBlurbPopup(b)}
-                                      >
-                                        Read blurb
-                                      </button>
-                                    ) : (
-                                      <p className="font-ui text-[11px] text-muted">No blurb yet.</p>
-                                    )}
+                                    <button
+                                      type="button"
+                                      className="font-ui self-start text-[11px] text-accent underline"
+                                      onClick={() => setBlurbPopup(b)}
+                                    >
+                                      Blurb, tropes, and warnings
+                                    </button>
                                     <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
                                       {b.authorUserId && (
                                         <button
@@ -1339,7 +1335,7 @@ export default function BetaDashboardClient() {
             <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden border border-line bg-paper shadow-lg">
               <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
                 <div className="min-w-0">
-                  <p className="font-ui text-[10px] uppercase tracking-wide text-muted">Blurb</p>
+                  <p className="font-ui text-[10px] uppercase tracking-wide text-muted">About this book</p>
                   <h2 id="beta-blurb-title" className="font-display mt-1 text-2xl text-ink">
                     {blurbPopup.title}
                   </h2>
@@ -1357,8 +1353,9 @@ export default function BetaDashboardClient() {
                 </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
+                <BookFacts facts={blurbPopup.facts} className="mb-5" />
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                  {blurbPopup.blurb}
+                  {blurbPopup.blurb || "The author hasn't written a blurb yet."}
                 </p>
                 <FeedbackBriefCard brief={blurbPopup.brief} className="mt-5" />
                 {(blurbPopup.trust || blurbPopup.record) && (

@@ -8,7 +8,7 @@ import {
   publicReaderName,
 } from "@/lib/beta-access";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
-import { withTickedWarnings } from "@/lib/reading-prefs";
+import { bookFactsFor } from "@/lib/book-facts";
 import { coverPublicUrl, projectCoverPath } from "@/lib/cover";
 import { genreLabel, linkInvitesForEmail } from "@/lib/beta-platform";
 import { enforceBetaAccessGates, findReaderInvite, inviteAllowsReading } from "@/lib/beta-server";
@@ -87,8 +87,9 @@ export async function GET(
   // This page is public, so reviewers never show by email or email prefix
   const inviteLabel = new Map((reviewInvites || []).map((i) => [i.id, publicReaderName(i.display_name, i.email)]));
 
-  const form = withTickedWarnings(normalizeBetaApplicationForm(project.beta_application_form), project.content_warnings);
+  const form = normalizeBetaApplicationForm(project.beta_application_form);
   const base: Record<string, unknown> & { subscribed?: boolean } = {
+    facts: bookFactsFor(project),
     projectId: project.id,
     title: project.title,
     genre: genreLabel(project.genre),

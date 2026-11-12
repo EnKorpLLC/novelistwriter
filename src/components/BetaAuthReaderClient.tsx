@@ -9,6 +9,8 @@ import type { BetaApplicationForm } from "@/lib/beta-form";
 import { betaEndLabel, betaEndState } from "@/lib/beta-access";
 import { highlightPassageInElement } from "@/lib/passage-highlight";
 import { GuardedText, type ReaderMark } from "@/components/GuardedText";
+import { BookFacts, BookFactsToggle } from "@/components/BookFacts";
+import type { BookFacts as BookFactsData } from "@/lib/book-facts";
 import { FINAL_PROMPTS, KIND_OPENERS, chapterPrompts, type FeedbackBrief } from "@/lib/feedback-brief";
 import { ReportConcern } from "@/components/ReportConcern";
 import { ReviewForm } from "@/components/ReviewForm";
@@ -153,6 +155,9 @@ export function BetaAuthReaderClient({
   const [brief, setBrief] = useState<FeedbackBrief | null>(null);
   const [authorUserId, setAuthorUserId] = useState("");
   const [readerMark, setReaderMark] = useState<ReaderMark | null>(null);
+  const [facts, setFacts] = useState<BookFactsData | null>(null);
+  // The book details start open until the reader has begun, so they see the warnings before reading
+  const [startedReading, setStartedReading] = useState(true);
 
   composingRef.current = pop?.composing ?? false;
 
@@ -172,10 +177,14 @@ export function BetaAuthReaderClient({
     brief?: FeedbackBrief | null;
     authorUserId?: string;
     readerMark?: ReaderMark;
+    facts?: BookFactsData;
+    progress?: Record<string, number>;
   }) {
     const list = Array.isArray(data.chapters) ? data.chapters : [];
     setChapters(list);
     setReaderMark(data.readerMark || null);
+    setFacts(data.facts || null);
+    setStartedReading(Object.values(data.progress || {}).some((p) => p > 0));
     setUnlocked(true);
     setGateNeedsApplication(false);
     if (data.title) setTitle(data.title);
@@ -235,7 +244,8 @@ export function BetaAuthReaderClient({
       if (data.needsApplication) {
         setGateNeedsApplication(true);
         setUnlocked(false);
-        if (data.form) setForm(data.form);
+        setFacts(data.facts || null);
+        if (data.form) setForm({ ...data.form, contentWarnings: data.facts ? "" : data.form.contentWarnings });
         if (data.title) setTitle(data.title);
         return;
       }
@@ -659,6 +669,7 @@ export function BetaAuthReaderClient({
         </Link>
         <h2 className="font-display text-xl">Complete the application</h2>
         {title ? <p className="text-sm text-muted">For {title}</p> : null}
+        <BookFacts facts={facts} />
         <p className="text-sm text-muted">
           Fill this out once to unlock the manuscript. Your account email is already linked to this
           invite.
@@ -791,6 +802,10 @@ export function BetaAuthReaderClient({
         </Link>
         {title ? <p className="text-sm text-muted">{title}</p> : null}
         {authorUserId && <ReportConcern mode="author" projectId={projectId} authorUserId={authorUserId} />}
+      </div>
+
+      <div className="mb-6">
+        <BookFactsToggle facts={facts} open={!startedReading} />
       </div>
 
       {!finished && !dnf && betaEndLabel(endsAt) && (

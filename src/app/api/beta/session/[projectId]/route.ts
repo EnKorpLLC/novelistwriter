@@ -12,6 +12,7 @@ import { joinAuthorAudience } from "@/lib/audience";
 import { recordReadingDay, rewardReaderJoin } from "@/lib/pass-rewards";
 import { recordBookDay } from "@/lib/reader-insights";
 import { traceCode } from "@/lib/copy-guard";
+import { bookFactsFor } from "@/lib/book-facts";
 import {
   enforceBetaAccessGates,
   findReaderInvite,
@@ -38,7 +39,7 @@ export async function GET(
 
   const { data: project } = await admin
     .from("projects")
-    .select("id, title, user_id, beta_application_form, beta_expires_at, beta_ready")
+    .select("*")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -48,6 +49,7 @@ export async function GET(
     const blocked = accessMessageForStatus("revoked", gate.reason);
     return NextResponse.json(blocked, { status: 403 });
   }
+  const facts = bookFactsFor(project);
 
   const invite = await findReaderInvite(admin, {
     projectId,
@@ -81,6 +83,7 @@ export async function GET(
       ok: false,
       needsApplication: true,
       form,
+      facts,
       title: project.title,
       inviteId: invite!.id,
       status: invite!.status,
@@ -120,6 +123,7 @@ export async function GET(
   return NextResponse.json({
     ok: true,
     title: project.title,
+    facts,
     // What the author asked for shapes the questions readers see (RX4)
     brief: normalizeBetaApplicationForm(project.beta_application_form).brief || null,
     authorUserId: project.user_id,
