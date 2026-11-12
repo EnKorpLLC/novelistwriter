@@ -19,7 +19,7 @@ import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { hiddenAuthorsFor } from "@/lib/reader-safety";
 import { normalizeTropes } from "@/lib/arc";
 import { normalizeFilters, readerFilterHit } from "@/lib/reader-recs";
-import { normalizePrefs, normalizeWarningIds } from "@/lib/reading-prefs";
+import { normalizePrefs, normalizeWarningIds, tropeScore } from "@/lib/reading-prefs";
 
 export async function GET() {
   const supabase = await createClient();
@@ -154,6 +154,7 @@ export async function GET() {
     (p) => studioAuthors.has(p.user_id) && !isBetaClosedToNew(p.beta_expires_at) && !hidden.has(p.user_id)
   );
   const catalogRaw = betaOpen.filter((p) => !filteredOut(p));
+  const loved = (p: { tropes?: unknown }) => tropeScore(normalizeTropes(p.tropes), filters.prefs);
   const hiddenBetas = betaOpen.length - catalogRaw.length;
 
   type CatalogBook = (typeof catalogRaw)[number];
@@ -176,7 +177,7 @@ export async function GET() {
       genre,
       books: books
         .slice()
-        .sort((a, b) => a.title.localeCompare(b.title))
+        .sort((a, b) => loved(b) - loved(a) || a.title.localeCompare(b.title))
         .map((p) => ({
           projectId: p.id,
           title: p.title,
@@ -240,7 +241,7 @@ export async function GET() {
     (arcRows || []).map((r) => [r.project_id, { status: r.status, finishedAt: r.finished_at }])
   );
   const arcOpen = openArcProjects.filter((p) => studioAuthors.has(p.user_id) && !hidden.has(p.user_id));
-  const arcVisible = arcOpen.filter((p) => !filteredOut(p));
+  const arcVisible = arcOpen.filter((p) => !filteredOut(p)).sort((a, b) => loved(b) - loved(a));
   const hiddenArcs = arcOpen.length - arcVisible.length;
   const arcCatalog = arcVisible
     .map((p) => ({

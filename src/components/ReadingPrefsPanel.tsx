@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { GENRE_CHOICES, NO_PREFS, WARNING_CHOICES, hasPrefs, type Choice, type ReadingPrefs } from "@/lib/reading-prefs";
+import { GENRE_CHOICES, NO_PREFS, TROPE_GROUPS, WARNING_CHOICES, hasPrefs, type Choice, type ReadingPrefs } from "@/lib/reading-prefs";
 
 function Chips({
   choices,
@@ -46,7 +46,43 @@ function Chips({
   );
 }
 
-/** Genres to read, genres to skip, and content warnings to skip. They filter betas, ARCs, and books for sale. */
+/** The trope list, folded since it's long, with how many are picked. */
+function TropeSection({
+  title,
+  hint,
+  picked,
+  blocked,
+  tone,
+  onToggle,
+}: {
+  title: string;
+  hint: string;
+  picked: string[];
+  blocked: string[];
+  tone: "want" | "avoid";
+  onToggle: (trope: string) => void;
+}) {
+  return (
+    <details>
+      <summary className="cursor-pointer text-ink">
+        {title}
+        <span className="ml-2 text-xs text-muted">
+          {picked.length ? `${picked.length} picked` : "none"} · {hint}
+        </span>
+      </summary>
+      <div className="mt-2 space-y-3">
+        {TROPE_GROUPS.map((g) => (
+          <div key={g.group}>
+            <p className="text-[11px] uppercase tracking-wide text-muted">{g.group}</p>
+            <Chips choices={g.tropes.map((t) => ({ id: t, label: t, terms: [] }))} picked={picked} blocked={blocked} tone={tone} onToggle={onToggle} />
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+/** Genres, tropes, and content warnings. They filter betas, ARCs, and books for sale, and loved tropes come first. */
 export function ReadingPrefsPanel({ hidden, onSaved }: { hidden?: { betas: number; arcs: number } | null; onSaved: () => void }) {
   const [prefs, setPrefs] = useState<ReadingPrefs>(NO_PREFS);
   const [saved, setSaved] = useState<ReadingPrefs>(NO_PREFS);
@@ -96,10 +132,12 @@ export function ReadingPrefsPanel({ hidden, onSaved }: { hidden?: { betas: numbe
         saved.likeGenres.length ? count(saved.likeGenres.length, "genre") + " wanted" : null,
         saved.avoidGenres.length ? count(saved.avoidGenres.length, "genre") + " skipped" : null,
         saved.avoidWarnings.length ? count(saved.avoidWarnings.length, "content warning") + " skipped" : null,
+        saved.likeTropes.length ? count(saved.likeTropes.length, "trope") + " loved" : null,
+        saved.avoidTropes.length ? count(saved.avoidTropes.length, "trope") + " skipped" : null,
       ]
         .filter(Boolean)
         .join(" · ")
-    : "Choose the genres you want to read and the content warnings you'd rather not see";
+    : "Choose the genres and tropes you want to read and the content warnings you'd rather not see";
   const hiddenTotal = (hidden?.betas || 0) + (hidden?.arcs || 0);
 
   return (
@@ -134,8 +172,24 @@ export function ReadingPrefsPanel({ hidden, onSaved }: { hidden?: { betas: numbe
             <p className="text-ink">Content warnings I don&apos;t want to see</p>
             <Chips choices={WARNING_CHOICES} picked={prefs.avoidWarnings} tone="avoid" onToggle={(id) => toggle("avoidWarnings", id)} />
           </div>
+          <TropeSection
+            title="Tropes I love"
+            hint="Books with these show first."
+            picked={prefs.likeTropes}
+            blocked={prefs.avoidTropes}
+            tone="want"
+            onToggle={(t) => toggle("likeTropes", t)}
+          />
+          <TropeSection
+            title="Tropes I'd rather skip"
+            hint="Books with these are left out."
+            picked={prefs.avoidTropes}
+            blocked={prefs.likeTropes}
+            tone="avoid"
+            onToggle={(t) => toggle("avoidTropes", t)}
+          />
           <p className="text-xs text-muted">
-            Want to skip a particular word or trope too? Add it to your{" "}
+            Want to skip a particular word too? Add it to your{" "}
             <Link href="/library" className="text-accent underline">
               content filters
             </Link>{" "}

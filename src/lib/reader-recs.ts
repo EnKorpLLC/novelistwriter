@@ -5,7 +5,7 @@ import { hiddenAuthorsFor } from "@/lib/reader-safety";
 import { publicReaderName } from "@/lib/beta-access";
 import { normalizeBetaApplicationForm } from "@/lib/beta-form";
 import { fetchAll } from "@/lib/supabase/fetch-all";
-import { NO_PREFS, hasPrefs, normalizePrefs, normalizeWarningIds, prefsHide, warningLabels, type ReadingPrefs } from "@/lib/reading-prefs";
+import { NO_PREFS, hasPrefs, normalizePrefs, normalizeWarningIds, prefsHide, tropeScore, warningLabels, type ReadingPrefs } from "@/lib/reading-prefs";
 
 /** Up to 30 words or phrases a reader would rather not see in genres, tropes, or content warnings. */
 export function normalizeFilters(raw: unknown): string[] {
@@ -33,7 +33,7 @@ export function readerFilterHit(f: ReaderFilters, book: { genre: string; tropes:
   const ticked = warningLabels(book.warningIds || []).join(", ");
   const word = filterHit([book.genre, ...book.tropes, book.warnings, ticked].join(" \n "), f.words);
   if (word) return word;
-  return prefsHide({ genre: book.genre, about: [...book.tropes, book.warnings].join(" \n "), warningIds: book.warningIds }, f.prefs);
+  return prefsHide({ genre: book.genre, about: [...book.tropes, book.warnings].join(" \n "), warningIds: book.warningIds, tropes: book.tropes }, f.prefs);
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -62,6 +62,8 @@ export async function applyContentFilters<T extends Pick<PublishedBook, "id" | "
     const w = warnings.get(b.id);
     return !readerFilterHit(filters, { genre: b.genre, tropes: b.tropes, warnings: w?.text || "", warningIds: w?.ids });
   });
+  // Books with tropes the reader loves come first; otherwise the order is kept (sort is stable)
+  if (filters.prefs.likeTropes.length) shown.sort((a, b) => tropeScore(b.tropes, filters.prefs) - tropeScore(a.tropes, filters.prefs));
   return { shown, hidden: books.length - shown.length };
 }
 

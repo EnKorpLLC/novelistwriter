@@ -96,22 +96,46 @@ export const TROPE_GROUPS: { group: string; tropes: string[] }[] = [
 ];
 export const TROPE_CHOICES = TROPE_GROUPS.flatMap((g) => g.tropes);
 
-export type ReadingPrefs = { likeGenres: string[]; avoidGenres: string[]; avoidWarnings: string[] };
-export const NO_PREFS: ReadingPrefs = { likeGenres: [], avoidGenres: [], avoidWarnings: [] };
+export type ReadingPrefs = {
+  likeGenres: string[];
+  avoidGenres: string[];
+  avoidWarnings: string[];
+  /** Books with these tropes are listed first */
+  likeTropes: string[];
+  /** Books with these tropes are left out */
+  avoidTropes: string[];
+};
+export const NO_PREFS: ReadingPrefs = { likeGenres: [], avoidGenres: [], avoidWarnings: [], likeTropes: [], avoidTropes: [] };
 
 const ids = (raw: unknown, from: Choice[]) => {
   const known = new Set(from.map((c) => c.id));
   return [...new Set((Array.isArray(raw) ? raw : []).map(String).filter((v) => known.has(v)))];
 };
 
+/** Tropes from the list, spelled as the list spells them. */
+const tropeList = (raw: unknown) => {
+  const picked = new Set((Array.isArray(raw) ? raw : []).map((v) => String(v).toLowerCase()));
+  return TROPE_CHOICES.filter((t) => picked.has(t.toLowerCase()));
+};
+
 export function normalizePrefs(raw: unknown): ReadingPrefs {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const avoidGenres = ids(o.avoidGenres, GENRE_CHOICES);
+  const avoidTropes = tropeList(o.avoidTropes);
   return {
     likeGenres: ids(o.likeGenres, GENRE_CHOICES).filter((g) => !avoidGenres.includes(g)),
     avoidGenres,
     avoidWarnings: ids(o.avoidWarnings, WARNING_CHOICES),
+    likeTropes: tropeList(o.likeTropes).filter((t) => !avoidTropes.includes(t)),
+    avoidTropes,
   };
+}
+
+/** How many of the reader's loved tropes a book has, for listing those books first. */
+export function tropeScore(bookTropes: string[], prefs: ReadingPrefs) {
+  if (!prefs.likeTropes.length) return 0;
+  const mine = new Set(bookTropes.map((t) => t.toLowerCase()));
+  return prefs.likeTropes.filter((t) => mine.has(t.toLowerCase())).length;
 }
 
 /** A book's ticked content warnings, as known ids in list order. */
@@ -129,7 +153,8 @@ export function withTickedWarnings<T extends { contentWarnings: string }>(form: 
   return { ...form, contentWarnings: [labels.join(" · "), form.contentWarnings].filter(Boolean).join("\n\n") };
 }
 
-export const hasPrefs = (p: ReadingPrefs) => p.likeGenres.length + p.avoidGenres.length + p.avoidWarnings.length > 0;
+export const hasPrefs = (p: ReadingPrefs) =>
+  p.likeGenres.length + p.avoidGenres.length + p.avoidWarnings.length + p.likeTropes.length + p.avoidTropes.length > 0;
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const mentions = (text: string, terms: string[]) => {
@@ -140,10 +165,13 @@ const choose = (list: Choice[], picked: string[]) => list.filter((c) => picked.i
 
 /**
  * Why a book is left out for this reader, or null to show it. `genre` is the book's genre and keywords; `about`
- * is its tropes and written content warnings; `warningIds` are the warnings the author ticked. A book with no
- * genre isn't held back by "genres I want".
+ * is its tropes and written content warnings; `warningIds` are the warnings the author ticked; `tropes` are the
+ * book's tropes. A book with no genre isn't held back by "genres I want".
  */
-export function prefsHide(book: { genre: string; about: string; warningIds?: string[] }, prefs: ReadingPrefs): string | null {
+export function prefsHide(book: { genre: string; about: string; warningIds?: string[]; tropes?: string[] }, prefs: ReadingPrefs): string | null {
+  const bookTropes = new Set((book.tropes || []).map((t) => t.toLowerCase()));
+  const skipped = prefs.avoidTropes.find((t) => bookTropes.has(t.toLowerCase()));
+  if (skipped) return `Trope: ${skipped}`;
   const genre = book.genre.trim();
   const avoided = choose(GENRE_CHOICES, prefs.avoidGenres).find((c) => mentions(genre, c.terms));
   if (avoided) return `Genre: ${avoided.label}`;

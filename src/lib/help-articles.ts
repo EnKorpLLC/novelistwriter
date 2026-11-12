@@ -781,7 +781,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     open: { href: "/beta/dashboard", label: "Browse available books" },
     steps: [
       "On your reader dashboard, open Available. Browse by genre or keyword.",
-      "Open Reading preferences at the top to pick the genres you want, the genres you don't, and the content warnings you'd rather not see. They filter beta reads, advance copies, and books for sale in the store.",
+      "Open Reading preferences at the top of your reader dashboard to pick the genres you want, the genres you don't, the content warnings you'd rather not see, and tropes you love (shown first) or would rather skip. They filter beta reads, advance copies, and books for sale in the store.",
       "Open a book to read its blurb and the author's feedback brief: what they want to hear about, how rough the draft is, and how long it takes.",
       "Read a sample chapter if there is one.",
       "Apply for the beta read or request the advance copy. Authors see your reader badges, so a good track record helps.",
