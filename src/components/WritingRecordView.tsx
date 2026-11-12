@@ -28,7 +28,7 @@ export function RecordBadge({ badge, href }: { badge: WritingRecordData["badge"]
   const title =
     badge === "written_here"
       ? "Typed in the Novelist Writer editor across many sessions and weeks."
-      : "Most of this book was written before Novelist Writer kept writing records; later work is recorded.";
+      : "Most of this book was written before Novelist Writer kept writing records, here or in another app; later work is recorded.";
   const cls = "border border-accent px-2 py-0.5 text-[11px] text-accent";
   // Without a public record page, the badge explains itself through the standard it follows
   return (

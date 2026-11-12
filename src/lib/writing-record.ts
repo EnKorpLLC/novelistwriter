@@ -105,11 +105,13 @@ export async function computeWritingRecord(admin: SupabaseClient, projectId: str
     needed.push(`${Math.round(RECORD_BADGE.minTypedShare * 100)}% typed rather than pasted (${Math.round(typedShare * 100)}% now)`);
   }
 
-  // A book mostly written before records began keeps its "before records" badge through later revisions
+  // A book mostly written before records began, here or in another app and imported, keeps its "before records"
+  // badge through later revisions (the human authorship standard labels imported and earlier words this way)
+  const earlier = beforeRecordsWords + importedWords;
   const badge =
     needed.length === 0
       ? ("written_here" as const)
-      : beforeRecordsWords > 0 && beforeRecordsWords * 2 >= currentWords
+      : earlier > 0 && earlier * 2 >= currentWords
         ? ("before_records" as const)
         : null;
 

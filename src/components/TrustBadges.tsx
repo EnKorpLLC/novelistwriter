@@ -47,9 +47,16 @@ export function RecordSummaryLine({ record, className = "" }: { record?: RecordS
       )}
       <p>
         <span className="text-ink">Writing record:</span>{" "}
-        {record.spanDays && record.spanDays >= 7 ? `written over ${spanLabel(record.spanDays)} · ` : ""}
-        {record.typedPercent}% typed in the editor · {record.sessions.toLocaleString()} writing session{record.sessions === 1 ? "" : "s"} on{" "}
-        {record.activeDays.toLocaleString()} day{record.activeDays === 1 ? "" : "s"}
+        {record.sessions === 0 ? (
+          "written before Novelist Writer kept records, so there are no writing sessions to show"
+        ) : (
+          <>
+            {record.badge === "before_records" ? "mostly written before records began; since then " : ""}
+            {record.spanDays && record.spanDays >= 7 ? `written over ${spanLabel(record.spanDays)} · ` : ""}
+            {record.typedPercent}% typed in the editor · {record.sessions.toLocaleString()} writing session{record.sessions === 1 ? "" : "s"} on{" "}
+            {record.activeDays.toLocaleString()} day{record.activeDays === 1 ? "" : "s"}
+          </>
+        )}
         {record.recordHref && (
           <>
             {" · "}
@@ -116,7 +123,7 @@ export function CompactTrust({ trust, record }: { trust?: TrustData | null; reco
       title: `Typed in the Novelist Writer editor: ${record.typedPercent}% typed, ${record.sessions} sessions.`,
     });
   } else if (record?.badge === "before_records") {
-    chips.push({ label: "Before records", title: "Most of this book was written before Novelist Writer kept writing records." });
+    chips.push({ label: "Before records", title: "Most of this book was written before Novelist Writer kept writing records, here or in another app." });
   }
   if (!chips.length) return null;
   return (
