@@ -586,8 +586,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
     slug: "paperbacks-direct",
     audience: "authors",
     topic: "Sell",
-    title: "Sell paperbacks printed on demand (opening soon)",
-    summary: "Each order is printed and shipped for you, with no stock to keep. This opens once our print partner is connected.",
+    title: "Sell paperbacks printed on demand",
+    summary: "Each order is printed and shipped by Lulu, so there's no stock to keep and nothing to mail.",
     plan: "Pro and Studio",
     steps: [
       "Make your print-ready interior PDF and full cover PDF (Make → Format → Paperback and Make → Cover).",

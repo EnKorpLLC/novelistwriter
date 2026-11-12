@@ -50,7 +50,7 @@ const US: Comparison["marks"] = {
   "Author website and launch pages": ["yes", "Pro"],
   "Proof a human wrote the book": ["yes", "Writing record and badges"],
   "Works on Windows, Mac, and Chromebook": ["yes", "In the browser"],
-  "Sell direct to readers": ["yes", "Ebooks, audiobooks, pre-orders, extras, and signed copies from your shop (Pro)"],
+  "Sell direct to readers": ["yes", "Ebooks, audiobooks, printed paperbacks, pre-orders, extras, and signed copies from your shop (Pro)"],
   "Human-narrated audiobooks": ["yes", "Record it yourself or hire a narrator, mastered to ACX's specs (Studio)"],
   "Hire human editors, designers, and narrators": ["yes", "Agreements and held payments on every plan; the directory opens as founding pros join"],
 };

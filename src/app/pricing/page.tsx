@@ -128,7 +128,7 @@ export default async function PricingPage() {
           <p className="font-ui mt-3 text-sm text-ink">
             <strong>Audiobooks</strong> sell direct at the same fees, alone or as ebook + audiobook at one price. So do <strong>pre-orders</strong>, <strong>extras</strong>{" "}
             (character art, maps, bonus stories), <strong>box sets</strong> (Studio), and <strong>your shop</strong> of signed books, bookmarks, and prints you ship, where
-            you also keep the shipping you charge. <strong>Paperbacks printed on demand</strong> open soon: you&apos;ll keep the price less printing and the same fee.
+            you also keep the shipping you charge. <strong>Paperbacks printed on demand</strong> by Lulu: you keep the price less printing and the same fee, paid 14 days after the book ships.
           </p>
           <p className="font-ui mt-3 text-sm text-ink">
             <strong>Hiring a narrator</strong> (Studio): our fee is 10% of the

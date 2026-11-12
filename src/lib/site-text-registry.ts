@@ -179,7 +179,7 @@ export const SITE_TEXT: TextEntry[] = [
         { t: "Extras", d: "Character art, maps, and bonus stories, sold on their own or included free with the ebook." },
         { t: "Bundles and box sets", d: "Several books at one price, with sale prices and discount codes. Box sets on Studio." },
         { t: "Your own shop", d: "Signed and personalized copies, bookmarks, and prints you ship, plus numbered limited editions and packages with the ebook inside." },
-        { t: "Paperbacks, printed for you", d: "Opening soon: each order printed on demand and shipped for you, with no stock to keep. [See what you keep](/pricing)" },
+        { t: "Paperbacks, printed for you", d: "Each order printed on demand and shipped for you, with no stock to keep, and readers can get the ebook free. [See what you keep](/pricing)" },
       ],
     },
   },
